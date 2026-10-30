@@ -12,7 +12,8 @@ from backend.app.models import (
 ```
 
 Flyway owns schema changes. Apply `backend/migrations/V1__*.sql`, then
-`V2__create_runs_attempts_events_idempotency.sql` using `backend/flyway.conf`.
+`V2__create_runs_attempts_events_idempotency.sql`, then
+`V3__refresh_run_updated_at.sql` using `backend/flyway.conf`.
 V1 remains unchanged. V2 adds a composite unique key to requirement revisions
 so the run's revision must belong to its project. All references use RESTRICT:
 removing a project/user/run must not silently remove history or replay records.
@@ -41,6 +42,12 @@ removing a project/user/run must not silently remove history or replay records.
 - `stopped_at` is an internal nullable timestamp: writers set it on failed,
   budget_exceeded, completed, cancelled and clear it on retry. It supports elapsed
   duration freezing; updated_at is not a substitute for the stop timestamp.
+- V3 installs a `BEFORE UPDATE` trigger on `runs`: every SQL UPDATE sets
+  `updated_at` to the database wall clock (`clock_timestamp()`), including ORM,
+  bulk SQL and independent worker writes. The caller does not supply this value.
+  SQLAlchemy marks it as server-generated; use `session.refresh(run)` when the
+  current in-memory value is needed immediately after a flush. `create_all` does
+  not install this Flyway-managed trigger; apply migrations for this behavior.
 - Optional current_stage, stop_reason, attempt times/reason/error and event stage_id
   use SQL NULL when absent; serializers omit absent optional API properties.
   `error` stores the complete C-01 Error schema, including its outer `error`
@@ -54,6 +61,7 @@ response store; it does not enqueue work:
 
 ```python
 from uuid import uuid4
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 run_id = uuid4()
@@ -78,13 +86,73 @@ with Session(engine) as session, session.begin():
                   "project_id": str(project_id), "revision_id": str(revision_id),
                   "profile_id": "web-fastapi-react"},
         ),
+        RunEvent(
+            run_id=run_id, seq=2, event_type="stage.status_changed", stage_id="analysis",
+            data={"schema_version": "1.0", "attempt_no": 1, "from": None,
+                  "to": "pending", "contract_version": "1", "reason_code": "RUN_CREATED"},
+        ),
+        RunEvent(
+            run_id=run_id, seq=3, event_type="metrics.updated",
+            data={"schema_version": "1.0", "metrics": dict(run.metrics),
+                  "tokens_complete": {"tokens_in": True, "tokens_out": True}},
+        ),
         IdempotencyRecord(
             owner_id=owner_id, operation="createRun", resource_id=project_id,
             key=idempotency_key, request_hash=request_hash,
             response_ref=response_snapshot_ref,
         ),
     ])
+
+# A later transaction appends new events; it never replaces the existing log.
+# This worker-start example assumes authorization/claim checks already succeeded.
+with Session(engine) as session, session.begin():
+    run = session.scalars(
+        select(Run).where(Run.id == run_id).with_for_update()
+    ).one()
+    attempt = session.scalars(select(StageAttempt).where(
+        StageAttempt.run_id == run_id, StageAttempt.stage_id == "analysis",
+        StageAttempt.attempt_no == 1,
+    )).one()
+    if run.status == "queued" and attempt.status == "pending":
+        seq = session.scalar(select(func.coalesce(func.max(RunEvent.seq), 0)).where(
+            RunEvent.run_id == run_id,
+        )) + 1
+        run.status = "running"
+        run.current_stage = "analysis"
+        attempt.status = "running"
+        attempt.started_at = func.clock_timestamp()
+        session.add_all([
+            RunEvent(
+                run_id=run_id, seq=seq, event_type="run.status_changed",
+                data={"schema_version": "1.0", "from": "queued", "to": "running",
+                      "reason_code": "WORKER_STARTED"},
+            ),
+            RunEvent(
+                run_id=run_id, seq=seq + 1, event_type="stage.status_changed",
+                stage_id="analysis",
+                data={"schema_version": "1.0", "attempt_no": 1, "from": "pending",
+                      "to": "running", "contract_version": "1",
+                      "reason_code": "WORKER_STARTED"},
+            ),
+        ])
+
+# Both transactions' events remain available, including after reconnect/restart.
+# Serialize these rows to C-01 EventPage; after_seq is the client's durable cursor.
+with Session(engine) as session:
+    after_seq = 0
+    event_log = session.scalars(select(RunEvent).where(
+        RunEvent.run_id == run_id, RunEvent.seq > after_seq,
+    ).order_by(RunEvent.seq).limit(100)).all()
+    next_after_seq = event_log[-1].seq if event_log else after_seq
 ```
+
+The example persists five events across two transactions. Each later accepted
+transition or accounting change must append its C-03 events in the same
+transaction as the corresponding state/projection update, using the Run lock.
+`event_log` is a query result, not a second mutable column: each request queries
+persisted `RunEvent` rows after its cursor. A repeated worker-start no-op appends
+nothing. The real API must also implement EventPage pagination/has_more and the
+service's authorization, claim and lifecycle guards.
 
 Idempotency scope is `(owner_id, operation, resource_id, key)`, exactly C-01:
 `createRun` uses the project UUID, `answerQuestions`/`retryRun`/`createExport`
@@ -110,7 +178,11 @@ The schema supplies storage and structural checks, not a functioning pipeline.
 
 ## Migration and rollback
 
-V2 is additive. Old rows in V1 are preserved. Before adoption, rollback can stop
+V2 is additive. Old rows in V1 are preserved. V3 adds only the Run update trigger
+and its function; it preserves existing rows and timestamps until the next UPDATE.
+Rollback of V3 alone drops `runs_refresh_updated_at` on `runs`, then
+`refresh_run_updated_at()`; raw SQL writers must then set updated_at explicitly.
+Before adoption, rollback of V2 can stop
 new writers and drop idempotency_records, run_events, stage_attempts, runs, then
 `uq_requirement_revisions_id_project`. After data exists this destroys history:
 prefer stopping writers and restoring a backup or an approved forward migration.

@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    BigInteger, CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint,
+    BigInteger, CheckConstraint, DateTime, FetchedValue, ForeignKey, ForeignKeyConstraint,
     Index, Integer, String, Text, UniqueConstraint, Uuid, func, text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -43,7 +43,7 @@ class Run(Base):
     current_stage: Mapped[str | None] = mapped_column(Text)
     limits: Mapped[dict[str, Any]] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), server_onupdate=FetchedValue())
     stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     stop_reason: Mapped[str | None] = mapped_column(Text)
     questions_revision: Mapped[int] = mapped_column(Integer, server_default="0")
