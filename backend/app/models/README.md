@@ -2,7 +2,7 @@
 
 Contract baseline: [C-01 v1.0.0](../../../contracts/platform.openapi.yaml),
 [C-03 v1.0](../../../contracts/lifecycle.md), accepted in main
-`4d8dc8ed4e3b5c9ceec40ff73513d3d7005c9888`. Public imports:
+`ef1956c958ef64c8784ce0558c53269bea25142f`. Public imports:
 
 ```python
 from backend.app.models import (
@@ -25,7 +25,8 @@ removing a project/user/run must not silently remove history or replay records.
   stores a nonempty identifier; the API/service validates the permitted profile
   against the current contract, allowing new profiles without a DB migration.
 - `Run.stage_attempts` stores the complete history ordered by stage_id, attempt_no.
-  For API `stages`, select the maximum attempt_no for each stage_id (C-03 §3).
+  API `stages` serializes ALL attempts in that order (C-03 §3); the maximum
+  attempt_no is used only for the current UI state of each logical stage.
   `StageAttempt.id` is the internal UUID used by future artifact references;
   `attempt_no` starts at 1 within each `(run_id, stage_id)`.
 - `Run.events` orders by seq. `RunEvent` has composite primary key `(run_id, seq)`;
@@ -42,7 +43,8 @@ removing a project/user/run must not silently remove history or replay records.
   duration freezing; updated_at is not a substitute for the stop timestamp.
 - Optional current_stage, stop_reason, attempt times/reason/error and event stage_id
   use SQL NULL when absent; serializers omit absent optional API properties.
-  `error` stores the C-01 Error object, not the HTTP error envelope.
+  `error` stores the complete C-01 Error schema, including its outer `error`
+  property: `{"error":{"code":"...","message":"...","details":{},"request_id":"..."}}`.
 
 ## Atomic write example
 
