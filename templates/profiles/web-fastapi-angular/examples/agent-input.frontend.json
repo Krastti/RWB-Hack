@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "run_id": "a42e19f4-80a9-5f04-941c-6d3ae4437744",
+  "stage_id": "frontend",
+  "attempt": 1,
+  "input_artifact_ids": [
+    "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99",
+    "155fc739-3f89-5db0-ad27-78adba9b7594",
+    "14a4535c-7f26-5bd8-9303-84415f4d6216"
+  ],
+  "contract_version": "1",
+  "profile_id": "web-fastapi-angular",
+  "limits": {
+    "max_calls": 10,
+    "max_output_tokens": 30000,
+    "timeout_seconds": 600,
+    "max_critical_questions": 3
+  }
+}

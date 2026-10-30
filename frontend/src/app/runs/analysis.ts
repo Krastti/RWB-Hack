@@ -17,6 +17,7 @@ import { ErrorBanner } from '../shared/error-banner';
 })
 export class Analysis {
   readonly runId = input.required<string>();
+  readonly refreshKey = input('');
   private readonly api = inject(ApiClient);
   readonly loading = signal(false);
   readonly error = signal<ApiError | null>(null);
@@ -29,14 +30,20 @@ export class Analysis {
     { key: 'assumptions', title: 'Допущения' }, { key: 'questions', title: 'Открытые вопросы' },
   ];
   private request?: Subscription;
+  private loadedRunId = '';
   constructor() { effect(onCleanup => {
     this.runId();
-    untracked(() => { this.markdown.set(''); this.structured.set(null); this.load(); });
+    this.refreshKey();
+    untracked(() => this.load());
     onCleanup(() => this.request?.unsubscribe());
   }); }
   load() {
-    if (this.loading()) return;
     const id = this.runId();
+    this.request?.unsubscribe();
+    if (this.loadedRunId !== id) {
+      this.loadedRunId = id;
+      this.markdown.set(''); this.structured.set(null);
+    }
     this.loading.set(true); this.error.set(null);
     this.request = this.api.artifacts(id).pipe(
       expand(page => page.next_cursor ? this.api.artifacts(id, page.next_cursor) : EMPTY),
@@ -56,7 +63,7 @@ export class Analysis {
         const questions: unknown = result.questions ? JSON.parse(result.questions) : null;
         const data = requirements && typeof requirements === 'object' && !Array.isArray(requirements) ? requirements as Record<string, unknown> : null;
         const q = questions && typeof questions === 'object' && 'questions' in questions ? questions.questions : data?.['questions'] ?? [];
-        return { html: marked.parse(result.markdown, { async: false }), data: data ? { ...data, questions: q } : null };
+        return { html: marked.parse(result.markdown, { async: false }), data: data || result.questions ? { ...data, questions: q } : null };
       }),
       finalize(() => this.loading.set(false)),
     ).subscribe({

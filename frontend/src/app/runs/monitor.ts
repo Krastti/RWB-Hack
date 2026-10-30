@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { EMPTY, Subject, catchError, defer, exhaustMap, expand, map, merge, of, reduce, switchMap, takeUntil, takeWhile, timer } from 'rxjs';
+import { EMPTY, Subject, catchError, defer, exhaustMap, expand, filter, map, merge, of, reduce, switchMap, takeUntil, takeWhile, timer } from 'rxjs';
 import { ApiClient, DTO, Run, RunEvent, TERMINAL } from '../api/client';
 import { ApiError, normalizeError } from '../api/errors';
 import { Session } from '../auth/session';
@@ -17,7 +17,9 @@ export class RunMonitor {
       let run: Run | null = null;
       let events: RunEvent[] = [];
       let cursor = 0;
+      let retryNotBefore = 0;
       return merge(timer(0, 2000), this.refresh).pipe(
+        filter(() => Date.now() >= retryNotBefore),
         exhaustMap(() => this.api.run(id).pipe(
           switchMap(value => {
             run = value;
@@ -39,7 +41,11 @@ export class RunMonitor {
               }),
             );
           }),
-          catchError(error => of({ run, events, error: normalizeError(error) } as RunSnapshot)),
+          catchError(error => {
+            const normalized = normalizeError(error);
+            if (normalized.status === 429) retryNotBefore = Date.now() + Math.max(2000, normalized.retryAfterMs ?? 0);
+            return of({ run, events, error: normalized } as RunSnapshot);
+          }),
         )),
         takeWhile(snapshot => !!snapshot.error || !snapshot.run || !TERMINAL.has(snapshot.run.status), true),
         takeUntil(this.session.ended),

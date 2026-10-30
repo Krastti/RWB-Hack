@@ -10,7 +10,7 @@ from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import Session, sessionmaker
 
 from ..errors.projects import InvalidProjectInput
-from ..models import Project as ProjectRow, RequirementRevision as RevisionRow, User
+from ..models import Project as ProjectRow, RequirementRevision as RevisionRow, Run as RunRow, User
 from ..models.dto import Project, ProjectPage, RequirementRevision
 from ..models.dto.auth import UserCredentials
 
@@ -62,7 +62,12 @@ class PostgreSQLProjectRepository:
             .where(RevisionRow.project_id == ProjectRow.id)
             .correlate(ProjectRow).scalar_subquery()
         )
-        return select(ProjectRow, RevisionRow).join(
+        latest_run_status = (
+            select(RunRow.status).where(RunRow.project_id == ProjectRow.id)
+            .order_by(RunRow.created_at.desc(), RunRow.id.desc()).limit(1)
+            .correlate(ProjectRow).scalar_subquery()
+        )
+        return select(ProjectRow, RevisionRow, latest_run_status).join(
             RevisionRow,
             (RevisionRow.project_id == ProjectRow.id) & (RevisionRow.number == latest_number),
         )
@@ -87,11 +92,12 @@ class PostgreSQLProjectRepository:
         return ProjectPage(items=items, next_cursor=next_cursor)
 
     @staticmethod
-    def _dto(project: ProjectRow, revision: RevisionRow) -> Project:
+    def _dto(project: ProjectRow, revision: RevisionRow, latest_run_status: str | None = None) -> Project:
         return Project(
             id=project.id, owner_id=project.owner_id, name=project.name,
             created_at=project.created_at.astimezone(timezone.utc),
             updated_at=project.updated_at.astimezone(timezone.utc),
+            latest_run_status=latest_run_status,
             current_revision=RequirementRevision(
                 id=revision.id, number=revision.number,
                 requirements_text=revision.requirements_text, hash=revision.hash,

@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { Subject, of, throwError } from 'rxjs';
 import { ApiClient, Run, RunEvent } from '../api/client';
 import { ApiError } from '../api/errors';
+import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { Session } from '../auth/session';
 import { RunMonitor, RunSnapshot } from './monitor';
 
@@ -44,5 +45,21 @@ describe('Run polling', () => {
     expect(values.at(-1)?.error).toBeTruthy(); expect(api.events).toHaveBeenCalledTimes(1);
     ended.next(); await vi.advanceTimersByTimeAsync(6000);
     expect(api.run).toHaveBeenCalledOnce(); sub.unsubscribe();
+  });
+  it.each(['run', 'events'] as const)('honors Retry-After on a %s response, including manual refresh', async endpoint => {
+    api[endpoint].mockReturnValueOnce(throwError(() => new HttpErrorResponse({
+      status: 429, headers: new HttpHeaders({ 'Retry-After': '8' }),
+    })));
+    const monitor = TestBed.inject(RunMonitor);
+    const snapshots: RunSnapshot[] = [];
+    const sub = monitor.watch('run').subscribe(value => snapshots.push(value));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(snapshots.at(-1)?.error?.retryAfterMs).toBe(8000);
+    await vi.advanceTimersByTimeAsync(2000); monitor.refresh.next();
+    await vi.advanceTimersByTimeAsync(5999);
+    expect(api.run).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(api.run).toHaveBeenCalledTimes(2); expect(snapshots.at(-1)?.error).toBeNull();
+    sub.unsubscribe();
   });
 });

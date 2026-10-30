@@ -1,7 +1,7 @@
 import { Component, DestroyRef, effect, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormRecord, ReactiveFormsModule, Validators } from '@angular/forms';
-import { finalize } from 'rxjs';
+import { Subject, finalize, takeUntil } from 'rxjs';
 import { ApiClient, Run } from '../api/client';
 import { ApiError, normalizeError } from '../api/errors';
 import { ErrorBanner } from '../shared/error-banner';
@@ -27,12 +27,19 @@ export class Questions {
   private revision = '';
   private submitted = '';
   private key = '';
+  private readonly scopeChanged = new Subject<void>();
+  private scopedRunId = '';
   constructor() {
     effect(() => {
       const run = this.run();
       const revision = `${run.run_id}:${run.questions_revision}`;
       if (revision === this.revision) return;
+      this.scopeChanged.next();
       this.revision = revision;
+      this.pending.set(false);
+      if (this.scopedRunId !== run.run_id) this.error.set(null);
+      this.scopedRunId = run.run_id;
+      this.key = ''; this.submitted = '';
       for (const key of Object.keys(this.form.controls)) this.form.removeControl(key);
       for (const question of run.questions) this.form.addControl(question.question_id, new FormControl(question.answer ?? '', { nonNullable: true, validators: [Validators.maxLength(10000), ...(question.required ? [Validators.required] : [])] }));
     });
@@ -44,7 +51,7 @@ export class Questions {
     const content = JSON.stringify(body);
     if (content !== this.submitted) { this.submitted = content; this.key = crypto.randomUUID(); }
     this.pending.set(true); this.error.set(null);
-    this.api.answers(this.run().run_id, body, this.key).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.pending.set(false))).subscribe({
+    this.api.answers(this.run().run_id, body, this.key).pipe(takeUntil(this.scopeChanged), takeUntilDestroyed(this.destroyRef), finalize(() => this.pending.set(false))).subscribe({
       next: run => { this.key = ''; this.submitted = ''; this.updated.emit(run); },
       error: error => { const value = normalizeError(error); this.error.set(value); if (value.status === 409) this.stale.emit(); },
     });

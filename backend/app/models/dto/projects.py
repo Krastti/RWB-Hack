@@ -1,8 +1,8 @@
-"""Immutable project DTOs for platform contract C-01 v2.0.0."""
+"""Immutable project DTOs for platform contract C-01 v2.1.0."""
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,6 +28,7 @@ class Project:
     created_at: datetime
     updated_at: datetime
     current_revision: RequirementRevision
+    latest_run_status: Literal["queued", "running", "waiting_for_input", "completed", "cancelling", "cancelled", "failed", "budget_exceeded"] | None = None
 
 
 @dataclass(frozen=True)

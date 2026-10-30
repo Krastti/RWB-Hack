@@ -296,6 +296,8 @@ export interface components {
              */
             updated_at: string;
             current_revision: components["schemas"]["RequirementRevision"];
+            /** @description Последний запуск по (created_at DESC, id DESC); null, если запусков нет. Возвращается вместе с проектом без дополнительных HTTP-запросов. */
+            latest_run_status?: components["schemas"]["RunStatus"] | null;
         };
         Limits: {
             max_calls: number;

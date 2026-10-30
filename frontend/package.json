@@ -6,7 +6,7 @@
   "scripts": {
     "start": "ng serve --host 127.0.0.1 --proxy-config proxy.conf.json",
     "build": "ng build",
-    "test": "vitest run",
+    "test": "ng test --watch=false",
     "test:e2e": "playwright test",
     "generate:api": "node tools/api-types/node_modules/openapi-typescript/bin/cli.js ../contracts/platform.openapi.yaml -o src/app/api/schema.ts"
   },

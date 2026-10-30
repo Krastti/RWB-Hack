@@ -11,6 +11,7 @@ import { Timeline } from './timeline';
 import { Questions } from './questions';
 import { Analysis } from './analysis';
 import { tokenUsageNote } from './metrics';
+import { retryLimitError } from './retry-limits';
 
 @Component({
   selector: 'rwb-run-detail', imports: [RouterLink, ReactiveFormsModule, ErrorBanner, Timeline, Questions, Analysis], providers: [RunMonitor],
@@ -35,7 +36,7 @@ import { tokenUsageNote } from './metrics';
       </div>
       <rwb-timeline [run]="r" [events]="events()" />
       <rwb-questions [run]="r" (updated)="update($event)" (stale)="monitor.refresh.next()" />
-      <rwb-analysis [runId]="r.run_id" />
+      <rwb-analysis [runId]="r.run_id" [refreshKey]="analysisRefreshKey(r)" />
     }`,
 })
 export class RunDetail {
@@ -66,15 +67,23 @@ export class RunDetail {
       this.run.set(null); this.events.set([]); this.error.set(null);
       const sub = this.monitor.watch(id).subscribe(snapshot => {
         this.run.set(snapshot.run); this.events.set(snapshot.events); this.error.set(snapshot.error);
-        if (snapshot.run?.status === 'budget_exceeded' && this.retryInitialized !== id) {
-          this.retryInitialized = id;
-          this.retryForm.setValue(snapshot.run.limits);
+        if (snapshot.run) {
+          const current = snapshot.run;
+          const budget = current.status === 'budget_exceeded'
+            ? `${id}:${current.limits.max_calls}:${current.limits.max_output_tokens}:${current.metrics.attempts}`
+            : '';
+          if (budget && budget !== this.retryInitialized) this.retryForm.reset(current.limits);
+          this.retryInitialized = budget;
         }
       });
       onCleanup(() => sub.unsubscribe());
     });
   }
   update(run: Run) { this.run.set(run); this.generation.update(value => value + 1); }
+  analysisRefreshKey(run: Run) {
+    const artifacts = this.events().filter(event => event.event_type === 'artifact.accepted' || event.event_type === 'snapshot.prepared');
+    return `${run.status}:${run.questions_revision}:${artifacts.at(-1)?.seq ?? 0}`;
+  }
   metrics(run: Run) {
     return [{ name: 'Токены вход / выход', value: `${run.metrics.tokens_in} / ${run.metrics.tokens_out}`, note: tokenUsageNote(this.events()) }, { name: 'Вызовы модели', value: run.metrics.model_calls, note: '' }, { name: 'Попытки', value: run.metrics.attempts, note: '' }, { name: 'Время, сек', value: Math.round(run.metrics.duration_ms / 1000), note: '' }];
   }
@@ -88,8 +97,9 @@ export class RunDetail {
     const run = this.run();
     if (!run || this.pending() || this.retryForm.invalid || !['failed','budget_exceeded'].includes(run.status)) return;
     const limits = this.retryForm.getRawValue();
-    if (run.status === 'budget_exceeded' && limits.max_calls <= run.limits.max_calls && limits.max_output_tokens <= run.limits.max_output_tokens) {
-      this.actionError.set(new ApiError(422, 'LIMIT_NOT_INCREASED', 'Увеличьте исчерпанный лимит перед повтором.', '')); return;
+    const limitError = run.status === 'budget_exceeded' ? retryLimitError(run, limits) : null;
+    if (limitError) {
+      this.actionError.set(new ApiError(422, 'LIMIT_NOT_INCREASED', limitError, '')); return;
     }
     const body = run.status === 'budget_exceeded' ? { limits } : {};
     const serialized = JSON.stringify(body);

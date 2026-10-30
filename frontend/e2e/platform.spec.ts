@@ -104,7 +104,7 @@ test('budget retry requires increased limits and blocks duplicate submissions', 
   await fixtures(page); await login(page);
   let retried = false;
   let requests = 0;
-  await page.route(`**/api/v1/runs/${runId}`, route => route.fulfill({ json: { ...run,status:retried ? 'completed' : 'budget_exceeded',stop_reason:'MODEL_CALL_LIMIT' } }));
+  await page.route(`**/api/v1/runs/${runId}`, route => route.fulfill({ json: { ...run,status:retried ? 'completed' : 'budget_exceeded',metrics:{ ...run.metrics,model_calls:10 },stop_reason:'MODEL_CALL_LIMIT' } }));
   await page.route(`**/api/v1/runs/${runId}/retry`, async route => {
     requests++;
     expect(route.request().headers()['idempotency-key']).toBeTruthy();
@@ -116,13 +116,45 @@ test('budget retry requires increased limits and blocks duplicate submissions', 
   await page.goto(`/runs/${runId}`);
   const retry = page.getByRole('button',{ name:'Повторить от контрольной точки' });
   await retry.click();
-  await expect(page.getByText('Увеличьте исчерпанный лимит перед повтором.')).toBeVisible();
+  await expect(page.getByText('Увеличьте исчерпанный лимит вызовов.')).toBeVisible();
   expect(requests).toBe(0);
   await page.getByLabel('Лимит вызовов').fill('11');
   await retry.click();
   await expect(page.getByRole('button',{name:'Отправка…',exact:true})).toBeDisabled();
   await expect(page.getByText('completed',{exact:true})).toBeVisible();
   expect(requests).toBe(1);
+});
+
+test('analysis refreshes automatically when an unchanged run id completes', async ({ page }) => {
+  await fixtures(page); await login(page);
+  let polls = 0;
+  let completed = false;
+  await page.route(`**/api/v1/runs/${runId}`, route => {
+    completed = ++polls > 1;
+    return route.fulfill({ json:{ ...run,status:completed ? 'completed' : 'running' } });
+  });
+  await page.route(`**/api/v1/runs/${runId}/artifacts`, route => route.fulfill({ json:{
+    snapshot_id:projectId,next_cursor:null,items:completed ? [{ artifact_id:'finished',path:'docs/system-analysis.md' }] : [],
+  } }));
+  await page.route(`**/api/v1/runs/${runId}/artifacts/finished`, route => route.fulfill({ contentType:'text/markdown',body:'# Финальный анализ' }));
+  await page.goto(`/runs/${runId}`);
+  await expect(page.getByText('Анализ ещё не подготовлен.')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Финальный анализ',exact:true})).toBeVisible({timeout:8000});
+  await expect(page).toHaveURL(new RegExp(`/runs/${runId}$`));
+});
+
+test('project statuses load in one list response without per-project requests', async ({ page }) => {
+  await fixtures(page); await login(page);
+  let histories = 0;
+  await page.route('**/api/v1/projects/*/runs', route => { histories++; return route.fulfill({ json:{items:[],next_cursor:null} }); });
+  await page.route('**/api/v1/projects', route => route.fulfill({ json:{items:[
+    {...project,id:projectId,name:'Первый',latest_run_status:'completed'},
+    {...project,id:runId,name:'Второй',latest_run_status:'failed'},
+  ],next_cursor:null} }));
+  await page.reload();
+  await expect(page.getByRole('cell',{name:'completed',exact:true})).toBeVisible();
+  await expect(page.getByRole('cell',{name:'failed',exact:true})).toBeVisible();
+  expect(histories).toBe(0);
 });
 
 test('stale clarification revision is refreshed before the next answer package', async ({ page }) => {
