@@ -85,6 +85,18 @@ class ControlTests(unittest.TestCase):
                 self.assertEqual(error.exception.code,'RETRY_NOT_SUPPORTED')
                 self.assertEqual(self.get(),before)
 
+    def test_output_exhaustion_requires_output_increase(self):
+        self.record.run.stop_reason='MAX_OUTPUT_TOKENS'
+        self.record.run.metrics.model_calls=2
+        self.record.run.metrics.tokens_out=100
+        self.record.required_limits=Limits(max_calls=5,max_output_tokens=120)
+        self.save(); before=self.get()
+        with self.assertRaises(ControlError):self.retry(max_calls=10,max_output_tokens=100)
+        self.assertEqual(self.get(),before)
+        response=self.retry(max_calls=5,max_output_tokens=120)
+        self.assertEqual(response.metrics.tokens_out,100)
+        self.assertEqual(response.status,'queued')
+
     def test_wrong_limit_and_policy_denial_rollback(self):
         self.save(); before=self.get()
         with self.assertRaises(ControlError):self.retry(max_calls=5,max_output_tokens=200)

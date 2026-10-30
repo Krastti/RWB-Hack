@@ -1,7 +1,9 @@
 # Stabilization FIX-01–FIX-10
 
-Base main: f030c71 (PR #132 merged). Existing #109 head e5e2661 was applied
-locally, without changing its branch. No new worker, ledger, generator, production
+Initial base: f030c71 (PR #132 merged). Existing #109 head e5e2661 was applied
+locally, without changing its branch. Before final publication, main advanced to
+1e5feae with #109 merged (including b2da403). That main was merged into this branch;
+policy-provided Retry-After and unconditional admission metrics were preserved. No new worker, ledger, generator, production
 adapter, automatic endpoint wiring or CI was introduced. The existing optional
 control router and local adapter come unchanged from #109 except the fixes listed.
 
@@ -29,7 +31,7 @@ contracts/agents/test_validate.py and validate.py --check.
 Executed with /tmp/rwb-stabilize-env/bin/python (new venv):
 
 - pip install -r backend/requirements-worker.txt: PASS, one resolver; pip check PASS.
-- PYTHONPATH=backend python -m unittest discover -s backend/tests -v: 13 PASS, 2 SKIP.
+- PYTHONPATH=backend python -m unittest discover -s backend/tests -v: 14 PASS, 2 SKIP.
 - python -m unittest discover -s backend/app/agents/graph -p 'test_*.py' -v: 26 PASS.
 - PYTHONPATH=backend/app/agents python -m unittest discover -s backend/app/agents/requirements_analyst/tests -p 'test_*.py' -v: 27 PASS.
 - python -m unittest discover -s contracts/agents -p 'test_*.py' -v: 7 PASS.

@@ -1,6 +1,6 @@
 # B-10: отмена и ручной повтор
 
-Публичный интерфейс соответствует [C-01 OpenAPI v1.0.0](../../../../contracts/platform.openapi.yaml),
+Публичный интерфейс соответствует [C-01 OpenAPI v2.1.0](../../../../contracts/platform.openapi.yaml),
 [C-03 v1.0](../../../../contracts/lifecycle.md), AgentResult —
 [C-02 schema_version=1.0](../../../../contracts/agents/README.md).
 База контрактов: `ef1956c958ef64c8784ce0558c53269bea25142f` (принятая #53).
