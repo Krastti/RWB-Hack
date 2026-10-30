@@ -65,7 +65,14 @@ class RunControlService:
                 attempt.reason = "RUN_CANCELLED"
                 self._stage_event(record, attempt, "pending")
         if not any(a.status == "running" for a in record.run.stages):
+            # Фиксируем длительность на последнем безопасном барьере отмены.
+            stopped_at = now()
+            record.run.metrics.duration_ms = max(
+                0, int((stopped_at - record.run.created_at).total_seconds() * 1000),
+            )
             self._status(record, "cancelled")
+            self._event(record, "metrics.updated", metrics=record.run.metrics.model_dump(),
+                        tokens_complete=record.tokens_complete)
 
     def cancel(self, *, owner_id: UUID, run_id: UUID) -> Run:
         with self.store.transaction(owner_id, run_id) as record:
@@ -188,7 +195,14 @@ class RunControlService:
             if (record.run.status != "running" or attempt.status != "running"
                     or private.attempt_id != attempt_id):
                 raise conflict("New calls are forbidden for this execution")
+            previous_metrics = record.run.metrics.model_dump()
+            previous_completeness = dict(record.tokens_complete)
             reserve_budget(record)
+            # Событие и резервирование фиксируются одной транзакцией.
+            if (record.run.metrics.model_dump() != previous_metrics
+                    or record.tokens_complete != previous_completeness):
+                self._event(record, "metrics.updated", metrics=record.run.metrics.model_dump(),
+                            tokens_complete=record.tokens_complete)
 
     def finish_attempt(self, *, owner_id: UUID, run_id: UUID, stage_id: str,
                        attempt_id: UUID, accepted_result: dict,
