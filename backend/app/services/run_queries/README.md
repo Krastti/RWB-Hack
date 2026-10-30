@@ -90,18 +90,18 @@ fixed local snapshot, not a persistence or concurrency implementation.
 
 ## Integration boundary and rollback
 
-The production `main.create_app` is unchanged and does **not** mount these routes
-or install an in-memory source by default. There is no hidden fallback, feature
-flag, runtime-generated data, migration, worker or pipeline implementation here.
-B-11 owns production composition with a persistent adapter. #65 supplies the
-entities; that separate PR is not imported or required by this module.
-For that adapter map ORM `Run.id -> Run.run_id`, `Run.stage_attempts -> Run.stages`,
+The B-07 composition in `main.create_app` mounts these routes using
+`PostgreSQLRunReadRepository` from `services/runs/postgresql.py`, with the same
+session factory as run creation. See the [B-07 module](../runs/README.md).
+The query service itself remains independent of ORM; it never installs the
+in-memory example as a fallback. Worker/lifecycle composition remains in B-11.
+The persistent adapter maps ORM `Run.id -> Run.run_id`, `Run.stage_attempts -> Run.stages`,
 `Run.questions_revision/questions/metrics ->` the persisted public snapshots,
 `StageAttempt` public fields directly, and `RunEvent -> Event`; never expose
 internal attempt IDs/input_hash/leases or stopped_at as extra closed DTO fields.
 The adapter/writers must maintain correct metrics (including elapsed duration)
 and current question snapshots atomically according to C-03; this query service
-does not fabricate unavailable facts. Production PostgreSQL read behavior and
-end-to-end pipeline execution remain unverified until that integration exists.
+does not fabricate unavailable facts. PostgreSQL integration and end-to-end
+pipeline execution still require verification on the real infrastructure.
 Rollback: revert this additive module PR or omit configure_runs at composition;
 there are no database or external side effects to undo.

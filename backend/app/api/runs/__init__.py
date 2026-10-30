@@ -11,6 +11,7 @@ from ...services.run_queries import (
     EventPage, InvalidReadInput, InvalidReadSnapshot, ReadNotFound,
     Run, RunPage, RunQueryService,
 )
+from .creation import configure_run_creation, create_run_creation_router, get_run_creation_service
 
 
 def get_run_query_service(request: Request) -> RunQueryService:
@@ -70,4 +71,5 @@ def configure_runs(app: FastAPI, service: RunQueryService) -> None:
         return error_response(request, 500, "INTERNAL_ERROR", "Invalid stored run snapshot")
 
 
-__all__ = ["create_runs_router", "configure_runs", "get_run_query_service"]
+__all__ = ["create_runs_router", "configure_runs", "get_run_query_service",
+           "configure_run_creation", "create_run_creation_router", "get_run_creation_service"]
