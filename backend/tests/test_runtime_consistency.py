@@ -9,7 +9,7 @@ from app.services.run_control import (Run, Record, StageAttempt, AttemptState, L
     Retry, RunControlService, SQLiteControlStore, ControlError)
 from app.services.lifecycle import (LifecycleService, SQLiteLifecycleRepository,
     RunRecord, Attempt, LifecycleError)
-from app.services.lifecycle.events import next_event
+from app.services.lifecycle.events import EventSequenceError, next_event
 
 
 class ControlTests(unittest.TestCase):
@@ -85,6 +85,55 @@ class ControlTests(unittest.TestCase):
                 self.assertEqual(error.exception.code,'RETRY_NOT_SUPPORTED')
                 self.assertEqual(self.get(),before)
 
+    def client(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from types import SimpleNamespace
+        from app.api.auth import current_user
+        from app.services.run_control.api import configure_run_control
+        app = FastAPI()
+        configure_run_control(app, self.service)
+        app.dependency_overrides[current_user] = lambda: SimpleNamespace(id=self.owner)
+        return TestClient(app)
+
+    def test_unsupported_budget_before_next_stage_has_normalized_http_error(self):
+        self.record.run.stages = []
+        self.record.attempts = []
+        self.save()
+        for reason in ('MAX_INPUT_TOKENS', 'RUN_TIMEOUT'):
+            with self.store.transaction(self.owner, self.id) as record:
+                record.run.stop_reason = reason
+            before = self.get()
+            response = self.client().post(f'/api/v1/runs/{self.id}/retry',
+                headers={'Idempotency-Key': 'early-budget'}, json={})
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json()['error']['code'], 'RETRY_NOT_SUPPORTED')
+            self.assertEqual(self.get(), before)
+
+    def test_accepted_results_require_internal_recovery_not_manual_retry(self):
+        self.record.run.status = 'failed'
+        self.record.run.stop_reason = 'CHECKPOINT_REQUIRED'
+        self.record.run.stages[0].status = 'succeeded'
+        self.record.attempts[0].accepted_result = {'status': 'succeeded', 'artifacts': ['accepted']}
+        self.save()
+        before = self.get()
+        response = self.client().post(f'/api/v1/runs/{self.id}/retry',
+            headers={'Idempotency-Key': 'checkpoint'}, json={})
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['error']['code'], 'RECOVERY_REQUIRED')
+        self.assertEqual(self.get(), before)  # no attempts, usage, replay or outbox effects
+
+    def test_allocator_failure_has_control_http_envelope_and_rolls_back(self):
+        self.record.run.status = 'queued'
+        self.record.run.stages[0].status = 'pending'
+        self.record.events = [{'seq': 1}, {'seq': 1}]
+        self.save()
+        before = self.get()
+        response = self.client().post(f'/api/v1/runs/{self.id}/cancel')
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['error']['code'], 'RUN_STATE_CONFLICT')
+        self.assertEqual(self.get(), before)
+
     def test_output_exhaustion_requires_output_increase(self):
         self.record.run.stop_reason='MAX_OUTPUT_TOKENS'
         self.record.run.metrics.model_calls=2
@@ -118,7 +167,7 @@ class ControlTests(unittest.TestCase):
     def test_event_allocation_uses_watermark_not_list_length(self):
         event=next_event(run_id=self.id,events=[{'seq':7}],event_type='metrics.updated',data={})
         self.assertEqual(event.seq,8)
-        with self.assertRaises(LifecycleError):
+        with self.assertRaises(EventSequenceError):
             next_event(run_id=self.id,events=[{'seq':7},{'seq':7}],event_type='metrics.updated',data={})
 
 
@@ -148,6 +197,22 @@ class LifecycleCheckpointTests(unittest.TestCase):
             saved=service.get(owner_id=owner,run_id=run_id)
             self.assertEqual(saved.attempts,[attempt]);self.assertEqual(saved.data,record.data)
             self.assertEqual(saved.status,'completed')
+
+    def test_allocator_failure_is_mapped_to_lifecycle_error(self):
+        with TemporaryDirectory() as directory:
+            repo = SQLiteLifecycleRepository(Path(directory) / 'lifecycle.db')
+            service = LifecycleService(repo, guard=lambda *_: None)
+            owner, run_id = uuid4(), uuid4()
+            service.create(owner_id=owner, run_id=run_id,
+                context={'profile_id':'web-fastapi-angular','revision_id':str(uuid4())}, data={})
+            with repo.transaction(owner_id=owner, run_id=run_id) as record:
+                record.last_seq += 1
+            before = service.get(owner_id=owner, run_id=run_id)
+            with self.assertRaises(LifecycleError) as error:
+                with service.transaction(owner_id=owner, run_id=run_id, expected_version=before.version) as tx:
+                    tx.publish(event_type='metrics.updated', data={})
+            self.assertEqual(error.exception.code, 'RUN_STATE_CONFLICT')
+            self.assertEqual(service.get(owner_id=owner, run_id=run_id), before)
 
     def test_concurrent_events_and_failed_transaction(self):
         with TemporaryDirectory() as directory:

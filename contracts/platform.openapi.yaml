@@ -850,6 +850,9 @@ components:
         retry with a sufficient increase of the exhausted limit. MAX_INPUT_TOKENS,
         RUN_TIMEOUT and unknown causes return 409 RETRY_NOT_SUPPORTED without
         effects. Cumulative usage and frozen inputs/profile are preserved.
+        If a failed Run has only accepted latest stage results, manual retry returns
+        409 RECOVERY_REQUIRED; internal checkpoint/assembly recovery uses those
+        results without another agent attempt.
       type: object
       additionalProperties: false
       properties:

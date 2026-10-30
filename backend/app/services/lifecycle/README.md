@@ -240,3 +240,16 @@ admission remains the mandatory domain guard's responsibility (#128).
 Both lifecycle and control use the C-03 event allocator and transition tables.
 Only one authoritative store and writer may own a Run; the two standalone local
 stores must never jointly manage the same Run. Shared write integration is #128.
+
+
+Manual retry and internal recovery are distinct. Public POST /retry retries a failed
+agent attempt. When the latest attempts are all succeeded/skipped and the Run is
+failed, it returns 409 RECOVERY_REQUIRED without effects; UI hides retry and
+explains that checkpoint/assembly recovery is needed. The existing guarded
+Lifecycle recovery transition reuses accepted results without a new attempt or
+LLM usage. Its real dispatcher/persistence integration remains #128; the UI does
+not promise automatic recovery. Unsupported budget causes are checked before
+attempt lookup, including stops before the next stage starts.
+
+The event allocator raises neutral EventSequenceError. Lifecycle/control map it
+to their own RUN_STATE_CONFLICT error envelopes, rolling back the transaction.

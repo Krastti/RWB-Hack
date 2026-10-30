@@ -166,3 +166,16 @@ Event allocation and transition tables are shared with lifecycle. This does NOT
 make two independent repositories a single Run owner. Production integration
 must use one authoritative transaction/lock/sequence and one state writer (#128).
 Do not connect the standalone SQLite control and lifecycle stores to the same Run.
+
+
+Manual retry and internal recovery are distinct. Public POST /retry retries a failed
+agent attempt. When the latest attempts are all succeeded/skipped and the Run is
+failed, it returns 409 RECOVERY_REQUIRED without effects; UI hides retry and
+explains that checkpoint/assembly recovery is needed. The existing guarded
+Lifecycle recovery transition reuses accepted results without a new attempt or
+LLM usage. Its real dispatcher/persistence integration remains #128; the UI does
+not promise automatic recovery. Unsupported budget causes are checked before
+attempt lookup, including stops before the next stage starts.
+
+The event allocator raises neutral EventSequenceError. Lifecycle/control map it
+to their own RUN_STATE_CONFLICT error envelopes, rolling back the transaction.

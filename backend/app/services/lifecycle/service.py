@@ -1,5 +1,5 @@
 """C-03 state machine; all effects and seq allocation share a repository lock."""
-from .events import next_event
+from .events import EventSequenceError, next_event
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
@@ -99,9 +99,12 @@ class LifecycleTransaction:
     def _event(self, event_type: str, data: dict, stage_id: str | None = None) -> Event:
         _json(data)
         record = self._record
-        event = next_event(run_id=record.run_id, events=record.events,
-                           event_type=event_type, data=data, stage_id=stage_id,
-                           last_seq=record.last_seq)
+        try:
+            event = next_event(run_id=record.run_id, events=record.events,
+                               event_type=event_type, data=data, stage_id=stage_id,
+                               last_seq=record.last_seq)
+        except EventSequenceError as exc:
+            raise conflict(str(exc)) from exc
         record.events.append(event)
         record.last_seq = event.seq
         record.updated_at = event.timestamp

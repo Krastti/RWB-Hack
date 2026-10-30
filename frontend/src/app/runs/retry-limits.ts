@@ -20,3 +20,14 @@ export function retryLimitError(run: Run, next: DTO['Limits']): string | null {
 export function supportsBudgetRetry(run: Run): boolean {
   return run.status !== 'budget_exceeded' || ['MAX_CALLS', 'MAX_OUTPUT_TOKENS'].includes(run.stop_reason ?? '');
 }
+
+/** Already accepted results use internal recovery, never another agent attempt. */
+export function requiresInternalRecovery(run: Run): boolean {
+  if (run.status !== 'failed' || !run.stages.length) return false;
+  const latest = new Map<string, Run['stages'][number]>();
+  for (const stage of run.stages) {
+    const previous = latest.get(stage.stage_id);
+    if (!previous || stage.attempt_no > previous.attempt_no) latest.set(stage.stage_id, stage);
+  }
+  return [...latest.values()].every(stage => ['succeeded', 'skipped'].includes(stage.status));
+}

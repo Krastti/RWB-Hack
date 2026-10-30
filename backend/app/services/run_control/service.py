@@ -1,5 +1,5 @@
 """Cancel/retry commands and worker safe-boundary hooks, C-03 v1.0."""
-from ..lifecycle.events import next_event
+from ..lifecycle.events import EventSequenceError, next_event
 from ..lifecycle.service import RUN_TRANSITIONS, STAGE_TRANSITIONS
 from copy import deepcopy
 from hashlib import sha256
@@ -24,8 +24,11 @@ class RunControlService:
 
     @staticmethod
     def _event(record: Record, event_type: str, *, stage_id: str | None = None, **data):
-        event = next_event(run_id=record.run.run_id, events=record.events,
-                           event_type=event_type, data=data, stage_id=stage_id)
+        try:
+            event = next_event(run_id=record.run.run_id, events=record.events,
+                               event_type=event_type, data=data, stage_id=stage_id)
+        except EventSequenceError as exc:
+            raise conflict(str(exc)) from exc
         record.events.append(event.model_dump(mode="json", exclude_none=True))
         record.run.updated_at = now()
 
@@ -107,12 +110,21 @@ class RunControlService:
                 return Run.model_validate(replay["response"])
             if record.run.status not in {"failed", "budget_exceeded"}:
                 raise conflict()
+            if (record.run.status == "budget_exceeded" and
+                    record.run.stop_reason not in {"MAX_CALLS", "MAX_OUTPUT_TOKENS"}):
+                raise ControlError(409, "RETRY_NOT_SUPPORTED", "Retry cannot increase the exhausted limit")
             if any(a.status in {"running", "pending"} for a in record.run.stages):
                 raise conflict("Run has unresolved executions")
             failed = sorted({a.stage_id for a in record.run.stages
                              if self._latest(record, a.stage_id).status == "failed"})
             stage_id = record.run.current_stage if record.run.current_stage in failed else next(iter(failed), None)
             if stage_id is None:
+                latest = {a.stage_id: self._latest(record, a.stage_id) for a in record.run.stages}
+                if record.run.status == "failed" and latest and all(
+                        a.status in {"succeeded", "skipped"} for a in latest.values()):
+                    # Public manual retry executes a failed agent. Restoring accepted
+                    # results/checkpoints is the existing internal Lifecycle path.
+                    raise ControlError(409, "RECOVERY_REQUIRED", "Accepted results require internal checkpoint or assembly recovery")
                 raise conflict("Run has no failed execution stage")
             previous = self._latest(record, stage_id)
             if previous.status != "failed":
@@ -125,8 +137,6 @@ class RunControlService:
             if limits.max_calls < old.max_calls or limits.max_output_tokens < old.max_output_tokens:
                 raise conflict("Retry cannot reduce limits")
             if record.run.status == "budget_exceeded":
-                if record.run.stop_reason not in {"MAX_CALLS", "MAX_OUTPUT_TOKENS"}:
-                    raise ControlError(409, "RETRY_NOT_SUPPORTED", "Retry cannot increase the exhausted limit")
                 required = record.required_limits
                 if (body.limits is None or required is None
                         or (limits.max_calls == old.max_calls and limits.max_output_tokens == old.max_output_tokens)

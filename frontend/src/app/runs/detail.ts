@@ -11,7 +11,7 @@ import { RunMonitor } from './monitor';
 import { Timeline } from './timeline';
 import { Questions } from './questions';
 import { Analysis } from './analysis';
-import { retryLimitError, supportsBudgetRetry } from './retry-limits';
+import { retryLimitError, supportsBudgetRetry, requiresInternalRecovery } from './retry-limits';
 
 @Component({
   selector: 'rwb-run-detail', imports: [RouterLink, ReactiveFormsModule, ErrorBanner, Timeline, Questions, Analysis], providers: [RunMonitor],
@@ -29,7 +29,8 @@ import { retryLimitError, supportsBudgetRetry } from './retry-limits';
         @if (r.status === 'cancelling') { <p role="status">Отмена будет выполнена на границе этапа.</p> }
         @if (r.status === 'cancelled') { <p class="text-secondary">Запуск отменён. Новую генерацию можно начать из карточки проекта.</p> }
         @if (supportsRunCommands(r) && !supportsBudgetRetry(r)) { <p class="text-secondary">Повтор не поддерживается для исчерпанного лимита (RETRY_NOT_SUPPORTED).</p> }
-        @if (supportsRunCommands(r) && supportsBudgetRetry(r) && (r.status === 'failed' || r.status === 'budget_exceeded')) {
+        @if (supportsRunCommands(r) && requiresInternalRecovery(r)) { <p class="text-secondary" role="status">Результаты этапов сохранены. Требуется внутреннее восстановление checkpoint или сборки (RECOVERY_REQUIRED); повторная генерация не требуется.</p> }
+        @if (supportsRunCommands(r) && !requiresInternalRecovery(r) && supportsBudgetRetry(r) && (r.status === 'failed' || r.status === 'budget_exceeded')) {
           <form [formGroup]="retryForm" (ngSubmit)="retry()" class="d-flex flex-wrap gap-3 align-items-end">
             @if (r.status === 'budget_exceeded') { <div><label for="max-calls" class="form-label">Лимит вызовов</label><input id="max-calls" class="form-control" type="number" formControlName="max_calls" min="1" required></div><div><label for="max-tokens" class="form-label">Лимит выходных токенов</label><input id="max-tokens" class="form-control" type="number" formControlName="max_output_tokens" min="1" required></div> }
             <button class="btn btn-primary" type="submit" [disabled]="pending() || retryForm.invalid">{{ pending() ? 'Отправка…' : 'Повторить от контрольной точки' }}</button>
@@ -44,6 +45,7 @@ import { retryLimitError, supportsBudgetRetry } from './retry-limits';
 export class RunDetail {
   readonly supportsRunCommands = supportsRunCommands;
   readonly supportsBudgetRetry = supportsBudgetRetry;
+  readonly requiresInternalRecovery = requiresInternalRecovery;
   readonly id = input.required<string>();
   private readonly api = inject(ApiClient);
   private readonly destroyRef = inject(DestroyRef);
@@ -99,7 +101,7 @@ export class RunDetail {
   }
   retry() {
     const run = this.run();
-    if (!run || !supportsRunCommands(run) || !supportsBudgetRetry(run) || this.pending() || this.retryForm.invalid || !['failed','budget_exceeded'].includes(run.status)) return;
+    if (!run || !supportsRunCommands(run) || !supportsBudgetRetry(run) || requiresInternalRecovery(run) || this.pending() || this.retryForm.invalid || !['failed','budget_exceeded'].includes(run.status)) return;
     const limits = this.retryForm.getRawValue();
     const limitError = run.status === 'budget_exceeded' ? retryLimitError(run, limits) : null;
     if (limitError) {

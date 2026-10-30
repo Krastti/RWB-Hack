@@ -91,3 +91,17 @@ it('clears the old Run and metrics on route changes and ignores the old subscrip
   expect(fixture.componentInstance.metrics(fixture.componentInstance.run()!)[0].value).toBe('0 / 0');
   expect(fixture.componentInstance.metrics(second)[0].note).toContain('полнота неизвестна');
 });
+
+it('shows internal recovery instead of retry for accepted results after checkpoint failure', () => {
+  const updates = new Subject<RunSnapshot>();
+  const api = {retry:vi.fn()};
+  TestBed.configureTestingModule({providers:[provideRouter([]),{provide:ApiClient,useValue:api}]});
+  TestBed.overrideComponent(RunDetail, {set:{imports:[RouterLink,ReactiveFormsModule,ErrorBanner],schemas:[NO_ERRORS_SCHEMA],providers:[{provide:RunMonitor,useValue:{watch:()=>updates}}]}});
+  const fixture = TestBed.createComponent(RunDetail);
+  fixture.componentRef.setInput('id','run');fixture.detectChanges();
+  updates.next({run:makeRun({status:'failed',stop_reason:'CHECKPOINT_REQUIRED',stages:[{stage_id:'analysis',attempt_no:1,contract_version:'1',status:'succeeded'}]}),events:[],error:null});
+  fixture.detectChanges();
+  expect(fixture.nativeElement.textContent).toContain('RECOVERY_REQUIRED');
+  expect(fixture.nativeElement.querySelector('form')).toBeNull();
+  fixture.componentInstance.retry();expect(api.retry).not.toHaveBeenCalled();
+});
