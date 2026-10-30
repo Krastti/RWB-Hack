@@ -13,9 +13,21 @@
         "155fc739-3f89-5db0-ad27-78adba9b7594",
         "c80417dc-33f7-5bc8-9338-e1d911166935"
       ],
-      "output_paths": [],
+      "output_paths": [
+        "backend/pyproject.toml",
+        "backend/app/__init__.py",
+        "backend/app/main.py",
+        "backend/.env.example",
+        "backend/alembic.ini"
+      ],
       "output_directories": [
-        "backend"
+        "backend/app/api",
+        "backend/app/core",
+        "backend/app/schemas",
+        "backend/app/services",
+        "backend/app/models",
+        "backend/app/repositories",
+        "backend/app/db"
       ],
       "related_fr_ids": [
         "FR-001",

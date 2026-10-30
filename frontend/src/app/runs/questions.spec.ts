@@ -25,3 +25,34 @@ describe('clarification request scope', () => {
     expect(api.answers.mock.calls[1][0]).toBe(next.run_id); expect(api.answers.mock.calls[1][2]).not.toBe(oldKey);
   });
 });
+
+it.each([true, false])('explains whitespace and maxlength errors (required=%s)', async required => {
+  const api = {answers: vi.fn()};
+  TestBed.configureTestingModule({imports:[Questions],providers:[{provide:ApiClient,useValue:api}]});
+  const fixture = TestBed.createComponent(Questions);
+  fixture.componentRef.setInput('run', makeRun({status:'waiting_for_input', questions_revision:1,
+    questions:[{question_id:'question',question:'Question?',reason:'Reason',related_fr_ids:[],required}]}));
+  fixture.detectChanges();
+  const textarea = fixture.nativeElement.querySelector('textarea') as HTMLTextAreaElement;
+  const enter = async (value: string) => { textarea.value = value; textarea.dispatchEvent(new Event('input')); textarea.dispatchEvent(new Event('blur')); await fixture.whenStable(); fixture.detectChanges(); };
+  await enter(' \t\u00a0');
+  expect(fixture.nativeElement.textContent).toContain('Ответ должен содержать хотя бы один непробельный символ.');
+  expect(fixture.nativeElement.querySelector('button').disabled).toBe(true);
+  expect(fixture.nativeElement.querySelector('textarea').getAttribute('aria-describedby')).toBe('question-error');
+  fixture.componentInstance.submit(); expect(api.answers).not.toHaveBeenCalled();
+  await enter('a'.repeat(10001));
+  expect(fixture.nativeElement.textContent).toContain('Ответ должен содержать не более 10 000 символов.');
+  await enter(required ? 'Valid answer' : '');
+  expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+  expect(fixture.nativeElement.querySelector('button').disabled).toBe(false);
+});
+
+it('does not submit answers for a historical profile even if called directly', () => {
+  const api = {answers:vi.fn()};
+  TestBed.configureTestingModule({imports:[Questions],providers:[{provide:ApiClient,useValue:api}]});
+  const fixture = TestBed.createComponent(Questions);
+  fixture.componentRef.setInput('run', makeRun({profile_id:'web-fastapi-react',status:'waiting_for_input'}));
+  fixture.detectChanges(); fixture.componentInstance.submit();
+  expect(fixture.nativeElement.querySelector('form')).toBeNull();
+  expect(api.answers).not.toHaveBeenCalled();
+});

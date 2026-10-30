@@ -602,6 +602,7 @@ components:
           type: string
           minLength: 1
           maxLength: 100000
+          pattern: '[^\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]'
       required:
       - name
       - requirements_text
@@ -778,6 +779,7 @@ components:
           type: string
           enum:
           - web-fastapi-angular
+          - web-fastapi-react
         status:
           $ref: '#/components/schemas/RunStatus'
         current_stage:
@@ -823,6 +825,7 @@ components:
           type: string
           minLength: 1
           maxLength: 10000
+          pattern: '[^\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]'
       required:
       - question_id
       - value

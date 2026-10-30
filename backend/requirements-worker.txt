@@ -1,0 +1,5 @@
+-r requirements.txt
+-r app/agents/llm/requirements.txt
+-r app/agents/prompts/analysis/requirements.txt
+-r app/agents/graph/requirements.txt
+-r app/agents/requirements_analyst/requirements.txt

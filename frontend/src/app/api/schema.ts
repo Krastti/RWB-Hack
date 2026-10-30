@@ -357,7 +357,7 @@ export interface components {
             /** Format: uuid */
             revision_id: string;
             /** @enum {string} */
-            profile_id: "web-fastapi-angular";
+            profile_id: "web-fastapi-angular" | "web-fastapi-react";
             status: components["schemas"]["RunStatus"];
             current_stage?: string;
             limits: components["schemas"]["Limits"];

@@ -20,6 +20,8 @@ class ProjectService:
         self._validate_owner(owner_id)
         self._validate_text("name", name, 120)
         self._validate_text("requirements_text", requirements_text, 100_000)
+        if not requirements_text.strip():
+            raise InvalidProjectInput("requirements_text must contain a non-whitespace character")
         now = datetime.now(timezone.utc)
         project = Project(
             id=uuid4(), owner_id=owner_id, name=name,
