@@ -2,4 +2,6 @@
 
 from .projects import ProjectRepository
 
-__all__ = ["ProjectRepository"]
+from .users import UserRepository
+
+__all__ = ["ProjectRepository", "UserRepository"]
