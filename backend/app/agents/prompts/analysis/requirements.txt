@@ -1,0 +1,4 @@
+-r ../../../../../contracts/agents/requirements.txt
+httpx==0.28.1
+# A-01 imports the shared DTO package, including Pydantic auth DTOs.
+pydantic>=2.9,<3
