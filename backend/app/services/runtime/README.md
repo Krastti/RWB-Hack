@@ -8,7 +8,7 @@
 PostgreSQL. `app.state.run_runtime` содержит результат
 `compose_runtime(sessions, retry_limits=Limits(...), queue_config=QueueConfig())`:
 repository, states, queue, control, intake. SQLite/in-memory stores здесь не используются.
-Необходимы миграции V1–V6; V6 хранит только private state, без второй копии Run/событий.
+Необходимы миграции V1–V8, применённые по порядку. V6 хранит private state без второй копии Run/событий; V7 добавляет учёт ошибок recovery в WorkerCommand, V8 — состояние и повторы доставки RunQueueJob.
 
 ## Путь команды
 
@@ -95,7 +95,7 @@ finish_attempt/recovery и не допускает новых calls. Intent от
 Одна лишь V6 не мигрирует исторические SQLite stores и LangGraph checkpoints.
 
 Откат: остановить dispatch/workers и новые commands, откатить код. Сохранить
-V4/V5/V6 и принятые inputs/replay/commands для восстановления; не удалять таблицы
+схему V4–V8 и принятые inputs/replay/commands для восстановления; не удалять таблицы
 с данными и не переисполнять потерянную попытку вместо recovery.
 
 ## Technical recovery delivery policy (V7)

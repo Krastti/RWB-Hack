@@ -53,8 +53,9 @@ flyway -configFiles=backend/flyway.conf migrate
 PYTHONPATH=backend .venv/bin/uvicorn app.main:create_app --factory
 ```
 
-Для штатного API/runtime нужны V1–V6; миграции поставляются в этой ветке
-и применяются по порядку без пропуска V4. V6 сохраняет private execution/control state.
+Для штатного API/runtime нужны V1–V8; миграции применяются по порядку без пропусков.
+V6 сохраняет private execution/control state, V7 добавляет учёт ошибок recovery
+в WorkerCommand, V8 — состояние и повторы доставки RunQueueJob.
 API слушает `127.0.0.1:8000`. Flyway/настоящий PostgreSQL-запуск требуют доступной
 инфраструктуры; список локально выполненных проверок приводится в PR, а не
 предполагается из этой инструкции. Возможна явная сборка:
@@ -444,9 +445,10 @@ Stage worker и control worker разделяются, чтобы длинный
 
 Миграция V5 создаёт WorkerCommand с уникальной attempt_id и состояниями pending,
 running,lost,recovering,completed,obsolete, generation/recovery_generation,
-owner_token/expires_at и next_delivery_at. Требуется **V1–V3 → V4 → V5**: V5
-структурно ссылается на V2, но Flyway после V5 не должен получать более раннюю V4
-без согласованного out-of-order решения. V4 и V5 уже присутствуют в дереве.
+owner_token/expires_at и next_delivery_at. Для текущего runtime нужны все миграции
+**V1–V8 по порядку**: V7 добавляет поля ошибок recovery в WorkerCommand,
+а V8 — поля доставки intake job. Flyway не должен получать пропущенные более ранние
+миграции без согласованного out-of-order решения.
 Production запуск worker здесь не считается проверенным и не предлагается с
 готовым module path. Интегратор должен создать engine/sessionmaker и вызвать
 create_worker_app с реальными orchestrator/recovery. Синтаксис будущего запуска
