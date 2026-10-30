@@ -4,4 +4,10 @@ from .projects import Project, ProjectPage, RequirementRevision
 
 from .llm import LLMResult, LLMUsage
 
-__all__ = ['LLMResult', 'LLMUsage', "Project", "ProjectPage", "RequirementRevision"]
+from .auth import CurrentUser, Token, TokenRequest, UserCredentials
+
+__all__ = ['LLMResult', 'LLMUsage', "Project", "ProjectPage", "RequirementRevision", "CurrentUser", "Token", "TokenRequest", "UserCredentials"]
+
+from .errors import Error, ErrorDetail
+
+__all__ += ["Error", "ErrorDetail"]

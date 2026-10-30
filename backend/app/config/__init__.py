@@ -2,4 +2,6 @@
 
 from .llm import LLMConfig
 
-__all__ = ["LLMConfig"]
+from .auth import AuthConfig
+
+__all__ = ["LLMConfig", "AuthConfig"]

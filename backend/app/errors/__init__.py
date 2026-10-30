@@ -4,4 +4,6 @@ from .projects import InvalidProjectInput, ProjectNotFound
 
 from .llm import LLMError
 
-__all__ = ['LLMError', "InvalidProjectInput", "ProjectNotFound"]
+from .auth import Unauthorized
+
+__all__ = ['LLMError', "InvalidProjectInput", "ProjectNotFound", "Unauthorized"]
