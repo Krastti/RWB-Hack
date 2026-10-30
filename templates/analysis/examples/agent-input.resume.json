@@ -8,7 +8,7 @@
     "20000000-0000-4000-8000-000000000001"
   ],
   "contract_version": "1",
-  "profile_id": "web-fastapi-react",
+  "profile_id": "web-fastapi-angular",
   "limits": {
     "max_calls": 10,
     "max_output_tokens": 30000,

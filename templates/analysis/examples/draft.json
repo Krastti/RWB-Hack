@@ -253,7 +253,7 @@
       },
       {
         "id": "ASM-002",
-        "text": "Предлагается web-интерфейс React/TypeScript/MUI, FastAPI и PostgreSQL по профилю web-fastapi-react; модули заявок, доступа и хранения разделены.",
+        "text": "Предлагается web-интерфейс Angular 22/TypeScript/Bootstrap 5.3/SCSS, FastAPI и PostgreSQL по профилю web-fastapi-angular; модули заявок, доступа и хранения разделены.",
         "reason": "Это ограничение и проектное решение платформы, не факт из бизнес-требований.",
         "related_fr_ids": [
           "FR-001",

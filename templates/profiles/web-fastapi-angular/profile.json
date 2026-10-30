@@ -1,13 +1,14 @@
 {
   "$schema": "./profile.schema.json",
   "schema_version": "1.0",
-  "profile_id": "web-fastapi-react",
+  "profile_id": "web-fastapi-angular",
   "profile_version": "1.0.0",
   "stack": {
     "frontend": [
-      "React",
+      "Angular 22",
       "TypeScript",
-      "MUI"
+      "Bootstrap 5.3",
+      "SCSS"
     ],
     "backend": [
       "FastAPI",
@@ -188,31 +189,31 @@
       "condition": "always"
     },
     {
-      "path": "frontend/index.html",
+      "path": "frontend/src/index.html",
       "kind": "source",
       "owner": "frontend",
       "condition": "always"
     },
     {
-      "path": "frontend/src/main.tsx",
+      "path": "frontend/src/main.ts",
       "kind": "source",
       "owner": "frontend",
       "condition": "always"
     },
     {
-      "path": "frontend/src/app/App.tsx",
+      "path": "frontend/src/app/app.ts",
       "kind": "source",
       "owner": "frontend",
       "condition": "always"
     },
     {
-      "path": "frontend/src/app/theme.ts",
+      "path": "frontend/src/styles.scss",
       "kind": "source",
       "owner": "frontend",
       "condition": "always"
     },
     {
-      "path": "frontend/src/api/client.ts",
+      "path": "frontend/src/app/api/client.ts",
       "kind": "source",
       "owner": "frontend",
       "condition": "always"
@@ -288,6 +289,42 @@
       "kind": "documentation",
       "owner": "integrations",
       "condition": "has_integrations"
+    },
+    {
+      "path": "frontend/angular.json",
+      "kind": "configuration",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "kind": "configuration",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/tsconfig.app.json",
+      "kind": "configuration",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/src/app/app.config.ts",
+      "kind": "source",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/src/app/app.routes.ts",
+      "kind": "source",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/THIRD_PARTY_NOTICES.md",
+      "kind": "documentation",
+      "owner": "frontend",
+      "condition": "always"
     }
   ],
   "conditional_directories": [
@@ -408,8 +445,8 @@
     }
   },
   "ui_kit": {
-    "name": "MUI",
-    "theme_path": "frontend/src/app/theme.ts",
+    "name": "Bootstrap",
+    "theme_path": "frontend/src/styles.scss",
     "required_states": [
       "loading",
       "empty",

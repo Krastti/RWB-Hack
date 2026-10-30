@@ -13,14 +13,14 @@ from urllib.parse import urljoin, urldefrag
 from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
-from contracts.agents.validate import Contracts, load, require, walk
+from contracts.agents.validate import ContractError, Contracts, load, require, walk
 
 if TYPE_CHECKING:
     from backend.app.models.dto.llm import LLMResult
 
 ROOT = Path(__file__).resolve().parents[5]
 TEMPLATES = ROOT / "templates" / "analysis"
-PROFILE = ROOT / "templates" / "profiles" / "web-fastapi-react"
+PROFILE = ROOT / "templates" / "profiles" / "web-fastapi-angular"
 PROMPT_VERSION = "1.0.0"
 
 
@@ -92,7 +92,7 @@ def build_analysis_prompt(
     contracts.validate("agent-input", context)
     contracts.validate("analysis-input", business_input)
     profile = load(PROFILE / "profile.json")
-    require(profile["profile_id"] == "web-fastapi-react" and profile["profile_version"] == "1.0.0",
+    require(profile["profile_id"] == "web-fastapi-angular" and profile["profile_version"] == "1.0.0",
             "ANALYSIS_UNSUPPORTED_PROFILE_VERSION")
     require(context["stage_id"] == "analysis" and context["profile_id"] == profile["profile_id"],
             "ANALYSIS_UNSUPPORTED_CONTEXT")
@@ -152,12 +152,29 @@ def build_analysis_prompt(
 
 
 async def generate_analysis(llm: StructuredLLM, prepared: AnalysisPrompt) -> LLMResult:
-    """Exactly one port call. Preserve A-01 error/usage; no retries or state changes.
+    """Validate the analysis before exposing an A-01 success to the caller.
 
     The caller must configure A-01 with prepared.max_output_tokens/timeout_seconds
-    and reserve the run budget before calling. A-03 validates semantics afterwards.
+    and reserve the run budget before calling. No retries or run state changes.
     """
-    return await llm.generate(system=prepared.system, prompt=prepared.prompt, schema=prepared.schema)
+    from backend.app.errors.llm import LLMError
+    from backend.app.models.dto.llm import LLMResult
+
+    result = await llm.generate(system=prepared.system, prompt=prepared.prompt, schema=prepared.schema)
+    if not result.ok:
+        return result
+    try:
+        validate_draft(result.data, prepared)
+    except ContractError:
+        return LLMResult(
+            usage=result.usage,
+            error=LLMError(
+                code="ANALYSIS_INVALID_DRAFT",
+                message="The model response failed analysis validation.",
+                retryable=False,
+            ),
+        )
+    return result
 
 
 def validate_draft(draft: dict[str, Any], prepared: AnalysisPrompt) -> None:

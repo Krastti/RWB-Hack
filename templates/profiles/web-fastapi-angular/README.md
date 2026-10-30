@@ -1,4 +1,4 @@
-# Профиль `web-fastapi-react` — C-05
+# Профиль `web-fastapi-angular` — C-05
 
 Задача: [#55](https://github.com/Krastti/RWB-Hack/issues/55).
 Версия профиля: **1.0.0**, формат профиля: **1.0**.
@@ -9,7 +9,7 @@
 
 Профиль описывает **генерируемый проект**. Это контракт для A-02, A-05–A-19,
 A-20 и B-14/B-20, а не реализация агентов, шаблон приложения или готовый pipeline.
-F-01 может использовать соглашения MUI для интерфейса платформы; дерево результата,
+F-01 может использовать соглашения Angular/Bootstrap для интерфейса платформы; дерево результата,
 API и конфигурация генерируемого проекта остаются отдельными от платформы.
 
 ## Публичный интерфейс и версии
@@ -23,7 +23,7 @@ API и конфигурация генерируемого проекта ост
 - [examples/generation-plan.json](examples/generation-plan.json) — пример плана
   после фиксации архитектуры, с непересекающимися выходами.
 
-Сервер разрешает `profile_id=web-fastapi-react` в этот каталог из своего allowlist.
+Сервер разрешает `profile_id=web-fastapi-angular` в этот каталог из своего allowlist.
 Он загружает профиль, проверяет схему и правила ниже, фиксирует его версию,
 SHA-256 точных байтов и эффективные лимиты в неизменяемом контексте запуска.
 Пользователь передаёт `profile_id`, но не путь к шаблону, команды или новые права.
@@ -56,7 +56,7 @@ A-10/A-12 в зависимостях шаблона; этот контракт 
 
 ## Стек и дерево результата
 
-Frontend: React, TypeScript в strict mode, MUI. Backend: FastAPI, Pydantic,
+Frontend: Angular 22, standalone-компоненты, TypeScript в strict mode, Bootstrap 5.3 и SCSS. Angular CLI, Router, Reactive Forms, HttpClient и RxJS. Backend: FastAPI, Pydantic,
 SQLAlchemy, PostgreSQL. Для миграций выбран Alembic как соглашение этого профиля,
 а не требование организаторов и не изменение миграций backend платформы.
 Kotlin/Compose и PostGIS относятся к отдельным расширениям X-01–X-06.
@@ -82,12 +82,18 @@ docs/
 frontend/
   package.json
   tsconfig.json
-  index.html
+  package-lock.json
+  angular.json
+  tsconfig.app.json
+  THIRD_PARTY_NOTICES.md
   src/
-    main.tsx
-    app/App.tsx
-    app/theme.ts
-    api/client.ts
+    index.html
+    main.ts
+    styles.scss
+    app/app.ts
+    app/app.config.ts
+    app/app.routes.ts
+    app/api/client.ts
     pages/                    # экраны по ui-spec
     components/               # общие компоненты при необходимости
 backend/
@@ -192,15 +198,18 @@ system-analysis.md охватывает назначение, границы, р
 
 ## UI Kit и правила кода
 
-Единый `ThemeProvider` подключается у корня React; palette, typography, spacing,
-breakpoints и component overrides задаются в `frontend/src/app/theme.ts`.
-Использовать MUI-компоненты, theme tokens и `sx` для локальной компоновки;
-не добавлять второй UI Kit и не копировать стили MUI отдельными CSS-реализациями.
-Пользовательский виджет допустим, если MUI не покрывает предметное взаимодействие;
-его назначение и доступность отражаются в UI spec. Иконкам-кнопкам нужны подписи.
+Bootstrap 5.3 подключается через `frontend/src/styles.scss`; тема задаётся SCSS-переменными
+и CSS custom properties. Приложение использует standalone-компоненты Angular,
+Router, Reactive Forms, HttpClient и RxJS. Angular CLI управляет сборкой; не добавлять
+второй UI Kit. Layout и оформление адаптируются из SB Admin Angular с сохранением
+MIT-лицензии в THIRD_PARTY_NOTICES.md. Старые зависимости Angular 11/Bootstrap 4
+и Pug из исходного шаблона не переносятся. Точные совместимые версии фиксируются
+в package.json и package-lock.json; Node.js 24.15+ и TypeScript 6.0.x.
+Пользовательский виджет допустим для предметного взаимодействия; его назначение
+и доступность отражаются в UI spec. Иконкам-кнопкам нужны подписи.
 
 Для каждого экрана UI spec связывает FR, роли, действия, `operationId` из OpenAPI
-и компоненты MUI. Обязательны состояния loading, empty, error, forbidden, success;
+и компоненты Angular/Bootstrap. Обязательны состояния loading, empty, error, forbidden, success;
 для неприменимого состояния фиксируется причина. Обеспечить клавиатурную навигацию,
 видимый focus, labels и связанные сообщения валидации. Для запросов предусмотреть
 повтор после ошибки соединения; кнопки блокируются на время отправки.
@@ -234,7 +243,7 @@ SQLite не подменяют целевое хранилище. Модели, 
 `ownership.default=deny`. Каждый ключ `ownership.agents` задаёт разрешённые
 точные `paths` и поддеревья `directories`; последние записываются без завершающего
 `/`. Разрешение поддерева действует только на границе сегмента пути:
-`frontend` разрешает `frontend/src/main.tsx`, но не `frontend-old/file.ts`.
+`frontend` разрешает `frontend/src/main.ts`, но не `frontend-old/file.ts`.
 Чтение — только разрешённых input_artifact_ids того же запуска и фиксированного профиля.
 
 План может сузить эти права, но не расширить их. Разные задачи не получают
@@ -353,15 +362,15 @@ Worker разрешает UUID в реальные артефакты своег
 
 ```sh
 python contracts/agents/validate.py --check
-python contracts/agents/validate.py agent-input templates/profiles/web-fastapi-react/examples/agent-input.frontend.json
-python contracts/agents/validate.py generation-plan templates/profiles/web-fastapi-react/examples/generation-plan.json
+python contracts/agents/validate.py agent-input templates/profiles/web-fastapi-angular/examples/agent-input.frontend.json
+python contracts/agents/validate.py generation-plan templates/profiles/web-fastapi-angular/examples/generation-plan.json
 python - <<'PY'
 import json
 from pathlib import Path
 from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
-root = Path('templates/profiles/web-fastapi-react')
+root = Path('templates/profiles/web-fastapi-angular')
 schemas = [json.loads(p.read_text()) for p in Path('contracts/agents/v1').glob('*.schema.json')]
 schema = json.loads((root / 'profile.schema.json').read_text())
 schemas.append(schema)
