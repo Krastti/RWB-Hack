@@ -22,7 +22,7 @@ owner, путь на сервере, следующий узел или Run.stat
 | A-03 Analyst | A-01/A-02 → requirements/questions/system-analysis artifacts | Legacy ядро 0.1 не заменяет bridge C-02 |
 | A-04 LangGraph | AnalysisNode/ArtifactStore/checkpointer → анализ/ожидание/resume | Есть внутренний граф без общего worker/HTTP persistence |
 | A-05 Architecture core | Принятый анализ + pinned профиль → компоненты, границы, дерево и предварительный generation-plan | Есть проверяемое предложение; кодогенерация заблокирована до A-09 |
-| A-06–A-09 Architecture | Core → OpenAPI, data-model, ui-spec и принятая architecture единой версии | Есть генераторы data-model и UI spec; общий архитектурный этап ещё не подключён |
+| A-06–A-09 Architecture | Core → OpenAPI, data-model, ui-spec и принятая architecture единой версии | Есть отдельные генераторы A-06 (OpenAPI), A-07 (data-model) и A-08 (UI spec); общий архитектурный этап ещё не подключён |
 | A-10–A-18 Coding | Frozen API/data/UI/plan → предметные frontend/backend/models/migrations/adapters/docs и fan-out/join | Правила профиля, не готовые агенты |
 | A-19 Assembly | Принятые bytes/metadata → manifest/traceability/snapshot | Правила проверки; не замена build/test |
 | A-20 Budget | Общие резервы/usage → допуск и причины остановки | Полный ledger/admission требует интеграции |
@@ -37,6 +37,16 @@ A-06 владеет предметным OpenAPI, A-07 — data schema, A-08 —
 Подключение модуля к общему архитектурному этапу остаётся в A-09.
 Mobile Kotlin/Compose (X-01/X-02), PostGIS (X-03), geo-adapters/session events
 (X-04/X-05), mobile graph/manifest/UI (X-06/X-07) — отдельные расширения.
+
+[A-06 OpenAPI generator](../backend/app/agents/generators/openapi/README.md) принимает
+разрешённый C-02 requirements artifact, замороженный профиль и утверждённую
+архитектором API policy, привязанную к checksum требований, делает один вызов
+A-01, проверяет draft/FR/roles/references и формирует `contracts/openapi.yaml`
+версии 3.1.0 с C-02 metadata/usage. Публичный интерфейс и offline-пример находятся
+рядом с модулем. Политика фиксирует маршруты, permissions и покрытие FR; модель
+не вправе самостоятельно менять доступ или исключать FR из API. Её утверждение
+и подключение к архитектурному этапу — A-09 (#87); генератор не
+меняет Run.status, storage или общий API платформы.
 
 ## Версии и C-02 envelope
 
