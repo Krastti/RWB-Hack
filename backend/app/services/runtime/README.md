@@ -97,3 +97,21 @@ finish_attempt/recovery и не допускает новых calls. Intent от
 Откат: остановить dispatch/workers и новые commands, откатить код. Сохранить
 V4/V5/V6 и принятые inputs/replay/commands для восстановления; не удалять таблицы
 с данными и не переисполнять потерянную попытку вместо recovery.
+
+## Technical recovery delivery policy (V7)
+
+`WorkerCommand.recovery_failures` is independent of domain automatic retry counts.
+An unacknowledged recovery lease expiration or a fenced `abandon()` increments it
+atomically. Retry delays are 5 and 10 seconds; the third failure makes the command
+`obsolete`, retains `RECOVERY_HANDLER_FAILED` in `recovery_error`, and invokes the
+runtime terminal barrier with `RECOVERY_INFRA_EXHAUSTED`. Pending work is closed
+through lifecycle; running independent work may finish before the final transition.
+Cancellation retains priority. Exception messages are not persisted because they
+may contain credentials or prompts. A database failure rolls back the counter,
+lease change and terminal intent together; delivery can resume when SQL returns.
+
+Direct delivery of a lost command must respect `next_delivery_at` as dispatch does.
+Dispatch does not move this recovery backoff timestamp when selecting a due lost
+command; claim acquires the lease under the Run/command locks. A durable successful
+`recovery_generation` is a commit receipt: losing the process before `complete()`
+does not increment technical failures or schedule another domain attempt.
