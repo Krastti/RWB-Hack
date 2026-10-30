@@ -63,6 +63,14 @@ A-02 (#76) — полный prompt/шаблон анализа. Миграция
   значения и права определяет конфигурация сервера. В примерах: analysis,
   architecture, frontend, backend. Schema не позволяет пользователю выбрать
   произвольный исполняемый инструмент.
+- `stage_id` обозначает отдельный узел исполнения, а не тип агента. В одном
+  generation-plan уникальны и task_id, и stage_id; owner_agent может повторяться.
+  Например, implement-auth/backend-auth и implement-orders/backend-orders — две
+  задачи с разными узлами, обе с owner_agent=backend. В текущем JSON-примере
+  task_id=stage_id=owner_agent=backend допустимо для одной задачи, но это не правило
+  маршрутизации. Orchestrator находит задачу по stage_id в принятом плане Run
+  и выбирает исполнителя по проверенному owner_agent; детали — в
+  [C-03](../lifecycle.md#11-задача-плана-и-узел-исполнения).
 - `limits` требует max_calls и max_output_tokens; timeout_seconds и
   max_critical_questions при необходимости передаются из профиля. Начальное
   значение лимита критичных вопросов — 3 по спецификации; изменение конфигурацией
@@ -160,9 +168,17 @@ model, outcome, input_tokens/output_tokens и duration_seconds. Реальная
 
 usage.duration_seconds — время одного этапа без ожидания человека. Оно не обязано
 равняться сумме длительностей вызовов, например при параллельных обращениях.
-В API Metrics: input_tokens → tokens_in, output_tokens → tokens_out,
-calls → model_calls, секунды → duration_ms. История attempts и ручных уточнений
-считается по сохранённым событиям, не выводится из номера последней попытки.
+В публичном OpenAPI Metrics поля остаются неотрицательными целыми числами:
+tokens_in/tokens_out — суммы известных значений из model_calls, calls переводится
+в model_calls, секунды — в duration_ms. Внутренний null не передаётся напрямую
+в числовое поле API и не заменяется фактом нулевого расхода. По C-03 полнота
+сумм публикуется отдельно в metrics.updated: Event.data.tokens_complete.
+При неизвестном usage UI не объявляет эти числовые суммы окончательными;
+для бюджета используется консервативный резерв, а не только известная сумма.
+Подробное преобразование — в [lifecycle-контракте](../lifecycle.md), раздел 10.
+Это уточнение отображения в API, схемы C-02 и nullable внутренний usage не меняются.
+История attempts и ручных уточнений считается по сохранённым событиям,
+не выводится из номера последней попытки.
 
 Diagnostic: code, безопасное message, severity, retryable, related_fr_ids,
 при необходимости artifact_id. retryable — разрешённость обсуждения повтора,
@@ -179,6 +195,7 @@ python3 -m venv contracts/agents/.venv
 source contracts/agents/.venv/bin/activate
 python -m pip install -r contracts/agents/requirements.txt
 python contracts/agents/validate.py --check
+python -m unittest discover -s contracts/agents -p 'test_*.py' -v
 ```
 
 Ожидается:
@@ -186,6 +203,9 @@ python contracts/agents/validate.py --check
 ```text
 OK: 11 schemas, 22 examples, 4 linked bundles, 1 snapshot; offline
 ```
+
+Unit-тесты проверяют, что разные задачи одного агента с разными stage_id
+принимаются, а повторяющийся stage_id отклоняется.
 
 Отдельный документ:
 

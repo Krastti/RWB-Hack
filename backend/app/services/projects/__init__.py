@@ -2,7 +2,7 @@
 
 from ...errors import InvalidProjectInput, ProjectNotFound
 from ...models.dto import Project, ProjectPage, RequirementRevision
-from ...repository import ProjectRepository
+from ...repositories import ProjectRepository
 from .service import ProjectService
 
 __all__ = [

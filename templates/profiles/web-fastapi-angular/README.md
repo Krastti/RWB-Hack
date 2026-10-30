@@ -5,7 +5,7 @@
 Статус: предложение для review; согласование потребителей фиксируется при принятии PR.
 Основание: §3, §10–12 [спецификации](../../../docs/project-specification.md),
 [роадмап](../../../docs/development-roadmap.md) и [C-02](../../../contracts/agents/README.md).
-Прочитанная база `main`: `3d3a2a88cd7e859885c78956df657d2a198528f2`.
+Прочитанная база `main`: `ef1956c958ef64c8784ce0558c53269bea25142f`.
 
 Профиль описывает **генерируемый проект**. Это контракт для A-02, A-05–A-19,
 A-20 и B-14/B-20, а не реализация агентов, шаблон приложения или готовый pipeline.
@@ -147,7 +147,7 @@ README.md
 | `architecture` | architecture.json, contracts/openapi.yaml, data-model.json, ui-spec.json, generation-plan.json |
 | `frontend` | Исходники экранов, реальный API client, theme и конфигурация frontend |
 | `backend` | FastAPI API, DTO, предметные сервисы, SQLAlchemy-модели и работа с PostgreSQL |
-| `migrations` в backend-этапе | Alembic env, начальная миграция и инструкция применения |
+| `migrations` | Alembic env, начальная миграция и инструкция применения |
 | `integrations` при необходимости | Контракты, адаптеры и явно обозначенные mock внешних систем |
 | `documentation` | Шесть документов docs, README по фактическому дереву |
 | `assembly` | manifest.json, traceability.json и .gitignore |
@@ -250,8 +250,11 @@ SQLite не подменяют целевое хранилище. Модели, 
 пересекающиеся пути/поддеревья даже последовательно: этого требует валидатор C-02.
 Backend получает перечисленные подкаталоги `backend/app` и конфигурационные файлы,
 а не весь `backend`; миграции принадлежат `migrations`, адаптеры — `integrations`.
-При отсутствии отдельного вызова это роли одного backend-этапа, а не право
-backend-агента перезаписывать их выходы.
+Задачи backend и миграций — отдельные узлы исполнения с разными `stage_id`:
+`backend` и `migrations` соответственно. В плане уникальны и `task_id`, и
+`stage_id`; `owner_agent` задаёт исполнителя и может повторяться. Зависимости
+`depends_on` ссылаются на `task_id`: в примере задача `migrations` зависит от
+`backend`. Общий исполнитель не даёт права расширять выходы отдельной задачи.
 
 Документационный агент не владеет всем `docs`: `docs/system-analysis.md` принадлежит
 аналитику. Ему разрешены ровно шесть остальных документов и корневой README.

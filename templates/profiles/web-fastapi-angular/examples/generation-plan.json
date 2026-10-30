@@ -52,7 +52,7 @@
     },
     {
       "task_id": "migrations",
-      "stage_id": "backend",
+      "stage_id": "migrations",
       "owner_agent": "migrations",
       "depends_on": [
         "backend"

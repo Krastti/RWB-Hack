@@ -1,39 +1,12 @@
 """JSON login endpoint and Bearer current_user dependency."""
-from uuid import uuid4
-
 from fastapi import APIRouter, Depends, FastAPI, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from fastapi.routing import APIRoute
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from ..common import ContractRoute, error_response
 from ...errors.auth import Unauthorized
 from ...models.dto.auth import CurrentUser, Token, TokenRequest
 from ...models.dto.errors import Error
 from ...services.auth import AuthService
-
-
-def _error(request: Request, status: int, code: str, message: str) -> JSONResponse:
-    request_id = getattr(request.state, "request_id", None) or str(uuid4())
-    return JSONResponse(
-        status_code=status,
-        content={"error": {"code": code, "message": message,
-                           "details": {}, "request_id": str(request_id)}},
-        headers={"WWW-Authenticate": "Bearer"} if status == 401 else None,
-    )
-
-
-class _AuthRoute(APIRoute):
-    def get_route_handler(self):
-        handler = super().get_route_handler()
-
-        async def wrapped(request: Request):
-            try:
-                return await handler(request)
-            except RequestValidationError:
-                # Never echo validation input: it can contain the password.
-                return _error(request, 422, "VALIDATION_ERROR", "Invalid login request")
-        return wrapped
 
 
 def get_auth_service(request: Request) -> AuthService:
@@ -52,7 +25,7 @@ def current_user(
     return service.current_user(credentials.credentials)
 
 
-router = APIRouter(prefix="/api/v1/auth", tags=["auth"], route_class=_AuthRoute)
+router = APIRouter(prefix="/api/v1/auth", tags=["auth"], route_class=ContractRoute)
 
 
 @router.post(
@@ -86,7 +59,7 @@ def configure_auth(app: FastAPI, service: AuthService) -> None:
 
     @app.exception_handler(Unauthorized)
     async def unauthorized_handler(request: Request, exc: Unauthorized):
-        return _error(request, 401, "UNAUTHORIZED", "Authentication required")
+        return error_response(request, 401, "UNAUTHORIZED", "Authentication required")
 
 
 __all__ = ["router", "current_user", "configure_auth", "get_auth_service"]
