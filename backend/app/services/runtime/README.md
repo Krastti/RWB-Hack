@@ -128,7 +128,9 @@ metadata then commits under those same locks. Known immutable-input validation
 errors are rejected immediately; other errors get at most three failures with
 5/10-second backoff. Rejected jobs retain a safe error code for investigation and
 never occupy an active dispatch slot. Valid frozen state allows queued → running
-→ failed through lifecycle. When corrupt snapshots prevent lifecycle loading,
-`TERMINALIZATION_UNAVAILABLE` is persisted with the rejected job for operator
-repair; no terminal Run state is fabricated. Database outages can prevent recording
-failure metadata; the whole transaction then rolls back and delivery remains durable.
+→ failed through lifecycle. When corrupt snapshots prevent lifecycle loading, the terminalization fallback
+transitions a queued Run through running to failed without loading private state,
+fences active attempts and commands, and releases the active Run slot. The rejected
+job records `TERMINALIZATION_FALLBACK` for investigation. If the fallback or database
+write fails, the whole transaction rolls back, including job rejection, so delivery
+remains pending for a later attempt.
