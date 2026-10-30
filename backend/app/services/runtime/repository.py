@@ -117,28 +117,30 @@ class PostgreSQLRuntimeRepository:
         from ..run_control import RunControlService
         return RunControlService(BoundStore(), authorize_retry=deny_retry)
 
-    def _guard_successes(self, session, row, record, original):
-        """Apply the lifecycle domain guard to every newly accepted result."""
+    def _guard_attempt_changes(self, session, row, record, original):
+        """Apply the lifecycle domain guard to every changed attempt status."""
         from ..lifecycle.models import LifecycleError
-        from ..lifecycle.service import Change
+        from ..lifecycle.service import Change, STAGE_TRANSITIONS
         from .lifecycle import BoundLifecycleRepository
 
         previous = {(a.stage_id, a.attempt_no): a.status for a in original.run.stages}
-        successes = [a for a in record.run.stages
-                     if a.status == "succeeded" and previous.get((a.stage_id, a.attempt_no)) != "succeeded"]
-        if not successes:
+        changes = [a for a in record.run.stages
+                   if previous.get((a.stage_id, a.attempt_no)) != a.status
+                   and not (a.status == "pending" and (a.stage_id, a.attempt_no) not in previous)]
+        if not changes:
             return
         if not callable(self.guard):
             raise LifecycleError(409, "DOMAIN_GUARD_REQUIRED", "A domain transition guard is required")
         repository = BoundLifecycleRepository(self, session, row)
         with repository.transaction(owner_id=record.owner_id, run_id=row.id) as snapshot:
             snapshot.data = record.model_dump(mode="json", exclude={"events"})
-            for attempt in successes:
+            for attempt in changes:
                 source = next((a for a in record.attempts if
                                (a.stage_id, a.attempt_no) == (attempt.stage_id, attempt.attempt_no)), None)
-                if source is None or previous.get((attempt.stage_id, attempt.attempt_no)) != "running":
+                before = previous.get((attempt.stage_id, attempt.attempt_no))
+                if source is None or (before, attempt.status) not in STAGE_TRANSITIONS:
                     raise LifecycleError(409, "RUN_STATE_CONFLICT", "Invalid accepted attempt")
-                change = Change(kind="attempt", source="running", target="succeeded",
+                change = Change(kind="attempt", source=before, target=attempt.status,
                                 attempt_id=source.attempt_id, stage_id=attempt.stage_id)
                 if self.guard(snapshot.model_copy(deep=True), change) is not None:
                     raise LifecycleError(422, "VALIDATION_ERROR", "Guard must approve with None or raise an error")
@@ -146,7 +148,7 @@ class PostgreSQLRuntimeRepository:
             snapshot.data = original.model_dump(mode="json", exclude={"events"})
 
     def save(self, session, row, state, record, original):
-        self._guard_successes(session, row, record, original)
+        self._guard_attempt_changes(session, row, record, original)
         if (record.owner_id != original.owner_id or any(
                 getattr(record.run, name) != getattr(original.run, name)
                 for name in ("run_id", "project_id", "revision_id", "profile_id", "created_at"))):

@@ -7,9 +7,9 @@ import logging
 
 from sqlalchemy import select, func
 
-from ..models import Run
+from ..models import Run, RunEvent, StageAttempt
 from ..models.run_creation import RunQueueJob
-from ..services.run_control.models import AttemptState, ControlError
+from ..services.run_control.models import AttemptState, ControlError, now
 
 
 logger = logging.getLogger(__name__)
@@ -73,13 +73,61 @@ class RunIntakeDispatcher:
                                     if tx.snapshot.status == "running":
                                         tx.transition_run(expected="running", target="failed", reason_code="INTAKE_REJECTED")
                         except Exception:
-                            # Corrupt frozen state may prevent lifecycle loading.
-                            # Rejected job remains a durable escalation; no redelivery.
-                            job.failure_code += ":TERMINALIZATION_UNAVAILABLE"
+                            # A rejected job and its terminal Run must commit together.
+                            # This narrow fallback never loads private runtime state.
+                            self._fail_rejected_queued_run(session, run)
+                            job.failure_code += ":TERMINALIZATION_FALLBACK"
                     logger.warning("Run intake rejected/deferred: run_id=%s job_id=%s code=%s",
                                    run_id, job_id, job.failure_code)
                     failed += 1
         return {"accepted": accepted, "failed": failed}
+
+    @staticmethod
+    def _fail_rejected_queued_run(session, run):
+        """Emergency intake boundary; caller holds Run -> job locks.
+
+        Preserve corrupt snapshots for diagnosis. Only queued Runs are eligible;
+        SQL attempts and commands are fenced in the same transaction. A database
+        failure rolls rejection back too, so the job remains deliverable.
+        """
+        from ..adapters.queue.models import WorkerCommand
+
+        if run.status != "queued":
+            return
+        timestamp = now()
+        seq = session.scalar(select(func.coalesce(func.max(RunEvent.seq), 0)).where(
+            RunEvent.run_id == run.id))
+
+        def event(event_type, data, stage_id=None):
+            nonlocal seq
+            seq += 1
+            session.add(RunEvent(run_id=run.id, seq=seq, timestamp=timestamp,
+                                 event_type=event_type, stage_id=stage_id,
+                                 data={**data, "schema_version": "1.0"}))
+
+        event("run.status_changed", {"from": "queued", "to": "running",
+                                     "reason_code": "INTAKE_REJECTED"})
+        attempts = list(session.scalars(select(StageAttempt).where(StageAttempt.run_id == run.id)))
+        for attempt in attempts:
+            if attempt.status in {"pending", "running"}:
+                before = attempt.status
+                attempt.status, attempt.reason = "failed", "INTAKE_REJECTED"
+                attempt.finished_at = timestamp
+                event("stage.status_changed", {"from": before, "to": "failed",
+                      "attempt_no": attempt.attempt_no, "contract_version": attempt.contract_version,
+                      "reason_code": "INTAKE_REJECTED"}, attempt.stage_id)
+        commands = session.scalars(select(WorkerCommand).join(
+            StageAttempt, StageAttempt.id == WorkerCommand.attempt_id).where(
+            StageAttempt.run_id == run.id).with_for_update(of=WorkerCommand))
+        for command in commands:
+            if command.state not in {"completed", "obsolete"}:
+                command.state, command.reason = "obsolete", "INTAKE_REJECTED"
+                command.owner_token = command.expires_at = None
+        event("run.status_changed", {"from": "running", "to": "failed",
+                                     "reason_code": "INTAKE_REJECTED"})
+        run.status, run.stop_reason = "failed", "INTAKE_REJECTED"
+        run.updated_at = run.stopped_at = timestamp
+        session.flush()
 
     def _register(self, session, run):
         frozen = self.repository.frozen_input(session, run)
