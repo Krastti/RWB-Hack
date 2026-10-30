@@ -20,10 +20,10 @@ HTTP-источник истины — [C-01 OpenAPI 2.1.0](../contracts/platfor
 | `adapters/queue/`, `workers/` | Celery transport, PostgreSQL WorkerCommand lease/fencing, StageWorker |
 | `agents/` | [Агенты и граф](agents.md); не HTTP orchestration |
 
-Штатная factory монтирует auth/projects, POST создания Run и три Run GET-маршрута
-к одной PostgreSQL через общий sessionmaker. Control router существует, но требует
-явного подключения с реальным write adapter. In-memory fallback нет. Answers,
-artifact/archive/export endpoints и сквозной worker binding остаются отдельными
+Штатная factory монтирует auth/projects, POST создания Run, три Run GET-маршрута
+и cancel/retry к одной PostgreSQL через общий sessionmaker и
+[runtime composition B-11](../backend/app/services/runtime/README.md). In-memory fallback нет. Answers,
+artifact/archive/export endpoints и предметный AG/worker bridge остаются отдельными
 потребителями [#127](https://github.com/Krastti/RWB-Hack/issues/127)/
 [#128](https://github.com/Krastti/RWB-Hack/issues/128).
 
@@ -53,8 +53,8 @@ flyway -configFiles=backend/flyway.conf migrate
 PYTHONPATH=backend .venv/bin/uvicorn app.main:create_app --factory
 ```
 
-Для штатного API нужны V1–V4, для worker также V5; все пять миграций уже
-поставляются в этой ветке и применяются по порядку без пропуска V4.
+Для штатного API/runtime нужны V1–V6; миграции поставляются в этой ветке
+и применяются по порядку без пропуска V4. V6 сохраняет private execution/control state.
 API слушает `127.0.0.1:8000`. Flyway/настоящий PostgreSQL-запуск требуют доступной
 инфраструктуры; список локально выполненных проверок приводится в PR, а не
 предполагается из этой инструкции. Возможна явная сборка:
@@ -190,7 +190,7 @@ Refresh tokens/регистрации/командных ролей нет.
 |---|---|
 | POST `/auth/token`; POST/GET `/projects`; GET `/projects/{id}` | Штатная factory, реальные PostgreSQL repositories |
 | GET `/projects/{id}/runs`, `/runs/{id}`, `/runs/{id}/events` | Штатная factory с PostgreSQLRunReadRepository; отдельный configure_runs также сохранён |
-| POST `/runs/{id}/cancel`, `/runs/{id}/retry` | Явный `configure_run_control(app, RunControlService(...))` после auth |
+| POST `/runs/{id}/cancel`, `/runs/{id}/retry` | Штатная factory: RunControlService над общим PostgreSQLRuntimeRepository |
 | POST `/projects/{id}/runs` | Штатная factory с PostgreSQLRunCreationRepository и PostgreSQLRunQueue |
 | POST answers; artifacts/archive/exports | Контракты есть; общего подключения/полного runtime пока нет |
 
@@ -287,7 +287,8 @@ lease, idempotency keys, prompt, chain-of-thought, provider bodies и stack trac
 constraints — последняя защита, не allocator. `SQLiteLifecycleRepository(path)` и
 `SQLiteControlStore(path)` используют файлы, BEGIN IMMEDIATE и synchronous=FULL;
 они локальные адаптеры, не production. Нельзя одновременно управлять одним Run
-из двух независимых агрегатов. Общий write adapter не реализован.
+из двух независимых агрегатов. Штатный runtime использует общий PostgreSQL write
+adapter B-11; локальные примеры по-прежнему остаются изолированными.
 
 ## Управление Run
 
@@ -401,7 +402,7 @@ configure_run_control(app, RunControlService(shared_store, authorize_retry=retry
 
 `create_runs_router()` доступен для DI с переопределением `get_run_query_service`.
 Configure вызывается один раз после auth. Этот пример показывает точки сборки,
-а не предоставляет отсутствующий shared PostgreSQL write adapter. Response_ref
+а штатную PostgreSQL сборку предоставляет `create_app()` / `compose_runtime()`. Response_ref
 идемпотентности разрешает исходные status/body из durable response store, не
 ссылается на изменяемый текущий GET. Operation scopes: createRun использует
 project UUID, answerQuestions/retryRun/createExport — Run UUID; keys/hashes не
@@ -425,8 +426,8 @@ RecoveryHandler; фабрика не выбирает бизнес-функци�
 latest pending StageAttempt, без commit/публикации/нового номера; replay возвращает
 тот же UUID. Регистратор берёт Run FOR UPDATE, создаёт attempt/events/metrics и
 вызывает enqueue в **той же** транзакции. Команда createRun до StageAttempt и
-команда исполнения этапа — разные сущности; bridge должен зарегистрировать первую
-попытку, не выдавать create job за готовый этап.
+команда исполнения этапа — разные сущности; RunIntakeDispatcher регистрирует первую
+попытку атомарно с WorkerCommand, не выдавая create job за готовый этап.
 
 `publish_due(limit=100)` резервирует окно доставки и отправляет только UUID,
 возвращает published/failed counts. Dispatch task `rwb.queue.dispatch.v1`, execution
@@ -502,9 +503,10 @@ command_id и для worker Run/attempt/generation/recovery. Это служеб
 новые исполнения, сохраните очередь для восстановления. До приёма данных её
 удаление — отдельное согласованное изменение схемы.
 
-Текущий queue store пишет ORM state/events напрямую, а local lifecycle/control
-имеют собственные store seams. Они **не являются одним production write owner**:
-согласование общей транзакции/переходов/seq остаётся #128. AnalysisGraph ArtifactStore
+Standalone queue store пишет ORM state/events напрямую, а local lifecycle/control
+имеют собственные store seams. Штатный B-11 runtime использует RuntimeQueueStore и
+PostgreSQLRuntimeRepository: claim/lost transitions проходят через lifecycle service
+под общим Run lock, control использует те же SQL rows/events. AnalysisGraph ArtifactStore
 и checkpoint также должны принимать результаты через этот fenced context (#130),
 иначе старый worker обходит защиту. Эту отсутствующую связку документация не
 объявляет реализованной.
@@ -600,7 +602,9 @@ validation/rate denial не резервируют ключ. Response_ref — UU
 транзакцию, не делает commit и не обращается к брокеру. Начальные run.created seq1
 и metrics.updated seq2 получают timestamp=Run.created_at после ожидания locks,
 не transaction-start now(). 202 — durable принятие job, не исполнение графа.
-Create-job и worker StageCommand остаются разными сущностями, bridge ещё нужен.
+Create-job и worker StageCommand остаются разными сущностями; B-11 intake dispatcher
+связывает их через атомарную регистрацию первой analysis-попытки. Предметное
+преобразование private intake input в C-02/LangGraph остаётся #128/#130.
 
 `PostgreSQLRunReadRepository(sessions)` из services/runs/postgresql.py реализует
 RunReadRepository той же БД и монтируется factory. Каждый SQL owner-scoped;

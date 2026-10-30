@@ -22,11 +22,16 @@ from .services.run_queries import RunQueryService
 from .services.runs import RunCreationService
 from .services.runs.postgresql import PostgreSQLRunCreationRepository, PostgreSQLRunReadRepository
 from .services.runs.queue import PostgreSQLRunQueue
+from .services.run_control.api import configure_run_control
+from .services.run_control.models import Limits as ControlLimits
+from .services.lifecycle.models import LifecycleError
+from .services.runtime import compose_runtime
 
 
 def create_app(
     *, database_url: str | None = None, auth_config: AuthConfig | None = None,
     run_config: RunCreationConfig | None = None,
+    retry_limits: ControlLimits | None = None,
 ) -> FastAPI:
     database_url = database_url if database_url is not None else os.environ["DATABASE_URL"]
     auth_config = auth_config if auth_config is not None else AuthConfig(secret_key=os.environ["JWT_SECRET_KEY"])
@@ -47,6 +52,9 @@ def create_app(
 
     app = FastAPI(title="RWB-Hack Platform API", version="2.1.0", lifespan=lifespan)
     app.state.engine = engine
+    app.state.run_runtime = compose_runtime(
+        sessions, retry_limits=retry_limits or ControlLimits.model_validate(run_config.limits.model_dump()),
+    )
     configure_auth(app, AuthService(PostgreSQLUserRepository(sessions), auth_config))
     configure_projects(app, ProjectService(PostgreSQLProjectRepository(sessions, cursor_secret=auth_config.secret_key)))
     configure_runs(app, RunQueryService(
@@ -56,6 +64,11 @@ def create_app(
         PostgreSQLRunCreationRepository(sessions, PostgreSQLRunQueue()),
         limits=run_config.limits, profile=run_profile,
     ))
+    configure_run_control(app, app.state.run_runtime.control)
+
+    @app.exception_handler(LifecycleError)
+    async def lifecycle_error_handler(request: Request, exc: LifecycleError):
+        return error_response(request, exc.status, exc.code, exc.message)
 
     @app.exception_handler(404)
     @app.exception_handler(405)
