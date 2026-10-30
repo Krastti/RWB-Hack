@@ -22,7 +22,7 @@ HTTP-источник истины — [C-01 OpenAPI 2.1.0](../contracts/platfor
 
 Штатная factory монтирует auth/projects, POST создания Run, три Run GET-маршрута
 и cancel/retry к одной PostgreSQL через общий sessionmaker и
-[runtime composition B-11](../backend/app/services/runtime/README.md). In-memory fallback нет. Answers,
+[runtime composition B-11](../backend/app/services/runtime/README.md) и answers B-12. In-memory fallback нет.
 artifact/archive/export endpoints и предметный AG/worker bridge остаются отдельными
 потребителями [#127](https://github.com/Krastti/RWB-Hack/issues/127)/
 [#128](https://github.com/Krastti/RWB-Hack/issues/128).
@@ -53,8 +53,10 @@ flyway -configFiles=backend/flyway.conf migrate
 PYTHONPATH=backend .venv/bin/uvicorn app.main:create_app --factory
 ```
 
-Для штатного API/runtime нужны V1–V6; миграции поставляются в этой ветке
+Для штатного API/runtime нужны V1–V7; миграции поставляются в этой ветке
 и применяются по порядку без пропуска V4. V6 сохраняет private execution/control state.
+V7 сохраняет Clarification, immutable inputs и replay пакетов ответов;
+[интерфейс answers](../backend/app/api/answers/README.md) подключён штатной factory.
 API слушает `127.0.0.1:8000`. Flyway/настоящий PostgreSQL-запуск требуют доступной
 инфраструктуры; список локально выполненных проверок приводится в PR, а не
 предполагается из этой инструкции. Возможна явная сборка:
@@ -192,7 +194,8 @@ Refresh tokens/регистрации/командных ролей нет.
 | GET `/projects/{id}/runs`, `/runs/{id}`, `/runs/{id}/events` | Штатная factory с PostgreSQLRunReadRepository; отдельный configure_runs также сохранён |
 | POST `/runs/{id}/cancel`, `/runs/{id}/retry` | Штатная factory: RunControlService над общим PostgreSQLRuntimeRepository |
 | POST `/projects/{id}/runs` | Штатная factory с PostgreSQLRunCreationRepository и PostgreSQLRunQueue |
-| POST answers; artifacts/archive/exports | Контракты есть; общего подключения/полного runtime пока нет |
+| POST `/runs/{id}/answers` | Штатная factory: атомарный PostgreSQL приём пакета, Clarification, resume command и replay |
+| artifacts/archive/exports | Контракты есть; общего подключения/полного runtime пока нет |
 
 Не отдавайте внутренний RunRecord как HTTP Run: aggregate version, generation,
 attempt_id, state_version, input_hash и private data не добавляются в закрытые DTO.
