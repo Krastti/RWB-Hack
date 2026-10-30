@@ -25,6 +25,7 @@ def compose_runtime(sessions, *, retry_limits: Limits, queue_config: QueueConfig
     ceiling = retry_limits.model_copy(deep=True)
     queue = RuntimeQueueStore(sessions, queue_config or QueueConfig())
     repository = PostgreSQLRuntimeRepository(sessions, queue)
+    repository.guard = guard
     states = RunStateService(repository, guard=guard, checkpoint_confirmed=checkpoint_confirmed)
     queue.states = states
 
