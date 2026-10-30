@@ -7,3 +7,6 @@ argon2-cffi>=23.1,<26
 # app.config exports LLMConfig, which imports httpx.
 httpx==0.28.1
 uvicorn>=0.30,<1
+# Public Run retry validates frozen C-02 inputs without worker extras.
+jsonschema==4.25.1
+referencing==0.37.0

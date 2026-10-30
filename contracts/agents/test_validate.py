@@ -2,7 +2,7 @@
 
 import unittest
 
-from validate import ContractError, Contracts, ROOT, load, validate_profile_grants
+from validate import ContractError, Contracts, ROOT, load, validate_profile_grants, load_profile_rules
 
 
 class GenerationPlanTests(unittest.TestCase):
@@ -78,6 +78,47 @@ class ProfileGrantsTests(unittest.TestCase):
                              lambda: validate_profile_grants(self.plan, self.profile)):
                 with self.assertRaisesRegex(ContractError, "Conflicting output file and directory"):
                     validate()
+
+
+class ArtifactIntegrityTests(unittest.TestCase):
+    def test_corrupt_fixture_size_or_checksum_is_rejected(self):
+        for field, value in (("size_bytes", 0), ("checksum", "0" * 64)):
+            artifact = load(ROOT / "examples/agent-result.architecture.json")["output_artifacts"][0]
+            artifact[field] = value
+            with self.assertRaises(ContractError):
+                Contracts().validate("artifact", artifact)
+
+
+class ProfileRulesTests(unittest.TestCase):
+    def test_pointer_resolves_full_allowlisted_document(self):
+        profile=load(ROOT.parent.parent / "templates/profiles/web-fastapi-angular/profile.json")
+        rules=load_profile_rules(profile)
+        self.assertIn("### Ownership и generation plan",rules)
+        self.assertIn("### Limits и остановки",rules)
+
+    def test_missing_traversal_network_and_symlink_targets_fail_closed(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        profile=load(ROOT.parent.parent / "templates/profiles/web-fastapi-angular/profile.json")
+        original=ROOT.parent.parent
+        with TemporaryDirectory() as directory:
+            root=Path(directory)
+            pointer=root/'templates/profiles/web-fastapi-angular/README.md'
+            pointer.parent.mkdir(parents=True)
+            pointer.write_text((original/'templates/profiles/web-fastapi-angular/README.md').read_text())
+            with self.assertRaises(ContractError):load_profile_rules(profile,root)
+            (root/'docs').mkdir()
+            target=root/'docs/agents.md'
+            target.write_text((original/'docs/agents.md').read_text())
+            load_profile_rules(profile,root)
+            for redirect in ('https://example.invalid/rules','../private.md','docs/missing.md'):
+                pointer.write_text('<!-- rwb-profile-rules: '+redirect+' -->')
+                with self.assertRaises(ContractError):load_profile_rules(profile,root)
+            pointer.write_text((original/'templates/profiles/web-fastapi-angular/README.md').read_text())
+            target.unlink();target.symlink_to(original/'docs/agents.md')
+            with self.assertRaises(ContractError):load_profile_rules(profile,root)
+            target.unlink();target.write_text('Incomplete rules')
+            with self.assertRaises(ContractError):load_profile_rules(profile,root)
 
 
 if __name__ == "__main__":

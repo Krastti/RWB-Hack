@@ -1,4 +1,5 @@
 """C-03 state machine; all effects and seq allocation share a repository lock."""
+from .events import EventAllocator, EventSequenceError, next_event
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
@@ -78,8 +79,13 @@ def _command(method):
 
 class LifecycleTransaction:
     """Use only through LifecycleService.transaction; snapshots are detached."""
-    def __init__(self, record: RunRecord, guard: TransitionGuard):
+    def __init__(self, record: RunRecord, guard: TransitionGuard, checkpoint_confirmed=None):
         self._record, self._guard = record, guard
+        try:
+            self._events = EventAllocator(record.events, record.last_seq)
+        except EventSequenceError as exc:
+            raise conflict(str(exc)) from exc
+        self._checkpoint_confirmed = checkpoint_confirmed
         self._open, self._failed, self._dirty = True, False, False
 
     @property
@@ -97,9 +103,12 @@ class LifecycleTransaction:
     def _event(self, event_type: str, data: dict, stage_id: str | None = None) -> Event:
         _json(data)
         record = self._record
-        event = Event(run_id=record.run_id, seq=record.last_seq + 1,
-                      event_type=event_type, timestamp=utcnow(), stage_id=stage_id,
-                      data=deepcopy({**data, "schema_version": "1.0"}))
+        try:
+            event = self._events.next(run_id=record.run_id,
+                               event_type=event_type, data=data, stage_id=stage_id,
+                               last_seq=record.last_seq)
+        except EventSequenceError as exc:
+            raise conflict(str(exc)) from exc
         record.events.append(event)
         record.last_seq = event.seq
         record.updated_at = event.timestamp
@@ -150,6 +159,13 @@ class LifecycleTransaction:
         if target == "completed":
             if not latest or any(a.status not in {"succeeded", "skipped"} for a in latest.values()):
                 raise conflict("Unresolved stage results prevent completion")
+            checkpoint_snapshot = self.snapshot
+            for attempt in latest.values():
+                if attempt.status == "succeeded" and (self._checkpoint_confirmed is None or
+                        self._checkpoint_confirmed(checkpoint_snapshot, attempt.model_copy(deep=True)) is not True):
+                    raise LifecycleError(409, "CHECKPOINT_REQUIRED", "Confirmed checkpoint is required before completion")
+            if checkpoint_snapshot != record:
+                raise conflict("Checkpoint checker must not mutate its snapshot")
         if expected == "waiting_for_input" and target == "running":
             if not any(a.status == "pending" and a.attempt_no > 1 and any(
                 b.stage_id == a.stage_id and b.attempt_no == a.attempt_no - 1 and b.status == "waiting_for_input"
@@ -283,10 +299,12 @@ class LifecycleTransaction:
 
 
 class LifecycleService:
-    def __init__(self, repository: LifecycleRepository, *, guard: TransitionGuard):
+    def __init__(self, repository: LifecycleRepository, *, guard: TransitionGuard,
+                 checkpoint_confirmed: Callable[[RunRecord, Attempt], bool] | None = None):
         if not callable(guard):
             raise TypeError("A server-side transition guard is required")
         self.repository, self.guard = repository, guard
+        self.checkpoint_confirmed = checkpoint_confirmed
 
     def create(self, *, owner_id: UUID, run_id: UUID, context: dict, data: dict) -> RunRecord:
         """B-05 supplies validated immutable snapshot and initial outbox/replay.
@@ -306,7 +324,7 @@ class LifecycleService:
         record = RunRecord(owner_id=owner_id, run_id=run_id, context=deepcopy(context), data=deepcopy(data))
         if self.guard(record.model_copy(deep=True), Change(kind="create", target="queued")) is not None:
             raise LifecycleError(422, "VALIDATION_ERROR", "Guard must approve with None or raise an error")
-        tx = LifecycleTransaction(record, self.guard)
+        tx = LifecycleTransaction(record, self.guard, self.checkpoint_confirmed)
         tx._event("run.created", {"status": "queued", "revision_id": context["revision_id"],
                                    "profile_id": context["profile_id"]})
         tx._event("metrics.updated", {"metrics": {"tokens_in": 0, "tokens_out": 0, "model_calls": 0,
@@ -320,7 +338,7 @@ class LifecycleService:
         with self.repository.transaction(owner_id=owner_id, run_id=run_id) as record:
             if type(expected_version) is not int or record.version != expected_version:
                 raise conflict("Stale run version")
-            tx = LifecycleTransaction(record, self.guard)
+            tx = LifecycleTransaction(record, self.guard, self.checkpoint_confirmed)
             try:
                 yield tx
                 if tx._failed:

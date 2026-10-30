@@ -32,7 +32,7 @@ def main():
         service = LifecycleService(repository, guard=local_guard)
         owner_id, run_id = uuid4(), uuid4()
         record = service.create(owner_id=owner_id, run_id=run_id,
-                                context={"revision_id": str(uuid4()), "profile_id": "web-fastapi-react"},
+                                context={"revision_id": str(uuid4()), "profile_id": "web-fastapi-angular"},
                                 data={"outbox": [{"id": str(uuid4()), "kind": "start"}]})
         with service.transaction(owner_id=owner_id, run_id=run_id, expected_version=record.version) as tx:
             attempt = tx.register_attempt(stage_id="backend-orders", contract_version="1",

@@ -1,11 +1,10 @@
 # C-03: жизненный цикл запуска, этапов и событий
 
-Версия документа и event payload: **1.0**. Статус: **предложение для review**.
+Версия документа и event payload: **1.0**.
 Задача: [#53](https://github.com/Krastti/RWB-Hack/issues/53).
-Основание: §8–10 [спецификации](../docs/project-specification.md),
-[OpenAPI платформы](platform.openapi.yaml), принятый [C-02](agents/README.md)
-и [CONTRIBUTING.md](../CONTRIBUTING.md). Проверенный upstream:
-`3d3a2a88cd7e859885c78956df657d2a198528f2`.
+Основание: [требования платформы](../README.md#требования-и-план-развития),
+[OpenAPI платформы](platform.openapi.yaml), принятый [C-02](agents/v1/)
+и [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 Это контракт для B-05/B-06/B-07/B-08/B-09/B-10/B-12, графа A-04 и интерфейса
 прогресса. Здесь определяются допустимое поведение и согласуемые решения,
@@ -269,7 +268,7 @@ POST /answers принимает **один пакет всех ещё не от
    worker выбирает способ восстановления при исполнении.
 
 Ключи вопроса в API — UUID. Локальные Q-001 из аналитика 0.1 напрямую не подходят:
-нужно постоянное отображение по [плану миграции](agents/MIGRATION.md).
+нужно постоянное отображение по [плану миграции](../docs/agents.md#legacy-и-миграция-a-03).
 При возобновлении FR IDs и исходный текст не меняются из-за нового номера попытки.
 Новые факты из ответов получают evidence.source=answer; модель не подставляет
 подтверждение за пользователя. Бюджет проверяется до следующего обращения к модели;
@@ -474,6 +473,19 @@ worker. Возврат checkpoint не сбрасывает общий расх�
 
 Это пример отказа **до** нового обращения. Нулевой calls/usage этой попытки
 не означает обнуление расхода предыдущих попыток Run.
+
+### 7.1. Бюджетная остановка до регистрации следующего узла
+
+Такая остановка допустима без failed StageAttempt. Для поддерживаемой причины
+MAX_CALLS/MAX_OUTPUT_TOKENS retry после разрешённого достаточного роста лимита
+регистрирует **первую** pending-попытку ready-узла по сохранённому плану и frozen
+inputs, а не фиктивную failed-попытку или повтор succeeded. Зависимости требуют
+принятых результатов и подтверждённого checkpoint. При отсутствии достаточных
+канонических данных возвращается RESUME_STATE_UNAVAILABLE без частичных эффектов.
+Полномочия, usage, резервы, input/contract/profile identity, events/outbox/replay
+подчиняются тем же атомарным правилам. Для нового stage без прежнего attempt_no
+не публикуется retry.scheduled с выдуманным номером: регистрация отражается
+stage.status_changed from=null и остальными существующими событиями C-03.
 
 ## 8. Условия completed и окончательного snapshot
 
@@ -782,7 +794,7 @@ C-02 также допускает AgentInput.limits.max_calls=0 как внут
 | Метрики, stopped/final состояния, значение completed | Разделы 2, 8, 10 |
 | Интерфейс и примеры, версии и потребители | Заголовок, разделы 3.1, 9–11 и JSON-примеры |
 
-Не изменяются wire-схемы C-02, OpenAPI, runtime, БД и CI/CD. В README C-02
+Не изменяются wire-схемы C-02, OpenAPI, runtime, БД и CI/CD. В документации агентов
 уточняется только отображение внутреннего usage в публичный Metrics.
 Имена статусов и JSON-примеры сверяются с действующими схемами. JSON с меткой
 AgentResult относится к C-02; Answers/Retry/EventPage/Metrics — к OpenAPI.
@@ -794,10 +806,25 @@ JSON-примеров, относительных ссылок и формати
 с B-06 (#66) — атомарность и seq, с B-10 (#70) — отмену/retry, с B-12 (#79) —
 ревизии и пакет ответов, с A-04 (#78) — историю попыток/checkpoint, с UI —
 elapsed и неизвестные значения. Отдельные продолжения создаются/согласуются в
-issues; помощник не публикует их автоматически. До review это версия-предложение.
+issues; помощник не публикует их автоматически. Изменения требуют review потребителей.
 
 После принятия изменение допустимых переходов, смыслов событий и счётчиков
 требует версии/согласования потребителей. Добавление event_type совместимо лишь
 при описанном поведении старого клиента на неизвестном типе. Смена смысла
 существующего поля под тем же schema_version недопустима. Откат документа до
 подключения — revert PR; после подключения сначала согласовать откат потребителей.
+
+
+### Budget retry stabilization policy
+
+C-01 Retry can raise max_calls/max_output_tokens only. Run.stop_reason uses
+MAX_CALLS or MAX_OUTPUT_TOKENS for these causes; required_limits includes the
+reservation for next work, and the cause-specific limit must increase. Cumulative
+usage and frozen profile are preserved; authorization is mandatory. MAX_INPUT_TOKENS
+and RUN_TIMEOUT (active Run execution time), and unknown causes, reject public
+retry with HTTP 409 RETRY_NOT_SUPPORTED without effects. UI hides this retry.
+The existing elapsed duration_ms includes wall-clock waiting and is not proof of
+active-time exhaustion. A single model_call.timeout_seconds is a request deadline,
+not RUN_TIMEOUT; it follows the existing failed-attempt policy. No API for changing
+input/time limits is introduced. Accounting producers must supply the cause; an
+unknown cause never grants continuation.

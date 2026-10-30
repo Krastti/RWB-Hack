@@ -845,6 +845,14 @@ components:
       - questions_revision
       - answers
     Retry:
+      description: >-
+        Only MAX_CALLS/MAX_OUTPUT_TOKENS exhaustion supports authorized public
+        retry with a sufficient increase of the exhausted limit. MAX_INPUT_TOKENS,
+        RUN_TIMEOUT and unknown causes return 409 RETRY_NOT_SUPPORTED without
+        effects. Cumulative usage and frozen inputs/profile are preserved.
+        If a failed Run has only accepted latest stage results, manual retry returns
+        409 RECOVERY_REQUIRED; internal checkpoint/assembly recovery uses those
+        results without another agent attempt.
       type: object
       additionalProperties: false
       properties:
@@ -1068,3 +1076,9 @@ components:
               message: Запуск не ожидает ответов
               details: {}
               request_id: req-example-1
+
+# Retry budget policy: stop_reason MAX_CALLS/MAX_OUTPUT_TOKENS permits only an
+# authorized sufficient increase of the exhausted limit. MAX_INPUT_TOKENS,
+# RUN_TIMEOUT (active execution time), and unknown causes return 409
+# RETRY_NOT_SUPPORTED without effects. duration_ms is elapsed wall-clock time,
+# not active execution time. See C-03 and C-05 for the same policy.

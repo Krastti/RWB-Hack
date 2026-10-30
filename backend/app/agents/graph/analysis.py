@@ -91,7 +91,7 @@ class AnalysisGraph:
                  "ARTIFACT_UNAVAILABLE")
         return artifact
 
-    def _inputs(self, request: dict) -> tuple[dict, str]:
+    def _inputs(self, request: dict, algorithm: str = "substantive-v2") -> tuple[dict, str]:
         artifacts = [self._artifact(request["run_id"], aid)
                      for aid in request["input_artifact_ids"]]
         sources = [a for a in artifacts if a["kind"] == "business_requirements"]
@@ -101,9 +101,29 @@ class AnalysisGraph:
         for key in ("previous_requirements_artifact_id", "analysis_rules_artifact_id"):
             _require(source[key] is None or source[key] in request["input_artifact_ids"],
                      "INPUT_REFERENCE_NOT_ALLOWED")
-        digest = sha256(_json({"request": request,
-                               "artifacts": [_reference(a) for a in artifacts]}).encode()).hexdigest()
+        _require(type(algorithm) is str and algorithm in {"full-request-v1", "substantive-v2"}, "INVALID_INPUT_HASH_ALGORITHM")
+        if algorithm == "full-request-v1":
+            identity = {"request": request, "artifacts": [_reference(a) for a in artifacts]}
+        else:
+            substantive = {key: deepcopy(value) for key, value in request.items()
+                           if key not in {"attempt", "limits"}}
+            substantive["input_artifact_ids"] = sorted(request["input_artifact_ids"])
+            identity = {"request": substantive,
+                        "artifacts": sorted((_reference(a) for a in artifacts), key=lambda a: a["artifact_id"])}
+        digest = sha256(_json(identity).encode()).hexdigest()
         return source, digest
+
+    def _verified_inputs(self, state: AnalysisState) -> tuple[dict, str, str]:
+        # Absence is the only compatibility case. Explicit invalid/unknown versions
+        # never fall back. Both hashes are computed from the actual verified bytes
+        # and metadata; a match pins the algorithm without changing the saved hash.
+        algorithms = ([state["input_hash_algorithm"]] if "input_hash_algorithm" in state
+                      else ["substantive-v2", "full-request-v1"])
+        for algorithm in algorithms:
+            source, digest = self._inputs(state["request"], algorithm)
+            if digest == state["input_hash"]:
+                return source, digest, algorithm
+        raise GraphError("INPUT_SNAPSHOT_CHANGED")
 
     def _config(self, run_id: str) -> dict:
         return {"configurable": {"thread_id": _uuid(run_id)}, "recursion_limit": 12}
@@ -140,6 +160,7 @@ class AnalysisGraph:
             "profile_id": request["profile_id"], "initial_request": request,
             "initial_attempt_id": attempt_id, "request": request,
             "attempt_id": attempt_id, "input_hash": digest,
+            "input_hash_algorithm": "substantive-v2",
             "attempt_started_at": None,
             "status": "running", "stage_status": "pending",
             "questions_revision": 0, "questions": [], "attempts": [],
@@ -157,6 +178,7 @@ class AnalysisGraph:
         if (snapshot.next or snapshot.tasks) and not any(task.interrupts for task in snapshot.tasks):
             self._graph.invoke(None, self._config(run_id), durability="sync")
             return self.snapshot(run_id)
+        self._verified_inputs(state)
         return state
 
     def _check_answers(self, state: AnalysisState, command: dict) -> None:
@@ -214,7 +236,7 @@ class AnalysisGraph:
 
     def _prepare_resume(self, state: AnalysisState) -> dict:
         command = state["resume_command"]
-        source, _ = self._inputs(state["request"])
+        source, _, _ = self._verified_inputs(state)
         by_id = {a["question_id"]: a["value"] for a in command["answers"]}
         questions = deepcopy(state["questions"])
         for question in questions:
@@ -245,7 +267,7 @@ class AnalysisGraph:
             + ([source["analysis_rules_artifact_id"]] if source["analysis_rules_artifact_id"] else []))))
         _, digest = self._inputs(request)
         return {"request": request, "attempt_id": command["attempt_id"],
-                "input_hash": digest, "questions": questions,
+                "input_hash": digest, "input_hash_algorithm": "substantive-v2", "questions": questions,
                 "status": "running", "stage_status": "pending", "attempt_started_at": None}
 
     def _begin_attempt(self, state: AnalysisState) -> dict:
@@ -255,8 +277,7 @@ class AnalysisGraph:
     def _analyse(self, state: AnalysisState) -> dict:
         result = None
         try:
-            _, digest = self._inputs(state["request"])
-            _require(digest == state["input_hash"], "INPUT_SNAPSHOT_CHANGED")
+            self._verified_inputs(state)
             result = self.artifacts.result(state["run_id"], state["attempt_id"])
             cached = result is not None
             if not cached:
@@ -291,8 +312,7 @@ class AnalysisGraph:
 
     def _accept_analysis(self, state: AnalysisState, result: dict, cached: bool) -> dict:
         request = state["request"]
-        source, digest = self._inputs(request)
-        _require(digest == state["input_hash"], "INPUT_SNAPSHOT_CHANGED")
+        source, digest, algorithm = self._verified_inputs(state)
         self._validate("agent-result", result)
         _require(all(result[k] == request[k] for k in (
             "run_id", "stage_id", "attempt", "contract_version")), "RESULT_CONTEXT_MISMATCH")
@@ -318,11 +338,13 @@ class AnalysisGraph:
                 d["code"] == "BUDGET_EXCEEDED" for d in result["diagnostics"]):
             status = "budget_exceeded"
         record = {"attempt_id": state["attempt_id"], "attempt_no": request["attempt"],
-                  "input_hash": digest, "status": result["status"], "artifacts": references,
+                  "input_hash": digest, "input_hash_algorithm": algorithm,
+                  "status": result["status"], "artifacts": references,
                   "started_at": state["attempt_started_at"],
                   "finished_at": datetime.now(timezone.utc).isoformat(),
                   "usage": result["usage"], "diagnostics": result["diagnostics"]}
         return {"status": status, "stage_status": result["status"],
+                "input_hash_algorithm": algorithm,
                 "questions": questions, "questions_revision": revision,
                 "artifact_refs": state["artifact_refs"] + references,
                 "attempts": state["attempts"] + [record]}

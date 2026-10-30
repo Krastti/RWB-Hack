@@ -73,3 +73,51 @@ it.each(['running','waiting_for_input','failed','budget_exceeded'] as const)('re
   expect(fixture.nativeElement.querySelector('button')).toBeNull();
   expect(fixture.nativeElement.querySelector('rwb-questions')).toBeNull();
 });
+
+it('clears the old Run and metrics on route changes and ignores the old subscription', () => {
+  const streams = new Map([['first',new Subject<RunSnapshot>()],['second',new Subject<RunSnapshot>()]]);
+  TestBed.configureTestingModule({providers:[{provide:ApiClient,useValue:{}}]});
+  TestBed.overrideComponent(RunDetail,{set:{imports:[],template:'',providers:[{provide:RunMonitor,useValue:{watch:(id:string)=>streams.get(id)!}}]}});
+  const fixture = TestBed.createComponent(RunDetail);
+  fixture.componentRef.setInput('id','first');fixture.detectChanges();
+  const first = makeRun({run_id:'first'});first.metrics.tokens_in=99;
+  streams.get('first')!.next({run:first,events:[],error:null});
+  fixture.componentRef.setInput('id','second');fixture.detectChanges();
+  expect(fixture.componentInstance.run()).toBeNull();expect(fixture.componentInstance.events()).toEqual([]);
+  streams.get('first')!.next({run:first,events:[],error:null});
+  expect(fixture.componentInstance.run()).toBeNull();
+  const second=makeRun({run_id:'second'});
+  streams.get('second')!.next({run:second,events:[],error:null});
+  expect(fixture.componentInstance.metrics(fixture.componentInstance.run()!)[0].value).toBe('0 / 0');
+  expect(fixture.componentInstance.metrics(second)[0].note).toContain('полнота неизвестна');
+});
+
+it('shows internal recovery instead of retry for accepted results after checkpoint failure', () => {
+  const updates = new Subject<RunSnapshot>();
+  const api = {retry:vi.fn()};
+  TestBed.configureTestingModule({providers:[provideRouter([]),{provide:ApiClient,useValue:api}]});
+  TestBed.overrideComponent(RunDetail, {set:{imports:[RouterLink,ReactiveFormsModule,ErrorBanner],schemas:[NO_ERRORS_SCHEMA],providers:[{provide:RunMonitor,useValue:{watch:()=>updates}}]}});
+  const fixture = TestBed.createComponent(RunDetail);
+  fixture.componentRef.setInput('id','run');fixture.detectChanges();
+  updates.next({run:makeRun({status:'failed',stop_reason:'CHECKPOINT_REQUIRED',stages:[{stage_id:'analysis',attempt_no:1,contract_version:'1',status:'succeeded'}]}),events:[],error:null});
+  fixture.detectChanges();
+  expect(fixture.nativeElement.textContent).toContain('RECOVERY_REQUIRED');
+  expect(fixture.nativeElement.querySelector('form')).toBeNull();
+  fixture.componentInstance.retry();expect(api.retry).not.toHaveBeenCalled();
+});
+
+it('allows supported budget continuation after a successful stage without retrying that stage', () => {
+  const updates = new Subject<RunSnapshot>();
+  const api = {retry:vi.fn(() => new Subject())};
+  TestBed.configureTestingModule({providers:[{provide:ApiClient,useValue:api}]});
+  TestBed.overrideComponent(RunDetail,{set:{imports:[],template:'',providers:[{provide:RunMonitor,useValue:{watch:()=>updates}}]}});
+  const fixture=TestBed.createComponent(RunDetail);
+  fixture.componentRef.setInput('id','run');fixture.detectChanges();
+  const run=makeRun({status:'budget_exceeded',stop_reason:'MAX_CALLS',stages:[{stage_id:'analysis',attempt_no:1,contract_version:'1',status:'succeeded'}]});
+  run.metrics.model_calls=run.limits.max_calls;
+  updates.next({run,events:[],error:null});
+  fixture.componentInstance.retryForm.controls.max_calls.setValue(run.limits.max_calls+1);
+  fixture.componentInstance.retry();
+  expect(api.retry).toHaveBeenCalledWith(run.run_id,{limits:{max_calls:run.limits.max_calls+1,max_output_tokens:run.limits.max_output_tokens}},expect.any(String));
+  expect(fixture.componentInstance.requiresInternalRecovery(run)).toBe(false);
+});

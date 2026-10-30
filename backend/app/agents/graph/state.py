@@ -1,6 +1,6 @@
 """JSON-only state for the analysis part of the pipeline (C-02/C-03)."""
 
-from typing import Any, Protocol, TypedDict
+from typing import Any, NotRequired, Protocol, TypedDict
 
 
 class GraphError(ValueError):
@@ -48,6 +48,7 @@ class AnalysisState(TypedDict):
     attempt_id: str
     attempt_started_at: str | None
     input_hash: str
+    input_hash_algorithm: NotRequired[str]
     status: str
     stage_status: str
     questions_revision: int
