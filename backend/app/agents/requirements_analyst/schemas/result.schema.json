@@ -1,0 +1,288 @@
+{
+  "$defs": {
+    "Artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "enum": [
+            "requirements.json",
+            "questions.json",
+            "requirements-analysis.md"
+          ],
+          "title": "Path",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "application/json",
+            "text/markdown"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "requirements-analyst/0.1",
+          "default": "requirements-analyst/0.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "related_fr_ids": {
+          "items": {
+            "pattern": "^FR-[0-9]{3,}$",
+            "type": "string"
+          },
+          "title": "Related Fr Ids",
+          "type": "array"
+        },
+        "checksum": {
+          "title": "Checksum",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "content",
+        "related_fr_ids",
+        "checksum"
+      ],
+      "title": "Artifact",
+      "type": "object"
+    },
+    "Assumption": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^ASM-[0-9]{3,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "related_fr_ids": {
+          "items": {
+            "pattern": "^FR-[0-9]{3,}$",
+            "type": "string"
+          },
+          "title": "Related Fr Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "reason",
+        "related_fr_ids"
+      ],
+      "title": "Assumption",
+      "type": "object"
+    },
+    "Diagnostic": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "retryable": {
+          "default": false,
+          "title": "Retryable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "Diagnostic",
+      "type": "object"
+    },
+    "Question": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^Q-[0-9]{3,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "critical": {
+          "title": "Critical",
+          "type": "boolean"
+        },
+        "related_fr_ids": {
+          "items": {
+            "pattern": "^FR-[0-9]{3,}$",
+            "type": "string"
+          },
+          "title": "Related Fr Ids",
+          "type": "array"
+        },
+        "answer": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Answer"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "reason",
+        "critical",
+        "related_fr_ids",
+        "answer"
+      ],
+      "title": "Question",
+      "type": "object"
+    },
+    "Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Calls",
+          "type": "integer"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Tokens"
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Tokens"
+        },
+        "duration_seconds": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Duration Seconds",
+          "type": "number"
+        }
+      },
+      "title": "Usage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "requirements-analyst/0.1",
+      "default": "requirements-analyst/0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "stage_id": {
+      "const": "requirements",
+      "default": "requirements",
+      "title": "Stage Id",
+      "type": "string"
+    },
+    "attempt": {
+      "title": "Attempt",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "succeeded",
+        "waiting_for_input",
+        "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "output_artifacts": {
+      "items": {
+        "$ref": "#/$defs/Artifact"
+      },
+      "title": "Output Artifacts",
+      "type": "array"
+    },
+    "questions": {
+      "items": {
+        "$ref": "#/$defs/Question"
+      },
+      "title": "Questions",
+      "type": "array"
+    },
+    "assumptions": {
+      "items": {
+        "$ref": "#/$defs/Assumption"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "usage": {
+      "$ref": "#/$defs/Usage"
+    },
+    "diagnostics": {
+      "items": {
+        "$ref": "#/$defs/Diagnostic"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    }
+  },
+  "required": [
+    "run_id",
+    "attempt",
+    "status",
+    "usage"
+  ],
+  "title": "AgentResult",
+  "type": "object"
+}
