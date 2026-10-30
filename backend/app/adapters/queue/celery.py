@@ -1,4 +1,5 @@
 """Celery доставляет только UUID команды; её состояние хранится в PostgreSQL."""
+import logging
 from uuid import UUID
 
 from celery import Celery
@@ -14,6 +15,7 @@ from .postgresql import PostgreSQLQueueStore
 
 EXECUTE_TASK = "rwb.stage.execute.v1"
 DISPATCH_TASK = "rwb.queue.dispatch.v1"
+logger = logging.getLogger(__name__)
 
 
 class CeleryQueueAdapter:
@@ -37,6 +39,7 @@ class CeleryQueueAdapter:
                 published += 1
             except Exception:
                 # Окно повторной отправки уже сохранено: сбой брокера не теряет команду.
+                logger.exception("Command publication failed: command_id=%s", command_id)
                 failed += 1
         return {"published": published, "failed": failed}
 
@@ -83,8 +86,8 @@ def create_worker_app(
         if engine is not None:
             engine.dispose(close=False)
 
-    @app.task(name=EXECUTE_TASK, bind=True, max_retries=None)
-    def execute_stage(task, command_id: str):
+    @app.task(name=EXECUTE_TASK)
+    def execute_stage(command_id: str):
         try:
             parsed_id = UUID(command_id)
         except (ValueError, TypeError, AttributeError):
@@ -92,9 +95,11 @@ def create_worker_app(
         try:
             return worker.execute(parsed_id)
         except LeaseBusy:
-            raise task.retry(countdown=config.redelivery_seconds, max_retries=None) from None
+            # ACK дубликата: следующее окно доставки уже хранится в PostgreSQL.
+            return "lease_busy"
         except SQLAlchemyError:
-            raise task.retry(countdown=config.redelivery_seconds, max_retries=None) from None
+            logger.exception("Command delivery failed: command_id=%s", parsed_id)
+            return "delivery_pending"
         except WorkerExecutionFailed:
             return "recovery_pending"
 

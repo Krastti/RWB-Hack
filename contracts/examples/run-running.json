@@ -1,0 +1,33 @@
+{
+  "run_id": "84711dee-74b4-5650-ad91-552028ae3ce8",
+  "project_id": "8f596881-0a46-5df0-b381-f1ffae16e9c3",
+  "revision_id": "edf1b307-85a0-5d9b-b39a-a5b682a651c7",
+  "profile_id": "web-fastapi-angular",
+  "created_at": "2026-10-30T10:00:00Z",
+  "limits": {
+    "max_calls": 20,
+    "max_output_tokens": 30000
+  },
+  "status": "running",
+  "updated_at": "2026-10-30T10:00:05Z",
+  "current_stage": "analysis",
+  "stages": [
+    {
+      "stage_id": "analysis",
+      "attempt_no": 1,
+      "contract_version": "1",
+      "status": "running",
+      "started_at": "2026-10-30T10:00:01Z"
+    }
+  ],
+  "questions_revision": 0,
+  "questions": [],
+  "metrics": {
+    "tokens_in": 1200,
+    "tokens_out": 0,
+    "model_calls": 1,
+    "attempts": 1,
+    "manual_clarifications": 0,
+    "duration_ms": 5000
+  }
+}

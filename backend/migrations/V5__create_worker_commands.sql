@@ -5,6 +5,7 @@ CREATE TABLE worker_commands (
     attempt_id UUID NOT NULL REFERENCES stage_attempts(id) ON DELETE RESTRICT,
     state VARCHAR(16) DEFAULT 'pending' NOT NULL,
     generation BIGINT DEFAULT 0 NOT NULL,
+    recovery_generation BIGINT,
     owner_token UUID,
     expires_at TIMESTAMP WITH TIME ZONE,
     reason TEXT,
@@ -14,6 +15,9 @@ CREATE TABLE worker_commands (
     CONSTRAINT uq_worker_commands_attempt_id UNIQUE (attempt_id),
     CONSTRAINT ck_worker_commands_state CHECK (state IN ('pending', 'running', 'lost', 'recovering', 'completed', 'obsolete')),
     CONSTRAINT ck_worker_commands_generation_nonnegative CHECK (generation >= 0),
+    CONSTRAINT ck_worker_commands_recovery_generation CHECK (
+        recovery_generation IS NULL OR (recovery_generation > 0 AND recovery_generation <= generation)
+    ),
     CONSTRAINT ck_worker_commands_lease_state CHECK (
         (state IN ('running', 'recovering') AND owner_token IS NOT NULL AND expires_at IS NOT NULL)
         OR (state NOT IN ('running', 'recovering') AND owner_token IS NULL AND expires_at IS NULL)

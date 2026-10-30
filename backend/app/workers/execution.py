@@ -1,5 +1,6 @@
 """Вызов оркестратора с heartbeat и проверяемым контекстом записи результата."""
 from contextlib import contextmanager
+import logging
 from threading import Event, Thread
 from typing import Iterator
 from uuid import UUID
@@ -8,6 +9,9 @@ from sqlalchemy.orm import Session
 
 from ..adapters.queue import Lease, LeaseLost, Orchestrator, RecoveryHandler
 from ..adapters.queue.postgresql import PostgreSQLQueueStore
+
+
+logger = logging.getLogger(__name__)
 
 
 class WorkerExecutionFailed(RuntimeError):
@@ -38,14 +42,20 @@ class LeasedExecution:
         self.ensure_current()
         try:
             self.store.heartbeat(self.lease)
+        except LeaseLost:
+            self._lost.set()
+            raise
         except Exception:
+            logger.exception("Lease heartbeat failed: command_id=%s run_id=%s attempt_id=%s generation=%s",
+                             self.lease.command.command_id, self.lease.command.run_id,
+                             self.lease.command.attempt_id, self.lease.generation)
             self._lost.set()
             raise LeaseLost() from None
 
     @contextmanager
-    def transaction(self) -> Iterator[Session]:
+    def transaction(self, *, recovery_complete: bool = False) -> Iterator[Session]:
         self.ensure_current()
-        with self.store.transaction(self.lease) as session:
+        with self.store.transaction(self.lease, recovery_complete=recovery_complete) as session:
             yield session
             self.ensure_current()
 
@@ -82,8 +92,16 @@ class StageWorker:
                 # Истёкшее поколение не вправе даже помечать новую попытку ошибочной.
                 return "fenced"
             except Exception:
+                logger.exception(
+                    "Worker execution failed: command_id=%s run_id=%s attempt_id=%s generation=%s recovery=%s",
+                    command_id, lease.command.run_id, lease.command.attempt_id, lease.generation, lease.recovery,
+                )
                 try:
                     self.store.abandon(lease)
                 except LeaseLost:
                     return "fenced"
+                except Exception:
+                    logger.exception("Could not schedule recovery: command_id=%s generation=%s",
+                                     command_id, lease.generation)
+                    raise
                 raise WorkerExecutionFailed("Execution needs recovery") from None

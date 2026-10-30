@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Iterator
 from uuid import UUID, uuid4, uuid5
 
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -116,17 +116,50 @@ class PostgreSQLQueueStore:
             row.next_delivery_at = row.expires_at
 
     @contextmanager
-    def transaction(self, lease: Lease) -> Iterator[Session]:
+    def transaction(self, lease: Lease, *, recovery_complete: bool = False) -> Iterator[Session]:
         """Fence проверяется под общими блокировками до и после предметной записи."""
-        with self.sessions.begin() as session:
-            row, run, attempt = self._require_lease(session, lease)
-            if not lease.recovery and (
-                not self._latest(session, attempt) or run.status not in {"running", "cancelling"}
-            ):
-                raise LeaseLost()
-            yield session
-            session.flush()
-            self._assert_lease(session, row, lease)
+        if recovery_complete and not lease.recovery:
+            raise ValueError("Only recovery can acknowledge a recovery outcome")
+        with self.sessions() as session:
+            committing = False
+            connection = None
+
+            def guard_commit(target):
+                if not committing:
+                    raise RuntimeError("Commit is owned by execution.transaction()")
+
+            event.listen(session, "before_commit", guard_commit)
+            try:
+                with session.begin() as transaction:
+                    row, run, attempt = self._require_lease(session, lease)
+                    if not lease.recovery and (
+                        not self._latest(session, attempt) or run.status not in {"running", "cancelling"}
+                    ):
+                        raise LeaseLost()
+                    connection = session.connection()
+                    connection_transaction = connection.get_transaction()
+                    event.listen(connection, "commit", guard_commit)
+                    yield session
+                    if (session.get_transaction() is not transaction or not transaction.is_active
+                            or connection.get_transaction() is not connection_transaction
+                            or not connection_transaction.is_active):
+                        raise RuntimeError("Execution transaction was ended by the handler")
+                    session.flush()
+                    session.refresh(row)
+                    self._assert_lease(session, row, lease)
+                    if recovery_complete:
+                        session.refresh(attempt)
+                        if attempt.status in {"pending", "running"}:
+                            raise RuntimeError("Recovery did not persist an attempt outcome")
+                        row.recovery_generation = lease.generation
+                        session.flush()
+                    # Проверка после последней записи, до единственного разрешённого commit.
+                    self._assert_lease(session, row, lease)
+                    committing = True
+            finally:
+                event.remove(session, "before_commit", guard_commit)
+                if connection is not None:
+                    event.remove(connection, "commit", guard_commit)
 
     def complete(self, lease: Lease) -> None:
         with self.sessions.begin() as session:
@@ -135,6 +168,10 @@ class PostgreSQLQueueStore:
                 not self._latest(session, attempt) or attempt.status in {"pending", "running"}
             ):
                 raise RuntimeError("Orchestrator did not persist an attempt outcome")
+            if lease.recovery and (
+                row.recovery_generation != lease.generation or attempt.status in {"pending", "running"}
+            ):
+                raise RuntimeError("Recovery did not acknowledge a persisted outcome")
             self._clear_lease(row, "completed")
 
     def abandon(self, lease: Lease) -> None:

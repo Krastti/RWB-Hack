@@ -63,8 +63,8 @@ class ExecutionContext(Protocol):
         """Продлить только текущее, ещё не истёкшее поколение."""
         ...
 
-    def transaction(self) -> ContextManager["Session"]:
-        """Общий commit результатов с проверкой lease до и после записи."""
+    def transaction(self, *, recovery_complete: bool = False) -> ContextManager["Session"]:
+        """Fenced commit; recovery_complete атомарно подтверждает восстановление."""
         ...
 
 
@@ -76,5 +76,5 @@ class Orchestrator(Protocol):
 
 class RecoveryHandler(Protocol):
     def __call__(self, command: StageCommand, execution: ExecutionContext) -> None:
-        """Идемпотентно обработать потерю исполнения и политику новой попытки."""
+        """Сохранить решение через transaction(recovery_complete=True), затем вернуть None."""
         ...
