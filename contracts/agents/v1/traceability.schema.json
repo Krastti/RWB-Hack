@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/contracts/agents/v1/traceability.schema.json",
+  "title": "FR to files, API operations, entities and screens",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "requirements_artifact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fr_id": {
+            "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/fr_id"
+          },
+          "status": {
+            "enum": [
+              "implemented",
+              "partial",
+              "unimplemented"
+            ]
+          },
+          "artifact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "operation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "entity_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "screen_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "notes": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "fr_id",
+          "status",
+          "artifact_ids",
+          "operation_ids",
+          "entity_ids",
+          "screen_ids",
+          "notes"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "implemented"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "artifact_ids": {
+                  "minItems": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "unimplemented"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "artifact_ids": {
+                  "maxItems": 0
+                }
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "requirements_artifact_id",
+    "coverage"
+  ],
+  "additionalProperties": false
+}

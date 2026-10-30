@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/contracts/agents/v1/artifact.schema.json",
+  "title": "Produced artifact with inline content or storage reference",
+  "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/artifact_metadata",
+  "properties": {
+    "content": {
+      "type": "string"
+    },
+    "storage_ref": {
+      "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/relative_path"
+    }
+  },
+  "oneOf": [
+    {
+      "required": [
+        "content"
+      ],
+      "not": {
+        "required": [
+          "storage_ref"
+        ]
+      }
+    },
+    {
+      "required": [
+        "storage_ref"
+      ],
+      "not": {
+        "required": [
+          "content"
+        ]
+      }
+    }
+  ],
+  "unevaluatedProperties": false
+}

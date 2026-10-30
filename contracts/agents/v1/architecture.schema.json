@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/contracts/agents/v1/architecture.schema.json",
+  "title": "Architecture and references to frozen design artifacts",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "contract_version": {
+      "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/contract_version"
+    },
+    "profile_id": {
+      "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/identifier"
+    },
+    "requirements_artifact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "in_scope": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "minItems": 0
+    },
+    "out_of_scope": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "minItems": 0
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^CMP-[0-9]{3,}$(?![\\s\\S])"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "responsibilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "minItems": 1
+          },
+          "output_directories": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/relative_path"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^CMP-[0-9]{3,}$(?![\\s\\S])"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "related_fr_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/fr_id"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "responsibilities",
+          "output_directories",
+          "depends_on",
+          "related_fr_ids"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^ADR-[0-9]{3,}$(?![\\s\\S])"
+          },
+          "decision": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "related_fr_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/fr_id"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "id",
+          "decision",
+          "reason",
+          "related_fr_ids"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "integrations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^INT-[0-9]{3,}$(?![\\s\\S])"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "mode": {
+            "enum": [
+              "mock_adapter",
+              "adapter"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "contract_artifact_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "related_fr_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/fr_id"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "mode",
+          "description",
+          "contract_artifact_id",
+          "related_fr_ids"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "contracts": {
+      "type": "object",
+      "properties": {
+        "openapi": {
+          "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/artifact_reference"
+        },
+        "data_model": {
+          "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/artifact_reference"
+        },
+        "ui_spec": {
+          "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/artifact_reference"
+        },
+        "generation_plan": {
+          "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/artifact_reference"
+        }
+      },
+      "required": [
+        "openapi",
+        "data_model",
+        "ui_spec",
+        "generation_plan"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "contract_version",
+    "profile_id",
+    "requirements_artifact_id",
+    "purpose",
+    "in_scope",
+    "out_of_scope",
+    "components",
+    "decisions",
+    "integrations",
+    "contracts"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,18 @@
+{
+  "artifact_id": "09c6e07d-702a-5cd3-82bd-064979202600",
+  "attempt_id": "bbfe3257-1630-531e-98f2-0d71a8678d99",
+  "path": "requirements.json",
+  "kind": "requirements",
+  "media_type": "application/json",
+  "version": 1,
+  "schema_version": "1.0",
+  "author_agent": "analysis",
+  "checksum": "81b803f5d9d92af226c23728170e878dc5aacb8e396632068817336313c7f975",
+  "size_bytes": 8305,
+  "related_fr_ids": [
+    "FR-001",
+    "FR-002",
+    "FR-003"
+  ],
+  "storage_ref": "runs/a42e19f4-80a9-5f04-941c-6d3ae4437744/artifacts/09c6e07d-702a-5cd3-82bd-064979202600"
+}

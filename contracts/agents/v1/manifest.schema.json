@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/contracts/agents/v1/manifest.schema.json",
+  "title": "Immutable snapshot manifest; preparation is not verification",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "snapshot_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "contract_version": {
+      "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/contract_version"
+    },
+    "profile_id": {
+      "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/identifier"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$(?![\\s\\S])"
+    },
+    "readiness": {
+      "enum": [
+        "prepared",
+        "partial"
+      ]
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/artifact_reference"
+      },
+      "minItems": 0
+    },
+    "traceability_artifact_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "unresolved_items": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/diagnostic"
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "snapshot_id",
+    "run_id",
+    "contract_version",
+    "profile_id",
+    "created_at",
+    "readiness",
+    "artifacts",
+    "traceability_artifact_id",
+    "unresolved_items"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "readiness": {
+            "const": "prepared"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "artifacts": {
+            "minItems": 1
+          },
+          "traceability_artifact_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "unresolved_items": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "severity": {
+                    "const": "error"
+                  }
+                },
+                "required": [
+                  "severity"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

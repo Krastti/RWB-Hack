@@ -1,0 +1,139 @@
+{
+  "schema_version": "1.0",
+  "contract_version": "1",
+  "profile_id": "web-fastapi-react",
+  "requirements_artifact_id": "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99",
+  "purpose": "Прототип обработки заявок на ремонт.",
+  "in_scope": [
+    "Подача, просмотр и изменение статуса; запрет удаления."
+  ],
+  "out_of_scope": [
+    "Реальные внешние интеграции."
+  ],
+  "components": [
+    {
+      "id": "CMP-001",
+      "name": "Web UI",
+      "responsibilities": [
+        "Форма и список заявок"
+      ],
+      "output_directories": [
+        "frontend"
+      ],
+      "depends_on": [
+        "CMP-002"
+      ],
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    {
+      "id": "CMP-002",
+      "name": "Сервис заявок",
+      "responsibilities": [
+        "Хранение, права и статусы"
+      ],
+      "output_directories": [
+        "backend"
+      ],
+      "depends_on": [],
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "ADR-001",
+      "decision": "Использовать web-профиль платформы.",
+      "reason": "Техническое решение примера, не требование заказчика.",
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    }
+  ],
+  "integrations": [],
+  "contracts": {
+    "openapi": {
+      "artifact_id": "155fc739-3f89-5db0-ad27-78adba9b7594",
+      "attempt_id": "1a0d5121-3c5d-5d4b-9dae-7aea443d7cda",
+      "path": "contracts/openapi.yaml",
+      "kind": "openapi",
+      "media_type": "application/json",
+      "version": 1,
+      "schema_version": "1.0",
+      "author_agent": "architecture",
+      "checksum": "422bd9b3540252c8665fe4b83e05f9c936efb28716d355dd5e90b61519ef5ec1",
+      "size_bytes": 1003,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    "data_model": {
+      "artifact_id": "c80417dc-33f7-5bc8-9338-e1d911166935",
+      "attempt_id": "1a0d5121-3c5d-5d4b-9dae-7aea443d7cda",
+      "path": "data-model.json",
+      "kind": "data_model",
+      "media_type": "application/json",
+      "version": 1,
+      "schema_version": "1.0",
+      "author_agent": "architecture",
+      "checksum": "fca256cc017fb29a80f0c0edf406d4efdcecead1540f5e4d8627080b33eb79cc",
+      "size_bytes": 257,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    "ui_spec": {
+      "artifact_id": "14a4535c-7f26-5bd8-9303-84415f4d6216",
+      "attempt_id": "1a0d5121-3c5d-5d4b-9dae-7aea443d7cda",
+      "path": "ui-spec.json",
+      "kind": "ui_spec",
+      "media_type": "application/json",
+      "version": 1,
+      "schema_version": "1.0",
+      "author_agent": "architecture",
+      "checksum": "2a830141dbcb2ca4098b7978794ff0b4f76161b21a199409d00df6923557882b",
+      "size_bytes": 255,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    "generation_plan": {
+      "artifact_id": "4d0fe590-5c81-5597-a614-41981f49bcc7",
+      "attempt_id": "1a0d5121-3c5d-5d4b-9dae-7aea443d7cda",
+      "path": "generation-plan.json",
+      "kind": "generation_plan",
+      "media_type": "application/json",
+      "version": 1,
+      "schema_version": "1.0",
+      "author_agent": "architecture",
+      "checksum": "97191832b62d89fee46f74dc2c7d8117d3cf5b5802eac4b8f3fa5da0a1333251",
+      "size_bytes": 1107,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    }
+  }
+}

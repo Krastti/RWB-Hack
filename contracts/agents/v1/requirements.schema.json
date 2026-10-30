@@ -1,0 +1,382 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/contracts/agents/v1/requirements.schema.json",
+  "title": "Requirements analysis snapshot 1.0",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "questions_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "product_goals": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/finding"
+      },
+      "minItems": 0
+    },
+    "in_scope": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/finding"
+      },
+      "minItems": 0
+    },
+    "out_of_scope": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/finding"
+      },
+      "minItems": 0
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/evidence"
+            },
+            "minItems": 1
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^ROLE-[0-9]{3,}$(?![\\s\\S])"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "text",
+          "evidence",
+          "id",
+          "permissions"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "functional_requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/evidence"
+            },
+            "minItems": 1
+          },
+          "id": {
+            "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/fr_id"
+          }
+        },
+        "required": [
+          "text",
+          "evidence",
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "nonfunctional_requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/evidence"
+            },
+            "minItems": 1
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^NFR-[0-9]{3,}$(?![\\s\\S])"
+          },
+          "verification": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "text",
+          "evidence",
+          "id",
+          "verification"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/finding"
+      },
+      "minItems": 0
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/finding"
+      },
+      "minItems": 0
+    },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/evidence"
+            },
+            "minItems": 1
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^SC-[0-9]{3,}$(?![\\s\\S])"
+          },
+          "role_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^ROLE-[0-9]{3,}$(?![\\s\\S])"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "related_fr_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/fr_id"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "text",
+          "evidence",
+          "id",
+          "role_ids",
+          "related_fr_ids",
+          "steps"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "integrations": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/finding"
+      },
+      "minItems": 0
+    },
+    "security_requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/finding"
+      },
+      "minItems": 0
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^AC-[0-9]{3,}$(?![\\s\\S])"
+          },
+          "related_fr_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/fr_id"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "given": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "when": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "then": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          }
+        },
+        "required": [
+          "id",
+          "related_fr_ids",
+          "given",
+          "when",
+          "then"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^RISK-[0-9]{3,}$(?![\\s\\S])"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "impact": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "related_fr_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/fr_id"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "impact",
+          "related_fr_ids"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 0
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/assumption"
+      },
+      "minItems": 0
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/question"
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "questions_revision",
+    "product_goals",
+    "in_scope",
+    "out_of_scope",
+    "roles",
+    "functional_requirements",
+    "nonfunctional_requirements",
+    "constraints",
+    "entities",
+    "scenarios",
+    "integrations",
+    "security_requirements",
+    "acceptance_criteria",
+    "risks",
+    "assumptions",
+    "questions"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "functional_requirements": {
+            "maxItems": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "questions": {
+            "contains": {
+              "type": "object",
+              "properties": {
+                "required": {
+                  "const": true
+                }
+              },
+              "required": [
+                "required"
+              ],
+              "not": {
+                "required": [
+                  "answer"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

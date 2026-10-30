@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "run_id": "a42e19f4-80a9-5f04-941c-6d3ae4437744",
+  "stage_id": "architecture",
+  "attempt": 1,
+  "input_artifact_ids": [
+    "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99"
+  ],
+  "contract_version": "1",
+  "profile_id": "web-fastapi-react",
+  "limits": {
+    "max_calls": 1,
+    "max_output_tokens": 8000,
+    "timeout_seconds": 90,
+    "max_critical_questions": 3
+  }
+}

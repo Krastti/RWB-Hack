@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/contracts/agents/v1/analysis-input.schema.json",
+  "title": "Business requirements and confirmed answers for analysis",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "requirements_text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "maxLength": 100000
+    },
+    "questions_revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "answers": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/answer"
+      },
+      "minItems": 0
+    },
+    "previous_requirements_artifact_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "analysis_rules_artifact_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "requirements_text",
+    "questions_revision",
+    "answers",
+    "previous_requirements_artifact_id",
+    "analysis_rules_artifact_id"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "answers": {
+            "minItems": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "questions_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "previous_requirements_artifact_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      }
+    }
+  ]
+}

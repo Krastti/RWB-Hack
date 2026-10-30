@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "run_id": "a42e19f4-80a9-5f04-941c-6d3ae4437744",
+  "stage_id": "analysis",
+  "attempt": 1,
+  "contract_version": "1",
+  "status": "cancelled",
+  "output_artifacts": [],
+  "questions": [],
+  "assumptions": [],
+  "usage": {
+    "calls": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "duration_seconds": 0,
+    "model_calls": []
+  },
+  "diagnostics": [
+    {
+      "code": "CANCELLED",
+      "message": "Иллюстрация остановки этапа до вызова модели.",
+      "severity": "info",
+      "retryable": false,
+      "related_fr_ids": []
+    }
+  ]
+}

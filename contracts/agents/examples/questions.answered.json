@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "questions_revision": 1,
+  "questions": [
+    {
+      "question_id": "c4f2de3a-29de-5e7d-a845-91de97bbcbf2",
+      "reason": "Неопределённые права влияют на безопасность и сохранность заявок.",
+      "related_fr_ids": [
+        "FR-002",
+        "FR-003"
+      ],
+      "required": true,
+      "question": "Нужно ли удаление заявок и кому оно разрешено?",
+      "answer": "Удаление запрещено всем ролям."
+    }
+  ]
+}

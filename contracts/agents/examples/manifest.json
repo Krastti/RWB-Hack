@@ -1,0 +1,183 @@
+{
+  "schema_version": "1.0",
+  "snapshot_id": "14957aa6-478f-52cd-9b3c-1cff968e1b93",
+  "run_id": "a42e19f4-80a9-5f04-941c-6d3ae4437744",
+  "contract_version": "1",
+  "profile_id": "web-fastapi-react",
+  "created_at": "2026-10-30T12:00:00Z",
+  "readiness": "partial",
+  "artifacts": [
+    {
+      "artifact_id": "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99",
+      "attempt_id": "f7569431-4eea-567d-b450-e59f2a108ca7",
+      "path": "requirements.json",
+      "kind": "requirements",
+      "media_type": "application/json",
+      "version": 2,
+      "schema_version": "1.0",
+      "author_agent": "analysis",
+      "checksum": "ef6b05718fe83b9695445e360699ae9c99452748d9ac2064be7abba9d76d9514",
+      "size_bytes": 9000,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    {
+      "artifact_id": "f2386ff5-e93f-508f-bb7c-6509e281e07e",
+      "attempt_id": "f7569431-4eea-567d-b450-e59f2a108ca7",
+      "path": "questions.json",
+      "kind": "questions",
+      "media_type": "application/json",
+      "version": 2,
+      "schema_version": "1.0",
+      "author_agent": "analysis",
+      "checksum": "1e7480e137c8e32c24ca8ab473b5606d2cc2beddce1e6672c1f6b5732d5a3a02",
+      "size_bytes": 569,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    {
+      "artifact_id": "6c4c25b6-575c-5b47-8bb6-d44f8ff58610",
+      "attempt_id": "f7569431-4eea-567d-b450-e59f2a108ca7",
+      "path": "docs/system-analysis.md",
+      "kind": "system_analysis",
+      "media_type": "text/markdown",
+      "version": 2,
+      "schema_version": "1.0",
+      "author_agent": "analysis",
+      "checksum": "df358cd1f84ac9d9ca2eae8b1f3604a25c686d90e62dc8ba262af8c29d326559",
+      "size_bytes": 3848,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    {
+      "artifact_id": "0c05995a-a3bc-5de6-ae6d-9ab4f50b1456",
+      "attempt_id": "1a0d5121-3c5d-5d4b-9dae-7aea443d7cda",
+      "path": "architecture.json",
+      "kind": "architecture",
+      "media_type": "application/json",
+      "version": 1,
+      "schema_version": "1.0",
+      "author_agent": "architecture",
+      "checksum": "b902e87c20e40a04e8e64b49f211eba7b4f7d641ea9a9da214cc13b04541823c",
+      "size_bytes": 3834,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    {
+      "artifact_id": "155fc739-3f89-5db0-ad27-78adba9b7594",
+      "attempt_id": "1a0d5121-3c5d-5d4b-9dae-7aea443d7cda",
+      "path": "contracts/openapi.yaml",
+      "kind": "openapi",
+      "media_type": "application/json",
+      "version": 1,
+      "schema_version": "1.0",
+      "author_agent": "architecture",
+      "checksum": "422bd9b3540252c8665fe4b83e05f9c936efb28716d355dd5e90b61519ef5ec1",
+      "size_bytes": 1003,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    {
+      "artifact_id": "c80417dc-33f7-5bc8-9338-e1d911166935",
+      "attempt_id": "1a0d5121-3c5d-5d4b-9dae-7aea443d7cda",
+      "path": "data-model.json",
+      "kind": "data_model",
+      "media_type": "application/json",
+      "version": 1,
+      "schema_version": "1.0",
+      "author_agent": "architecture",
+      "checksum": "fca256cc017fb29a80f0c0edf406d4efdcecead1540f5e4d8627080b33eb79cc",
+      "size_bytes": 257,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    {
+      "artifact_id": "14a4535c-7f26-5bd8-9303-84415f4d6216",
+      "attempt_id": "1a0d5121-3c5d-5d4b-9dae-7aea443d7cda",
+      "path": "ui-spec.json",
+      "kind": "ui_spec",
+      "media_type": "application/json",
+      "version": 1,
+      "schema_version": "1.0",
+      "author_agent": "architecture",
+      "checksum": "2a830141dbcb2ca4098b7978794ff0b4f76161b21a199409d00df6923557882b",
+      "size_bytes": 255,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    {
+      "artifact_id": "4d0fe590-5c81-5597-a614-41981f49bcc7",
+      "attempt_id": "1a0d5121-3c5d-5d4b-9dae-7aea443d7cda",
+      "path": "generation-plan.json",
+      "kind": "generation_plan",
+      "media_type": "application/json",
+      "version": 1,
+      "schema_version": "1.0",
+      "author_agent": "architecture",
+      "checksum": "97191832b62d89fee46f74dc2c7d8117d3cf5b5802eac4b8f3fa5da0a1333251",
+      "size_bytes": 1107,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    {
+      "artifact_id": "ab1c787b-3a63-54f7-ba14-fbdfc4ede3a8",
+      "attempt_id": "6c823715-7ba8-5bae-a24e-4b45371bd2a1",
+      "path": "traceability.json",
+      "kind": "traceability",
+      "media_type": "application/json",
+      "version": 1,
+      "schema_version": "1.0",
+      "author_agent": "assembly",
+      "checksum": "5d5601d1ca991bdfd11f8abb794cd4f36c14225825013e44ab5066aa17676ba6",
+      "size_bytes": 1324,
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    }
+  ],
+  "traceability_artifact_id": "ab1c787b-3a63-54f7-ba14-fbdfc4ede3a8",
+  "unresolved_items": [
+    {
+      "code": "GENERATION_PENDING",
+      "message": "Артефакты проектирования подготовлены; генерация исходников ещё не выполнена.",
+      "severity": "warning",
+      "retryable": false,
+      "related_fr_ids": []
+    }
+  ]
+}

@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/contracts/agents/v1/agent-result.schema.json",
+  "title": "AgentResult 1.0",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "stage_id": {
+      "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/identifier"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "contract_version": {
+      "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/contract_version"
+    },
+    "status": {
+      "enum": [
+        "succeeded",
+        "waiting_for_input",
+        "failed",
+        "cancelled",
+        "skipped"
+      ]
+    },
+    "output_artifacts": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/artifact.schema.json"
+      },
+      "minItems": 0
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/question"
+      },
+      "minItems": 0
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/assumption"
+      },
+      "minItems": 0
+    },
+    "usage": {
+      "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/usage"
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/diagnostic"
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "stage_id",
+    "attempt",
+    "contract_version",
+    "status",
+    "output_artifacts",
+    "questions",
+    "assumptions",
+    "usage",
+    "diagnostics"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "waiting_for_input"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "questions": {
+            "contains": {
+              "type": "object",
+              "properties": {
+                "required": {
+                  "const": true
+                }
+              },
+              "required": [
+                "required"
+              ],
+              "not": {
+                "required": [
+                  "answer"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "succeeded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "questions": {
+            "not": {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "required": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "required"
+                ],
+                "not": {
+                  "required": [
+                    "answer"
+                  ]
+                }
+              }
+            }
+          },
+          "output_artifacts": {
+            "minItems": 1
+          },
+          "diagnostics": {
+            "not": {
+              "contains": {
+                "properties": {
+                  "severity": {
+                    "const": "error"
+                  }
+                },
+                "required": [
+                  "severity"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "diagnostics": {
+            "contains": {
+              "properties": {
+                "severity": {
+                  "const": "error"
+                }
+              },
+              "required": [
+                "severity"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "cancelled",
+              "skipped"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "diagnostics": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ]
+}
