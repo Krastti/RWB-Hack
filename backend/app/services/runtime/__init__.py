@@ -41,7 +41,7 @@ def compose_runtime(sessions, *, retry_limits: Limits, queue_config: QueueConfig
 
 
 def compose_worker(runtime: RunRuntime, *, broker_url: str, orchestrator, recovery=None):
-    """Requires actual AG orchestration/recovery; never installs a mock fallback."""
+    """Requires actual AG orchestration; defaults to technical RuntimeRecovery."""
     from ...adapters.queue.celery import create_worker_app
     return create_worker_app(
         broker_url=broker_url, sessions=runtime.repository.sessions,

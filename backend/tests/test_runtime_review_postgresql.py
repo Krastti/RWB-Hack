@@ -38,7 +38,8 @@ def db():
     admin.dispose()
 
 
-def test_guard_rejection_rolls_back_result_and_events(db):
+@pytest.mark.parametrize("target", ["succeeded", "skipped", "waiting_for_input"])
+def test_guard_rejection_rolls_back_result_and_events(db, target):
     owner, project, revision, run_id, attempt_id = [uuid4() for _ in range(5)]
     text_input = "requirements"
     source = AttemptState(attempt_id=attempt_id, stage_id="analysis", attempt_no=1,
@@ -58,14 +59,18 @@ def test_guard_rejection_rolls_back_result_and_events(db):
         s.add(RunRuntimeState(run_id=run_id, version=1, generations={}, payload={
             "attempts": [source.model_dump(mode="json")], "saved_state": {}}))
     runtime = compose_runtime(db, retry_limits=Limits(max_calls=10, max_output_tokens=1000))
-    result = {"status": "succeeded", "run_id": str(run_id), "stage_id": "analysis", "attempt": 1,
+    result = {"status": target, "run_id": str(run_id), "stage_id": "analysis", "attempt": 1,
               "contract_version": "1.0"}
+    def boundary(record):
+        record.run.stages[0].reason = "ACCEPTED_RESULT"
+        return {"checkpoint": "saved"}
+
     def finish():
         with db.begin() as s:
             row = s.scalar(select(Run).where(Run.id == run_id).with_for_update())
             runtime.repository.control_in(s, row).finish_attempt(owner_id=owner, run_id=run_id,
                 stage_id="analysis", attempt_id=attempt_id, accepted_result=result,
-                save_boundary=lambda record: {"checkpoint": "saved"})
+                save_boundary=boundary)
     with pytest.raises(LifecycleError):
         finish()
     with db() as s:
@@ -85,7 +90,7 @@ def test_guard_rejection_rolls_back_result_and_events(db):
         results = list(pool.map(lambda _: concurrent_finish(), range(2)))
     assert sorted(results) == ["RUN_STATE_CONFLICT", "saved"]
     with db() as s:
-        assert s.get(StageAttempt, attempt_id).status == "succeeded"
+        assert s.get(StageAttempt, attempt_id).status == target
         assert len(list(s.scalars(select(RunEvent).where(RunEvent.run_id == run_id)))) == 1
     with pytest.raises(ControlError) as exc:
         finish()

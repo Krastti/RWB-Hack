@@ -8,7 +8,7 @@
 PostgreSQL. `app.state.run_runtime` содержит результат
 `compose_runtime(sessions, retry_limits=Limits(...), queue_config=QueueConfig())`:
 repository, states, queue, control, intake. SQLite/in-memory stores здесь не используются.
-Необходимы миграции V1–V6; V6 хранит только private state, без второй копии Run/событий.
+Необходимы миграции V1–V8, применённые по порядку. V6 хранит private state без второй копии Run/событий; V7 добавляет учёт ошибок recovery в WorkerCommand, V8 — состояние и повторы доставки RunQueueJob.
 
 ## Путь команды
 
@@ -23,8 +23,9 @@ repository, states, queue, control, intake. SQLite/in-memory stores здесь �
 4. Worker claim использует тот же runtime queue store: queued → running и
    pending → running выполняются существующим lifecycle service и видны через GET
    Run/events. Повтор доставки не создаёт attempts/events/usage.
-5. Orchestrator/recovery обязаны сохранять реальные результаты через
-   `execution.transaction()`; никакого встроенного mock-аналитика нет.
+5. Orchestrator сохраняет реальные результаты через `execution.transaction()`.
+   Встроенный `RuntimeRecovery` обрабатывает потерянные исполнения; можно передать
+   специализированный recovery. Встроенного mock-аналитика нет.
 
 `AttemptState.input_state.schema_version = runtime-intake/1` обозначает private
 снимок требований/профиля/contracts/limits. Это **не AgentInput C-02** и не
@@ -43,15 +44,17 @@ import os
 from backend.app.main import create_app
 from backend.app.services.runtime import compose_worker
 
-def build_worker(orchestrator, recovery):
+def build_worker(orchestrator, recovery=None):
     api = create_app()  # DATABASE_URL, JWT_SECRET_KEY; production PostgreSQL
     runtime = api.state.run_runtime
     return compose_worker(runtime, broker_url=os.environ["BROKER_URL"],
                           orchestrator=orchestrator, recovery=recovery)
 ```
 
-Функции `(StageCommand, ExecutionContext) -> None` предоставляет интеграция AG.
-Без них factory worker не вызывается. Запускайте worker для `rwb.stages`, отдельный
+Предметный orchestrator `(StageCommand, ExecutionContext) -> None` обязателен
+и предоставляется интеграцией AG. Если `recovery` не передан, `compose_worker`
+использует встроенный `RuntimeRecovery` для технического восстановления; при необходимости
+интеграция может передать специализированный обработчик. Запускайте worker для `rwb.stages`, отдельный
 control worker для `rwb.control` и beat по инструкции [backend](../../../../docs/backend.md).
 HTTP-процесс не запускает beat/worker автоматически. Только запущенные dispatch и
 worker переводят durable 202 в исполнение. Настройки queue/lease едины в runtime;
@@ -95,7 +98,7 @@ finish_attempt/recovery и не допускает новых calls. Intent от
 Одна лишь V6 не мигрирует исторические SQLite stores и LangGraph checkpoints.
 
 Откат: остановить dispatch/workers и новые commands, откатить код. Сохранить
-V4/V5/V6 и принятые inputs/replay/commands для восстановления; не удалять таблицы
+схему V4–V8 и принятые inputs/replay/commands для восстановления; не удалять таблицы
 с данными и не переисполнять потерянную попытку вместо recovery.
 
 ## Technical recovery delivery policy (V7)
@@ -125,7 +128,9 @@ metadata then commits under those same locks. Known immutable-input validation
 errors are rejected immediately; other errors get at most three failures with
 5/10-second backoff. Rejected jobs retain a safe error code for investigation and
 never occupy an active dispatch slot. Valid frozen state allows queued → running
-→ failed through lifecycle. When corrupt snapshots prevent lifecycle loading,
-`TERMINALIZATION_UNAVAILABLE` is persisted with the rejected job for operator
-repair; no terminal Run state is fabricated. Database outages can prevent recording
-failure metadata; the whole transaction then rolls back and delivery remains durable.
+→ failed through lifecycle. When corrupt snapshots prevent lifecycle loading, the terminalization fallback
+transitions a queued Run through running to failed without loading private state,
+fences active attempts and commands, and releases the active Run slot. The rejected
+job records `TERMINALIZATION_FALLBACK` for investigation. If the fallback or database
+write fails, the whole transaction rolls back, including job rejection, so delivery
+remains pending for a later attempt.

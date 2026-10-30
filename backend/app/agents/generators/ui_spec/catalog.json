@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0",
+  "catalog_version": "1.0.0",
+  "framework": "Angular",
+  "ui_kit": "Bootstrap",
+  "components": [
+    {
+      "id": "container",
+      "angular": "Standalone layout component",
+      "bootstrap": "container-fluid",
+      "purpose": "Page landmarks and content width"
+    },
+    {
+      "id": "grid",
+      "angular": "Standalone layout component",
+      "bootstrap": "row g-3 / col-12 col-md-6",
+      "purpose": "Responsive layout without page overflow"
+    },
+    {
+      "id": "card",
+      "angular": "Standalone component",
+      "bootstrap": "card",
+      "purpose": "Group a named task or record"
+    },
+    {
+      "id": "table",
+      "angular": "Angular @for with stable track key",
+      "bootstrap": "table / table-responsive",
+      "purpose": "Tabular records with headers and a named scroll region"
+    },
+    {
+      "id": "form",
+      "angular": "ReactiveFormsModule / FormGroup",
+      "bootstrap": "form-label / form-control",
+      "purpose": "Labelled form and associated validation messages"
+    },
+    {
+      "id": "input",
+      "angular": "Reactive FormControl",
+      "bootstrap": "form-control",
+      "purpose": "Labelled text/date/number input"
+    },
+    {
+      "id": "textarea",
+      "angular": "Reactive FormControl",
+      "bootstrap": "form-control",
+      "purpose": "Labelled multiline input"
+    },
+    {
+      "id": "select",
+      "angular": "Reactive FormControl",
+      "bootstrap": "form-select",
+      "purpose": "Labelled native choice control"
+    },
+    {
+      "id": "checkbox",
+      "angular": "Reactive FormControl",
+      "bootstrap": "form-check / form-check-input",
+      "purpose": "Labelled native checkbox"
+    },
+    {
+      "id": "button",
+      "angular": "Angular event binding on native button",
+      "bootstrap": "btn btn-primary",
+      "purpose": "Named action, busy/disabled semantics"
+    },
+    {
+      "id": "link",
+      "angular": "RouterLink on native anchor",
+      "bootstrap": "nav-link",
+      "purpose": "Keyboard-accessible internal navigation"
+    },
+    {
+      "id": "alert",
+      "angular": "Angular conditional rendering",
+      "bootstrap": "alert",
+      "purpose": "Error, permission or success message; appropriate live region"
+    },
+    {
+      "id": "spinner",
+      "angular": "Angular conditional rendering",
+      "bootstrap": "spinner-border",
+      "purpose": "Busy state with accessible status text"
+    },
+    {
+      "id": "badge",
+      "angular": "Angular text binding",
+      "bootstrap": "badge",
+      "purpose": "Textual status, never colour alone"
+    },
+    {
+      "id": "pagination",
+      "angular": "Standalone component and Angular events",
+      "bootstrap": "pagination",
+      "purpose": "Named page controls and aria-current"
+    }
+  ]
+}

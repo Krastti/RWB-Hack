@@ -19,10 +19,11 @@ class Snapshot:
         return self
 
 
-def test_result_save_checks_same_domain_guard():
+@pytest.mark.parametrize("target", ["succeeded", "skipped", "waiting_for_input"])
+def test_result_save_checks_same_domain_guard(target):
     attempt_id, run_id, owner_id = uuid4(), uuid4(), uuid4()
     old_stage = SimpleNamespace(stage_id="analysis", attempt_no=1, status="running")
-    new_stage = SimpleNamespace(stage_id="analysis", attempt_no=1, status="succeeded")
+    new_stage = SimpleNamespace(stage_id="analysis", attempt_no=1, status=target)
     private = SimpleNamespace(stage_id="analysis", attempt_no=1, attempt_id=attempt_id)
     original = SimpleNamespace(run=SimpleNamespace(stages=[old_stage]), model_dump=lambda **_: {})
     proposed = SimpleNamespace(run=SimpleNamespace(stages=[new_stage]), attempts=[private],
@@ -41,10 +42,10 @@ def test_result_save_checks_same_domain_guard():
     repo.guard = execution_guard
     with patch("app.services.runtime.lifecycle.BoundLifecycleRepository", FakeLifecycleRepository):
         with pytest.raises(LifecycleError, match="domain guard"):
-            repo._guard_successes(None, SimpleNamespace(id=run_id), proposed, original)
+            repo._guard_attempt_changes(None, SimpleNamespace(id=run_id), proposed, original)
         seen = []
         repo.guard = lambda state, change: seen.append((state.data.copy(), change))
-        repo._guard_successes(None, SimpleNamespace(id=run_id), proposed, original)
+        repo._guard_attempt_changes(None, SimpleNamespace(id=run_id), proposed, original)
     assert seen[0][0] == {"accepted": True}
     assert seen[0][1].attempt_id == attempt_id
-    assert seen[0][1].target == "succeeded"
+    assert seen[0][1].target == target

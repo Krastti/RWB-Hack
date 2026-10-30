@@ -108,3 +108,83 @@ def test_permanent_validation_failure_terminalizes_once(db, monkeypatch):
     assert runtime(db).intake.dispatch()=={"accepted":0,"failed":0}
     with db() as s:
         assert len(list(s.scalars(select(RunEvent))))==len(events)
+
+
+@pytest.mark.parametrize("corruption", ["missing_input", "runtime_payload"])
+def test_rejected_corrupt_run_releases_active_slot(db, corruption):
+    from app.services.runtime.models import RunRuntimeState
+    run_id, job_id = seed(db, poison=corruption == "missing_input")
+    with db.begin() as s:
+        if corruption == "runtime_payload":
+            s.add(RunRuntimeState(run_id=run_id, version=1, generations={},
+                                  payload={"attempts": "corrupt", "saved_state": {}}))
+        # Existing history must retain its sequence and contents.
+        s.add(RunEvent(run_id=run_id, seq=1, event_type="run.created",
+                       data={"schema_version": "1.0", "status": "queued"}))
+    assert runtime(db).intake.dispatch() == {"accepted": 0, "failed": 1}
+    with db() as s:
+        row = s.get(Run, run_id)
+        assert row.status == "failed" and row.stop_reason == "INTAKE_REJECTED"
+        assert row.stopped_at is not None
+        job = s.get(RunQueueJob, job_id)
+        assert job.state == "rejected"
+        assert job.failure_code.endswith(":TERMINALIZATION_FALLBACK")
+        events = list(s.scalars(select(RunEvent).where(
+            RunEvent.run_id == run_id).order_by(RunEvent.seq)))
+        assert [e.seq for e in events] == [1, 2, 3]
+        assert events[0].data == {"schema_version": "1.0", "status": "queued"}
+        assert [e.data["to"] for e in events[1:]] == ["running", "failed"]
+        owner = s.scalar(select(Project.owner_id).where(Project.id == row.project_id))
+        assert s.scalar(select(Run.id).join(Project).where(
+            Project.owner_id == owner,
+            Run.status.in_({"queued", "running", "waiting_for_input", "cancelling"}))) is None
+    assert runtime(db).intake.dispatch() == {"accepted": 0, "failed": 0}
+    with db() as s:
+        assert len(list(s.scalars(select(RunEvent).where(RunEvent.run_id == run_id)))) == 3
+
+
+def test_fallback_fences_commands_and_pending_attempts(db):
+    from app.services.runtime.models import RunRuntimeState
+    run_id, job_id = seed(db)
+    attempt_id = uuid4()
+    with db.begin() as s:
+        s.add(RunRuntimeState(run_id=run_id, version=1, generations={},
+                              payload={"attempts": "corrupt"}))
+        s.add(StageAttempt(id=attempt_id, run_id=run_id, stage_id="analysis", attempt_no=1,
+                           contract_version="1.0", input_hash="a" * 64, status="pending"))
+        s.flush()
+        s.add(WorkerCommand(attempt_id=attempt_id))
+    assert runtime(db).intake.dispatch() == {"accepted": 0, "failed": 1}
+    with db() as s:
+        assert s.get(Run, run_id).status == "failed"
+        attempt = s.get(StageAttempt, attempt_id)
+        assert attempt.status == "failed" and attempt.finished_at is not None
+        command = s.scalar(select(WorkerCommand).where(WorkerCommand.attempt_id == attempt_id))
+        assert command.state == "obsolete"
+        assert command.owner_token is None and command.expires_at is None
+        events = list(s.scalars(select(RunEvent).where(
+            RunEvent.run_id == run_id).order_by(RunEvent.seq)))
+        assert [e.event_type for e in events] == [
+            "run.status_changed", "stage.status_changed", "run.status_changed"]
+
+
+def test_fallback_failure_rolls_back_job_rejection(db, monkeypatch):
+    run_id, job_id = seed(db, poison=True)
+    rt = runtime(db)
+
+    def unavailable(session, run):
+        run.status = "failed"
+        session.flush()
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(rt.intake, "_fail_rejected_queued_run", unavailable)
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        rt.intake.dispatch()
+    with db() as s:
+        assert s.get(Run, run_id).status == "queued"
+        job = s.get(RunQueueJob, job_id)
+        assert job.state == "pending" and job.failures == 0
+        assert list(s.scalars(select(RunEvent).where(RunEvent.run_id == run_id))) == []
+    assert runtime(db).intake.dispatch() == {"accepted": 0, "failed": 1}
+    with db() as s:
+        assert s.get(Run, run_id).status == "failed"
