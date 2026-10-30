@@ -18,8 +18,8 @@ from .store import ControlStore
 class RunControlService:
     def __init__(self, store: ControlStore, *, authorize_retry: Callable[[Record, Limits], None]):
         self.store = store
-        # Must enforce owner policy, allowed limits and one active Run. Called
-        # inside the storage transaction; raise ControlError(429, ...) on denial.
+        # Политика проверяет владельца, лимиты и один активный Run в транзакции.
+        # При отказе 429 она передаёт рассчитанный retry_after в ControlError.
         self.authorize_retry = authorize_retry
 
     @staticmethod
@@ -213,14 +213,10 @@ class RunControlService:
             if (record.run.status != "running" or attempt.status != "running"
                     or private.attempt_id != attempt_id):
                 raise conflict("New calls are forbidden for this execution")
-            previous_metrics = record.run.metrics.model_dump()
-            previous_completeness = dict(record.tokens_complete)
             reserve_budget(record)
-            # Событие и резервирование фиксируются одной транзакцией.
-            if (record.run.metrics.model_dump() != previous_metrics
-                    or record.tokens_complete != previous_completeness):
-                self._event(record, "metrics.updated", metrics=record.run.metrics.model_dump(),
-                            tokens_complete=record.tokens_complete)
+            # Каждый успешный допуск публикует снимок вместе с резервированием.
+            self._event(record, "metrics.updated", metrics=record.run.metrics.model_dump(),
+                        tokens_complete=record.tokens_complete)
 
     def finish_attempt(self, *, owner_id: UUID, run_id: UUID, stage_id: str,
                        attempt_id: UUID, accepted_result: dict,

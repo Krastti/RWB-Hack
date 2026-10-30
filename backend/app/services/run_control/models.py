@@ -112,9 +112,17 @@ class Record(Model):
 
 
 class ControlError(Exception):
-    def __init__(self, status: int, code: str, message: str):
+    def __init__(
+        self, status: int, code: str, message: str, *, retry_after: int | None = None,
+    ):
+        # Политика допуска задаёт срок ожидания; HTTP-слой его не угадывает.
+        if retry_after is not None and (type(retry_after) is not int or retry_after < 1):
+            raise ValueError("retry_after must be a positive integer number of seconds")
+        if status == 429 and retry_after is None:
+            raise ValueError("Rate-limit errors require retry_after from the admission policy")
         super().__init__(message)
         self.status, self.code, self.message = status, code, message
+        self.retry_after = retry_after
 
 
 def conflict(message: str = "Run state conflicts with this command") -> ControlError:
