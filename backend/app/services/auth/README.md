@@ -61,6 +61,9 @@ Bearer`. Ошибка содержит envelope C-01: code, message, details, re
 Если middleware уже назначил `request.state.request_id`, он сохраняется;
 иначе генерируется UUID. Ошибки тела login возвращают 422 `VALIDATION_ERROR`
 без исходного ввода, чтобы пароль не попадал в ответ.
+В OpenAPI декоратор login endpoint явно описывает ответы 401 и 422 через
+DTO `app.models.dto.errors.Error` по схеме C-01; стандартная схема
+FastAPI `HTTPValidationError` для этого endpoint не используется.
 `configure_auth` устанавливает обработчик только `Unauthorized`; валидация
 перехватывается только для auth router и не меняет остальные маршруты.
 

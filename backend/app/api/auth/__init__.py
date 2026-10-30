@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ...errors.auth import Unauthorized
 from ...models.dto.auth import CurrentUser, Token, TokenRequest
+from ...models.dto.errors import Error
 from ...services.auth import AuthService
 
 
@@ -54,7 +55,24 @@ def current_user(
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"], route_class=_AuthRoute)
 
 
-@router.post("/token", response_model=Token, operation_id="issueToken")
+@router.post(
+    "/token",
+    response_model=Token,
+    operation_id="issueToken",
+    responses={
+        401: {
+            "model": Error,
+            "description": "UNAUTHORIZED: invalid credentials or inactive user",
+            "headers": {
+                "WWW-Authenticate": {"schema": {"type": "string"}},
+            },
+        },
+        422: {
+            "model": Error,
+            "description": "VALIDATION_ERROR: invalid login request",
+        },
+    },
+)
 def issue_token(
     body: TokenRequest, service: AuthService = Depends(get_auth_service),
 ) -> Token:
