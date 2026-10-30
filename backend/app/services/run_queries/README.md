@@ -24,12 +24,15 @@ reconstructing state from events. Unknown event types remain public data.
 Implement `RunReadRepository` from `repository.py`. Every method receives owner_id;
 SQL implementations must enforce it through Project.owner_id on every query.
 `project_exists` prevents a missing/foreign project from looking like an empty
-history. `OwnedRun(owner_id, run)` provides an additional service ownership check.
+history. `get_run` also confirms that the returned run's project belongs to the
+caller through `project_exists`; event reads share this check.
+`OwnedRun(owner_id, run)` provides an additional service ownership check.
 Foreign and missing resources both raise `ReadNotFound` (HTTP 404). Ownership is
 checked before an event read, and the event query itself must be owner scoped.
 Adapters must return detached consistent snapshots, with bounded queries and no
 read-side writes. The service fails closed on owner/project/run mismatches,
-incorrect ordering, or excessive rows, and never silently repairs event ordering.
+duplicate `(stage_id, attempt_no)` pairs in any run, incorrect ordering, or
+excessive rows, and never silently repairs event ordering.
 Storage failures should use the application's existing generic storage handler.
 
 History uses descending `(created_at, run_id)` keyset ordering. The signed opaque

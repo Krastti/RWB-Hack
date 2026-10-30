@@ -48,6 +48,9 @@ class RunQueryService:
         if record is None or record.owner_id != owner_id:
             raise ReadNotFound()
         run = record.run.model_copy(deep=True)
+        attempt_keys = {(item.stage_id, item.attempt_no) for item in run.stages}
+        if len(attempt_keys) != len(run.stages):
+            raise InvalidReadSnapshot("Duplicate stage attempt")
         # Lifecycle C-03 groups attempts by stage, then attempt number.
         return run.model_copy(update={"stages": tuple(sorted(
             run.stages, key=lambda item: (item.stage_id, item.attempt_no)))})
@@ -57,6 +60,8 @@ class RunQueryService:
         run = self._owned(self._repository.get_run(owner_id=owner_id, run_id=run_id), owner_id)
         if run.run_id != run_id:
             raise InvalidReadSnapshot()
+        if not self._repository.project_exists(owner_id=owner_id, project_id=run.project_id):
+            raise ReadNotFound()
         return run
 
     def list_runs(self, *, owner_id: UUID, project_id: UUID,
