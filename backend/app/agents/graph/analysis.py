@@ -39,6 +39,12 @@ def _reference(artifact: dict) -> dict:
     return {k: deepcopy(v) for k, v in artifact.items() if k not in {"content", "storage_ref"}}
 
 
+def _question_definition(question: dict) -> dict:
+    definition = {k: v for k, v in question.items() if k != "answer"}
+    definition["related_fr_ids"] = sorted(question["related_fr_ids"])
+    return definition
+
+
 class AnalysisGraph:
     """One analysis node per Run, called under the worker's external lease.
 
@@ -326,9 +332,13 @@ class AnalysisGraph:
         questions = result["questions"]
         if result["status"] not in {"succeeded", "waiting_for_input"}:
             return deepcopy(state["questions"]), state["questions_revision"]
-        answers = {q["question_id"]: q["answer"] for q in state["questions"] if "answer" in q}
+        known = {q["question_id"]: q for q in state["questions"]}
+        answers = {qid: q["answer"] for qid, q in known.items() if "answer" in q}
         for q in questions:
             _require(q.get("answer") == answers.get(q["question_id"]), "UNCONFIRMED_ANSWER")
+            if q["question_id"] in answers:
+                _require(_question_definition(q) == _question_definition(known[q["question_id"]]),
+                         "CONFIRMED_QUESTION_CHANGED")
         _require(answers.keys() <= {q["question_id"] for q in questions}, "CONFIRMED_QUESTION_LOST")
         pending = [q for q in questions if q["required"] and "answer" not in q]
         _require(len(pending) <= state["request"]["limits"].get("max_critical_questions", 3),
@@ -340,18 +350,23 @@ class AnalysisGraph:
         qdoc = loads(kinds["questions"]["content"])
         _require(reqs["questions"] == questions == qdoc["questions"]
                  and reqs["assumptions"] == result["assumptions"], "ANALYSIS_RESULT_MISMATCH")
-        # Answers alone do not create a new question-set revision.
-        definition = lambda qs: sorted(
-            [{k: v for k, v in q.items() if k != "answer"} for q in qs],
-            key=lambda q: q["question_id"])
-        revision = state["questions_revision"] + (definition(questions) != definition(state["questions"]))
+        # The first published snapshot has revision 1 even when it is empty.
+        # Answers alone and FR ordering do not create a new question-set revision.
+        def definition(items):
+            return sorted((_question_definition(q) for q in items), key=lambda q: q["question_id"])
+
+        revision = max(1, state["questions_revision"]
+                       + (definition(questions) != definition(state["questions"])))
         _require(reqs["questions_revision"] == qdoc["questions_revision"] == revision,
                  "QUESTIONS_REVISION_CONFLICT")
         previous_id = source["previous_requirements_artifact_id"]
         if previous_id:
             previous = loads(self._artifact(state["run_id"], previous_id)["content"])
-            _require({f["id"] for f in previous["functional_requirements"]} <= {
-                f["id"] for f in reqs["functional_requirements"]}, "FR_ID_LOST")
+            for field, code in (("functional_requirements", "FR_ID_LOST"),
+                                ("nonfunctional_requirements", "NFR_ID_LOST"),
+                                ("roles", "ROLE_ID_LOST")):
+                _require({item["id"] for item in previous[field]} <= {
+                    item["id"] for item in reqs[field]}, code)
         for item in walk(reqs):
             if isinstance(item, dict) and set(item) == {"source", "quote", "question_id"}:
                 original = (source["requirements_text"] if item["source"] == "requirements"

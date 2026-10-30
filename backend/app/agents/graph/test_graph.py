@@ -20,6 +20,27 @@ def example(name):
     return json.loads((EXAMPLES / (name + ".json")).read_text(encoding="utf-8"))
 
 
+def rewrite_requirements(result, update):
+    """Keep fixture artifacts consistent while testing semantic changes."""
+    requirements = next(a for a in result["output_artifacts"] if a["kind"] == "requirements")
+    value = json.loads(requirements["content"])
+    update(value)
+    result["questions"] = deepcopy(value["questions"])
+    result["assumptions"] = deepcopy(value["assumptions"])
+    for artifact in result["output_artifacts"]:
+        if artifact["kind"] == "requirements":
+            payload = value
+        elif artifact["kind"] == "questions":
+            payload = {"schema_version": "1.0", "questions": value["questions"],
+                       "questions_revision": value["questions_revision"]}
+        else:
+            continue
+        artifact["content"] = json.dumps(payload, ensure_ascii=False)
+        artifact["size_bytes"] = len(artifact["content"].encode())
+        artifact["checksum"] = sha256(artifact["content"].encode()).hexdigest()
+    return result
+
+
 FIRST = example("agent-result.waiting")["output_artifacts"][0]["attempt_id"]
 SECOND = example("agent-result.succeeded")["output_artifacts"][0]["attempt_id"]
 
@@ -175,6 +196,105 @@ class AnalysisGraphTests(unittest.TestCase):
             self.assertEqual(state["status"], "running")
             self.assertEqual(graph.recover(self.run_id), state)
             self.assertEqual(len(self.calls), 1)
+
+    def test_analysis_without_questions_publishes_first_empty_revision(self):
+        def no_questions(result):
+            result["status"] = "succeeded"
+            return rewrite_requirements(result, lambda value: value.update(questions=[]))
+
+        self.modify = no_questions
+        with open_checkpoints(self.path / "graph.sqlite") as saver:
+            graph = self.graph(saver)
+            state = graph.start(self.request, attempt_id=FIRST)
+            self.assertEqual(state["stage_status"], "succeeded")
+            self.assertEqual(state["status"], "running")
+            self.assertEqual(state["questions"], [])
+            self.assertEqual(state["questions_revision"], 1)
+            self.assertEqual(graph.recover(self.run_id), state)
+            self.assertEqual(len(self.calls), 1)
+
+    def _reject_clarification_change(self, update, code):
+        with open_checkpoints(self.path / "graph.sqlite") as saver:
+            graph = self.graph(saver)
+            before = self.waiting(graph)
+            candidate = rewrite_requirements(example("agent-result.succeeded"), update)
+            # The regression must be semantic, not a malformed schema/checksum.
+            graph.contracts.validate("agent-result", candidate)
+            self.modify = lambda result: deepcopy(candidate)
+            state = self.resume(graph)
+            self.assertEqual(state["status"], "failed")
+            self.assertEqual(state["attempts"][-1]["diagnostics"][0]["code"], code)
+            self.assertEqual(state["artifact_refs"], before["artifact_refs"])
+            self.assertEqual(state["attempts"][0], before["attempts"][0])
+            self.assertIsNone(self.store.result(self.run_id, SECOND))
+
+    def test_confirmed_question_text_cannot_change_in_a_new_revision(self):
+        def change(value):
+            value["questions"][0]["question"] = "Разрешить удаление всем пользователям?"
+            value["questions_revision"] = 2
+
+        self._reject_clarification_change(change, "CONFIRMED_QUESTION_CHANGED")
+
+    def test_confirmed_question_required_flag_cannot_change(self):
+        def change(value):
+            value["questions"][0]["required"] = False
+            value["questions_revision"] = 2
+
+        self._reject_clarification_change(change, "CONFIRMED_QUESTION_CHANGED")
+
+    def test_confirmed_question_reason_cannot_change(self):
+        def change(value):
+            value["questions"][0]["reason"] = "Новая причина для прежнего ответа."
+            value["questions_revision"] = 2
+
+        self._reject_clarification_change(change, "CONFIRMED_QUESTION_CHANGED")
+
+    def test_confirmed_question_fr_links_cannot_change(self):
+        def change(value):
+            value["questions"][0]["related_fr_ids"] = ["FR-001"]
+            value["questions_revision"] = 2
+
+        self._reject_clarification_change(change, "CONFIRMED_QUESTION_CHANGED")
+
+    def test_confirmed_question_fr_order_does_not_change_its_meaning(self):
+        with open_checkpoints(self.path / "graph.sqlite") as saver:
+            graph = self.graph(saver)
+            self.waiting(graph)
+
+            def reorder(value):
+                value["questions"][0]["related_fr_ids"].reverse()
+
+            self.modify = lambda result: rewrite_requirements(result, reorder)
+            state = self.resume(graph)
+            self.assertEqual(state["stage_status"], "succeeded")
+            self.assertEqual(state["questions_revision"], 1)
+
+    def test_clarification_cannot_drop_nfr(self):
+        self._reject_clarification_change(
+            lambda value: value.update(nonfunctional_requirements=[]), "NFR_ID_LOST")
+
+    def test_clarification_cannot_drop_a_role(self):
+        def remove_role(value):
+            removed = value["roles"].pop()["id"]
+            value["scenarios"] = [s for s in value["scenarios"] if removed not in s["role_ids"]]
+
+        self._reject_clarification_change(remove_role, "ROLE_ID_LOST")
+
+    def test_clarification_can_add_nfr_and_roles_while_preserving_previous_ids(self):
+        with open_checkpoints(self.path / "graph.sqlite") as saver:
+            graph = self.graph(saver)
+            self.waiting(graph)
+
+            def append_entities(value):
+                for field, new_id in (("nonfunctional_requirements", "NFR-002"),
+                                      ("roles", "ROLE-003")):
+                    extra = deepcopy(value[field][0])
+                    extra["id"] = new_id
+                    value[field].append(extra)
+
+            self.modify = lambda result: rewrite_requirements(result, append_entities)
+            state = self.resume(graph)
+            self.assertEqual(state["stage_status"], "succeeded")
 
     def test_new_question_revision_keeps_previously_confirmed_answer(self):
         with open_checkpoints(self.path / "graph.sqlite") as saver:
