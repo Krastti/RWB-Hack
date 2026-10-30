@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RunCreate(BaseModel):
@@ -10,6 +10,13 @@ class RunCreate(BaseModel):
 
     requirements_text: str = Field(min_length=1, max_length=100000)
     profile_id: Literal["web-fastapi-angular"] = "web-fastapi-angular"
+
+    @field_validator("requirements_text")
+    @classmethod
+    def meaningful_requirements(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("requirements_text must contain a non-whitespace character")
+        return value
 
 
 @dataclass(frozen=True)
