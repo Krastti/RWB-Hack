@@ -8,6 +8,19 @@ from contracts.agents.validate import ContractError, validate_profile_grants
 OWNERS = ("frontend", "backend", "migrations", "integrations", "documentation", "assembly")
 
 
+def validate_required_artifacts(profile):
+    """Reject inconsistent ownership, including inactive conditional files."""
+    plan = {"profile_id": profile["profile_id"], "tasks": [
+        {"owner_agent": item["owner"], "output_paths": [item["path"]],
+         "output_directories": []}
+        for item in profile["required_artifacts"]
+    ]}
+    try:
+        validate_profile_grants(plan, profile)
+    except ContractError:
+        raise ContractError("ARCHITECTURE_REQUIRED_ARTIFACT_NOT_ALLOWED") from None
+
+
 def make_plan(context, requirements_id, requirements, profile, design):
     owners = [owner for owner in OWNERS if owner != "integrations" or design["integrations"]]
     dependencies = {
@@ -61,6 +74,8 @@ def make_tree(profile, design):
     for path in tuple(directories):
         add_parents(path)
     all_paths = [*files, *directories]
+    if any(len(path) > profile["limits"]["artifacts"]["max_path_length"] for path in all_paths):
+        raise ContractError("ARCHITECTURE_PATH_TOO_LONG")
     if files.keys() & directories or any(parent in files for path in all_paths
             for parent in (str(p) for p in PurePosixPath(path).parents)):
         raise ContractError("ARCHITECTURE_FILE_DIRECTORY_CONFLICT")

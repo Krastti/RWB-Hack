@@ -13,7 +13,7 @@ from referencing import Resource
 from backend.app.agents.llm import LLMAdapter, LLMConfig, LLMError, LLMResult
 from contracts.agents.validate import Contracts, ContractError, load, loads, validate_semantics, walk
 
-from .planning import make_plan, make_tree
+from .planning import make_plan, make_tree, validate_required_artifacts
 from .prompt import SYSTEM, response_schema
 
 
@@ -76,7 +76,9 @@ class ArchitectureNode:
             _require(isinstance(rules_text, str) and bool(rules_text.strip())
                      and sha256(rules_text.encode()).hexdigest() == rules_checksum,
                      "ARCHITECTURE_RULES_CHECKSUM_MISMATCH")
-            _require(context["limits"]["max_calls"] > 0, "ARCHITECTURE_CALL_BUDGET_EXHAUSTED")
+            validate_required_artifacts(profile)
+            _require(min(context["limits"]["max_calls"], profile["limits"]["agent"]["max_calls"]) > 0,
+                     "ARCHITECTURE_CALL_BUDGET_EXHAUSTED")
             self._contracts.validate("artifact", artifact)
             _require(artifact["artifact_id"] in context["input_artifact_ids"]
                      and artifact["kind"] == "requirements" and artifact["path"] == "requirements.json"
@@ -91,8 +93,8 @@ class ArchitectureNode:
             _require(bool(requirements["functional_requirements"]), "ARCHITECTURE_EMPTY_REQUIREMENTS")
             defaults = profile["limits"]["agent"]
             limits = {
-                "max_output_tokens": min(self._config.max_output_tokens, defaults["max_output_tokens"],
-                                         context["limits"]["max_output_tokens"]),
+                "max_output_tokens": int(min(self._config.max_output_tokens, defaults["max_output_tokens"],
+                                             context["limits"]["max_output_tokens"])),
                 "timeout_seconds": min(self._config.timeout_seconds, defaults["timeout_seconds"],
                                        profile["limits"]["model_call"]["timeout_seconds"],
                                        context["limits"].get("timeout_seconds", defaults["timeout_seconds"])),
@@ -104,10 +106,10 @@ class ArchitectureNode:
                     "profile_id", "profile_version", "stack", "ui_kit", "ownership", "required_artifacts")},
                 "profile_rules": rules_text,
             }
+            adapter = LLMAdapter(replace(self._config, **limits), transport=self._transport)
         except (ContractError, ValueError, TypeError, KeyError) as error:
             return _failure(error, fallback="ARCHITECTURE_INVALID_INPUT")
 
-        adapter = LLMAdapter(replace(self._config, **limits), transport=self._transport)
         result = await adapter.generate(system=SYSTEM, prompt=json.dumps(payload, ensure_ascii=False),
                                         schema=deepcopy(self._schema))
         if not result.ok:

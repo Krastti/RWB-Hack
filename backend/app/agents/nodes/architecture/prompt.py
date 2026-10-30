@@ -51,5 +51,25 @@ def response_schema(contracts):
                 localize(value)
 
     localize(schema)
+    # Keep only definitions transitively reachable from the response fields.
+    definitions = schema.pop("$defs")
+    reachable = {}
+
+    def collect(item):
+        if isinstance(item, dict):
+            reference = item.get("$ref", "")
+            if reference.startswith("#/$defs/"):
+                name = reference.removeprefix("#/$defs/").split("/")[0]
+                if name not in reachable:
+                    reachable[name] = definitions[name]
+                    collect(definitions[name])
+            for value in item.values():
+                collect(value)
+        elif isinstance(item, list):
+            for value in item:
+                collect(value)
+
+    collect(schema)
+    schema["$defs"] = reachable
     Draft202012Validator.check_schema(schema)
     return schema

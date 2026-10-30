@@ -9,9 +9,11 @@ import unittest
 from unittest.mock import patch
 
 import httpx
+from jsonschema import Draft202012Validator
 
 from backend.app.agents.llm import LLMAdapter, LLMConfig
 from backend.app.agents.nodes.architecture import ArchitectureNode
+from backend.app.agents.nodes.architecture.prompt import response_schema
 from contracts.agents.validate import Contracts, load, load_profile_rules, validate_profile_grants
 
 
@@ -158,6 +160,90 @@ class ArchitectureNodeTests(unittest.IsolatedAsyncioTestCase):
     async def test_zero_call_budget_blocks_before_network(self):
         self.context["limits"]["max_calls"] = 0
         self.assert_error(await self.generate(), "ARCHITECTURE_CALL_BUDGET_EXHAUSTED", calls=0)
+
+    def freeze_profile(self):
+        self.profile_bytes = json.dumps(self.profile).encode()
+
+    async def test_zero_profile_call_budget_blocks_before_network(self):
+        self.profile["limits"]["agent"]["max_calls"] = 0
+        self.freeze_profile()
+        self.assert_error(await self.generate(), "ARCHITECTURE_CALL_BUDGET_EXHAUSTED", calls=0)
+
+    async def test_integral_json_token_limits_are_normalized(self):
+        for source in (self.context["limits"], self.profile["limits"]["agent"]):
+            with self.subTest(source=source):
+                source["max_output_tokens"] = 400.0
+                self.freeze_profile()
+                with patch("backend.app.agents.nodes.architecture.node.LLMAdapter", wraps=LLMAdapter) as adapter:
+                    result = await self.generate()
+                self.assertTrue(result.ok, result.error)
+                self.assertIs(type(adapter.call_args.args[0].max_output_tokens), int)
+                self.assertEqual(self.requests[-1]["max_tokens"], 400)
+                source["max_output_tokens"] = 9000
+
+    async def test_invalid_effective_config_returns_error_before_network(self):
+        with patch("backend.app.agents.nodes.architecture.node.replace", side_effect=ValueError("invalid")):
+            self.assert_error(await self.generate(), "ARCHITECTURE_INVALID_INPUT", calls=0)
+
+    async def test_required_artifact_owner_must_have_a_grant_before_network(self):
+        for condition in ("always", "has_integrations"):
+            with self.subTest(condition=condition):
+                self.profile["required_artifacts"].append({
+                    "path": "reports/output.json", "kind": "source",
+                    "owner": "frontend", "condition": condition,
+                })
+                self.freeze_profile()
+                self.assert_error(await self.generate(), "ARCHITECTURE_REQUIRED_ARTIFACT_NOT_ALLOWED", calls=0)
+                self.profile["required_artifacts"].pop()
+
+    async def test_required_artifact_respects_directory_boundaries(self):
+        self.profile["required_artifacts"].append({
+            "path": "frontend-other/output.json", "kind": "source",
+            "owner": "frontend", "condition": "always",
+        })
+        self.freeze_profile()
+        self.assert_error(await self.generate(), "ARCHITECTURE_REQUIRED_ARTIFACT_NOT_ALLOWED", calls=0)
+
+    async def test_profile_path_limit_applies_to_component_directories(self):
+        self.profile["limits"]["artifacts"]["max_path_length"] = 100
+        self.freeze_profile()
+        self.design["components"][0]["output_directories"] = ["frontend/" + "x" * 150]
+        self.assert_error(await self.generate(), "ARCHITECTURE_PATH_TOO_LONG", calls=1)
+
+    async def test_profile_path_limit_applies_to_required_files(self):
+        self.profile["limits"]["artifacts"]["max_path_length"] = 100
+        self.profile["required_artifacts"].append({
+            "path": "frontend/" + "x" * 100, "kind": "source",
+            "owner": "frontend", "condition": "always",
+        })
+        self.freeze_profile()
+        self.assert_error(await self.generate(), "ARCHITECTURE_PATH_TOO_LONG", calls=1)
+
+    async def test_profile_path_limit_accepts_boundary(self):
+        self.profile["limits"]["artifacts"]["max_path_length"] = 100
+        self.freeze_profile()
+        path = "frontend/" + "x" * 91
+        self.design["components"][0]["output_directories"] = [path]
+        result = await self.generate()
+        self.assertTrue(result.ok, result.error)
+        self.assertIn(path, {entry["path"] for entry in result.data["project_tree"]})
+
+    async def test_transport_schema_contains_only_reachable_definitions(self):
+        result = await self.generate()
+        self.assertTrue(result.ok, result.error)
+        schema = self.requests[0]["response_format"]["json_schema"]["schema"]
+        self.assertEqual(set(schema["$defs"]), {"fr_id", "relative_path"})
+
+    def test_response_schema_keeps_transitive_references(self):
+        contracts = Contracts()
+        definitions = contracts.schemas["common"]["$defs"]
+        definitions["fr_id_value"] = definitions["fr_id"]
+        definitions["fr_id"] = {"$ref": "#/$defs/fr_id_value"}
+        before = deepcopy(contracts.schemas)
+        schema = response_schema(contracts)
+        self.assertEqual(set(schema["$defs"]), {"fr_id", "fr_id_value", "relative_path"})
+        Draft202012Validator(schema).validate(self.design)
+        self.assertEqual(contracts.schemas, before)
 
     async def test_unanswered_required_question_blocks_before_network(self):
         waiting = load(EXAMPLES / "agent-result.waiting.json")["output_artifacts"][0]
