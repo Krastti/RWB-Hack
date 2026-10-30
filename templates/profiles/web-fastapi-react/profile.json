@@ -1,0 +1,427 @@
+{
+  "$schema": "./profile.schema.json",
+  "schema_version": "1.0",
+  "profile_id": "web-fastapi-react",
+  "profile_version": "1.0.0",
+  "stack": {
+    "frontend": [
+      "React",
+      "TypeScript",
+      "MUI"
+    ],
+    "backend": [
+      "FastAPI",
+      "Pydantic",
+      "SQLAlchemy"
+    ],
+    "database": "PostgreSQL",
+    "migrations": "Alembic"
+  },
+  "contracts": {
+    "agent_schema_version": "1.0",
+    "json_schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+    "openapi_version": "3.1.0",
+    "schemas": {
+      "agent-input": {
+        "schema_version": "1.0",
+        "path": "contracts/agents/v1/agent-input.schema.json"
+      },
+      "agent-result": {
+        "schema_version": "1.0",
+        "path": "contracts/agents/v1/agent-result.schema.json"
+      },
+      "artifact": {
+        "schema_version": "1.0",
+        "path": "contracts/agents/v1/artifact.schema.json"
+      },
+      "requirements": {
+        "schema_version": "1.0",
+        "path": "contracts/agents/v1/requirements.schema.json"
+      },
+      "questions": {
+        "schema_version": "1.0",
+        "path": "contracts/agents/v1/questions.schema.json"
+      },
+      "architecture": {
+        "schema_version": "1.0",
+        "path": "contracts/agents/v1/architecture.schema.json"
+      },
+      "generation-plan": {
+        "schema_version": "1.0",
+        "path": "contracts/agents/v1/generation-plan.schema.json"
+      },
+      "manifest": {
+        "schema_version": "1.0",
+        "path": "contracts/agents/v1/manifest.schema.json"
+      },
+      "traceability": {
+        "schema_version": "1.0",
+        "path": "contracts/agents/v1/traceability.schema.json"
+      },
+      "common": {
+        "schema_version": "1.0",
+        "path": "contracts/agents/v1/common.schema.json"
+      },
+      "analysis-input": {
+        "schema_version": "1.0",
+        "path": "contracts/agents/v1/analysis-input.schema.json"
+      }
+    },
+    "content_schema_owners": {
+      "data-model.json": "A-07",
+      "ui-spec.json": "A-08"
+    }
+  },
+  "required_artifacts": [
+    {
+      "path": "requirements.json",
+      "kind": "requirements",
+      "owner": "analysis",
+      "condition": "always"
+    },
+    {
+      "path": "questions.json",
+      "kind": "questions",
+      "owner": "analysis",
+      "condition": "always"
+    },
+    {
+      "path": "docs/system-analysis.md",
+      "kind": "system_analysis",
+      "owner": "analysis",
+      "condition": "always"
+    },
+    {
+      "path": "architecture.json",
+      "kind": "architecture",
+      "owner": "architecture",
+      "condition": "always"
+    },
+    {
+      "path": "contracts/openapi.yaml",
+      "kind": "openapi",
+      "owner": "architecture",
+      "condition": "always"
+    },
+    {
+      "path": "data-model.json",
+      "kind": "data_model",
+      "owner": "architecture",
+      "condition": "always"
+    },
+    {
+      "path": "ui-spec.json",
+      "kind": "ui_spec",
+      "owner": "architecture",
+      "condition": "always"
+    },
+    {
+      "path": "generation-plan.json",
+      "kind": "generation_plan",
+      "owner": "architecture",
+      "condition": "always"
+    },
+    {
+      "path": "docs/product.md",
+      "kind": "documentation",
+      "owner": "documentation",
+      "condition": "always"
+    },
+    {
+      "path": "docs/architecture.md",
+      "kind": "documentation",
+      "owner": "documentation",
+      "condition": "always"
+    },
+    {
+      "path": "docs/data-model.md",
+      "kind": "documentation",
+      "owner": "documentation",
+      "condition": "always"
+    },
+    {
+      "path": "docs/user-guide.md",
+      "kind": "documentation",
+      "owner": "documentation",
+      "condition": "always"
+    },
+    {
+      "path": "docs/development-guide.md",
+      "kind": "documentation",
+      "owner": "documentation",
+      "condition": "always"
+    },
+    {
+      "path": "docs/limitations.md",
+      "kind": "documentation",
+      "owner": "documentation",
+      "condition": "always"
+    },
+    {
+      "path": "README.md",
+      "kind": "documentation",
+      "owner": "documentation",
+      "condition": "always"
+    },
+    {
+      "path": "traceability.json",
+      "kind": "traceability",
+      "owner": "assembly",
+      "condition": "always"
+    },
+    {
+      "path": "manifest.json",
+      "kind": "manifest",
+      "owner": "assembly",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/package.json",
+      "kind": "configuration",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/tsconfig.json",
+      "kind": "configuration",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/index.html",
+      "kind": "source",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "kind": "source",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/src/app/App.tsx",
+      "kind": "source",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/src/app/theme.ts",
+      "kind": "source",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "frontend/src/api/client.ts",
+      "kind": "source",
+      "owner": "frontend",
+      "condition": "always"
+    },
+    {
+      "path": "backend/pyproject.toml",
+      "kind": "configuration",
+      "owner": "backend",
+      "condition": "always"
+    },
+    {
+      "path": "backend/app/__init__.py",
+      "kind": "source",
+      "owner": "backend",
+      "condition": "always"
+    },
+    {
+      "path": "backend/app/main.py",
+      "kind": "source",
+      "owner": "backend",
+      "condition": "always"
+    },
+    {
+      "path": "backend/app/core/config.py",
+      "kind": "source",
+      "owner": "backend",
+      "condition": "always"
+    },
+    {
+      "path": "backend/app/db/session.py",
+      "kind": "source",
+      "owner": "backend",
+      "condition": "always"
+    },
+    {
+      "path": "backend/.env.example",
+      "kind": "configuration",
+      "owner": "backend",
+      "condition": "always"
+    },
+    {
+      "path": "backend/alembic.ini",
+      "kind": "configuration",
+      "owner": "backend",
+      "condition": "always"
+    },
+    {
+      "path": "backend/migrations/env.py",
+      "kind": "migration",
+      "owner": "migrations",
+      "condition": "always"
+    },
+    {
+      "path": "backend/migrations/versions/0001_initial.py",
+      "kind": "migration",
+      "owner": "migrations",
+      "condition": "always"
+    },
+    {
+      "path": "backend/migrations/README.md",
+      "kind": "documentation",
+      "owner": "migrations",
+      "condition": "always"
+    },
+    {
+      "path": ".gitignore",
+      "kind": "configuration",
+      "owner": "assembly",
+      "condition": "always"
+    },
+    {
+      "path": "integrations/README.md",
+      "kind": "documentation",
+      "owner": "integrations",
+      "condition": "has_integrations"
+    }
+  ],
+  "conditional_directories": [
+    {
+      "condition": "has_integrations",
+      "directories": [
+        "integrations",
+        "backend/app/integrations"
+      ]
+    }
+  ],
+  "ownership": {
+    "default": "deny",
+    "agents": {
+      "analysis": {
+        "paths": [
+          "requirements.json",
+          "questions.json",
+          "docs/system-analysis.md"
+        ],
+        "directories": []
+      },
+      "architecture": {
+        "paths": [
+          "architecture.json",
+          "data-model.json",
+          "ui-spec.json",
+          "generation-plan.json"
+        ],
+        "directories": [
+          "contracts"
+        ]
+      },
+      "frontend": {
+        "paths": [],
+        "directories": [
+          "frontend"
+        ]
+      },
+      "backend": {
+        "paths": [
+          "backend/pyproject.toml",
+          "backend/app/__init__.py",
+          "backend/app/main.py",
+          "backend/.env.example",
+          "backend/alembic.ini"
+        ],
+        "directories": [
+          "backend/app/api",
+          "backend/app/core",
+          "backend/app/schemas",
+          "backend/app/services",
+          "backend/app/models",
+          "backend/app/repositories",
+          "backend/app/db"
+        ]
+      },
+      "migrations": {
+        "paths": [],
+        "directories": [
+          "backend/migrations"
+        ]
+      },
+      "integrations": {
+        "paths": [],
+        "directories": [
+          "integrations",
+          "backend/app/integrations"
+        ]
+      },
+      "documentation": {
+        "paths": [
+          "README.md",
+          "docs/product.md",
+          "docs/architecture.md",
+          "docs/data-model.md",
+          "docs/user-guide.md",
+          "docs/development-guide.md",
+          "docs/limitations.md"
+        ],
+        "directories": []
+      },
+      "assembly": {
+        "paths": [
+          "manifest.json",
+          "traceability.json",
+          ".gitignore"
+        ],
+        "directories": []
+      }
+    }
+  },
+  "limits": {
+    "run": {
+      "max_active_runs_per_user": 1,
+      "max_calls": 60,
+      "max_input_tokens": 300000,
+      "max_output_tokens": 180000,
+      "timeout_seconds": 3600,
+      "max_automatic_retries_per_stage": 2,
+      "max_clarification_rounds": 2,
+      "max_critical_questions_per_round": 3
+    },
+    "agent": {
+      "max_calls": 10,
+      "max_output_tokens": 30000,
+      "timeout_seconds": 600,
+      "max_critical_questions": 3
+    },
+    "model_call": {
+      "timeout_seconds": 120
+    },
+    "artifacts": {
+      "max_files": 500,
+      "max_file_bytes": 1048576,
+      "max_total_bytes": 26214400,
+      "max_path_length": 512
+    }
+  },
+  "ui_kit": {
+    "name": "MUI",
+    "theme_path": "frontend/src/app/theme.ts",
+    "required_states": [
+      "loading",
+      "empty",
+      "error",
+      "forbidden",
+      "success"
+    ],
+    "responsive_widths_px": [
+      360,
+      768,
+      1280
+    ]
+  },
+  "rules_document": "README.md"
+}
