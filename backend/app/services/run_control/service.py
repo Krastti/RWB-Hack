@@ -1,0 +1,244 @@
+"""Cancel/retry commands and worker safe-boundary hooks, C-03 v1.0."""
+from copy import deepcopy
+from hashlib import sha256
+import json
+import re
+from typing import Callable
+from uuid import UUID, uuid4
+
+from .models import (
+    AttemptState, Checkpoint, ControlError, Limits, Record, Retry, Run,
+    StageAttempt, conflict, now,
+)
+from .store import ControlStore
+
+
+class RunControlService:
+    def __init__(self, store: ControlStore, *, authorize_retry: Callable[[Record, Limits], None]):
+        self.store = store
+        # Must enforce owner policy, allowed limits and one active Run. Called
+        # inside the storage transaction; raise ControlError(429, ...) on denial.
+        self.authorize_retry = authorize_retry
+
+    @staticmethod
+    def _event(record: Record, event_type: str, *, stage_id: str | None = None, **data):
+        event = dict(run_id=str(record.run.run_id), seq=len(record.events) + 1,
+                     event_type=event_type, timestamp=now().isoformat(),
+                     data=deepcopy({"schema_version": "1.0", **data}))
+        if stage_id is not None:
+            event["stage_id"] = stage_id
+        record.events.append(event)
+        record.run.updated_at = now()
+
+    def _status(self, record: Record, status: str):
+        previous = record.run.status
+        record.run.status = status
+        self._event(record, "run.status_changed", **{"from": previous, "to": status,
+                                                     "reason_code": "RUN_CONTROL"})
+
+    def _stage_event(self, record: Record, attempt: StageAttempt, previous: str | None):
+        self._event(record, "stage.status_changed", stage_id=attempt.stage_id,
+                    attempt_no=attempt.attempt_no, contract_version=attempt.contract_version,
+                    **{"from": previous, "to": attempt.status, "reason_code": "RUN_CONTROL"})
+
+    @staticmethod
+    def _latest(record: Record, stage_id: str) -> StageAttempt:
+        attempts = [a for a in record.run.stages if a.stage_id == stage_id]
+        if not attempts:
+            raise conflict("No attempt for this execution stage")
+        return max(attempts, key=lambda a: a.attempt_no)
+
+    @staticmethod
+    def _private(record: Record, attempt: StageAttempt) -> AttemptState:
+        matches = [a for a in record.attempts
+                   if (a.stage_id, a.attempt_no) == (attempt.stage_id, attempt.attempt_no)]
+        if len(matches) != 1:
+            raise ControlError(500, "RESUME_STATE_UNAVAILABLE", "Attempt input is unavailable")
+        return matches[0]
+
+    def _cancel_boundary(self, record: Record):
+        if record.run.status != "cancelling":
+            return
+        for attempt in record.run.stages:
+            if attempt.status == "pending":
+                attempt.status, attempt.finished_at = "cancelled", now()
+                attempt.reason = "RUN_CANCELLED"
+                self._stage_event(record, attempt, "pending")
+        if not any(a.status == "running" for a in record.run.stages):
+            self._status(record, "cancelled")
+
+    def cancel(self, *, owner_id: UUID, run_id: UUID) -> Run:
+        with self.store.transaction(owner_id, run_id) as record:
+            if record.run.status in {"queued", "running", "waiting_for_input"}:
+                self._status(record, "cancelling")
+                # A worker/barrier dispatcher observes the durable intent even
+                # when there is no active call. Do not lose it on API restart.
+                record.outbox.append({"id": str(uuid4()), "kind": "cancel", "run_id": str(run_id)})
+                self._cancel_boundary(record)
+            return record.run.model_copy(deep=True)
+
+    def retry(self, *, owner_id: UUID, run_id: UUID, key: str, body: Retry) -> Run:
+        if not isinstance(key, str) or re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", key) is None:
+            raise ControlError(422, "VALIDATION_ERROR", "Invalid Idempotency-Key")
+        fingerprint = sha256(json.dumps(body.model_dump(mode="json", exclude_none=True),
+                                        sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        with self.store.transaction(owner_id, run_id) as record:
+            replay = record.replays.get(key)  # Scope: owner + run + retry.
+            if replay is not None:
+                if replay["hash"] != fingerprint:
+                    raise ControlError(409, "IDEMPOTENCY_KEY_CONFLICT", "Key was used with a different request")
+                return Run.model_validate(replay["response"])
+            if record.run.status not in {"failed", "budget_exceeded"}:
+                raise conflict()
+            if any(a.status in {"running", "pending"} for a in record.run.stages):
+                raise conflict("Run has unresolved executions")
+            failed = sorted({a.stage_id for a in record.run.stages
+                             if self._latest(record, a.stage_id).status == "failed"})
+            stage_id = record.run.current_stage if record.run.current_stage in failed else next(iter(failed), None)
+            if stage_id is None:
+                raise conflict("Run has no failed execution stage")
+            previous = self._latest(record, stage_id)
+            if previous.status != "failed":
+                raise conflict("Selected stage did not fail")
+            source = self._private(record, previous)
+            if not record.saved_state or not source.input_state or not source.input_hash:
+                raise ControlError(500, "RESUME_STATE_UNAVAILABLE", "Saved recovery state is unavailable")
+            limits = body.limits or record.run.limits
+            old = record.run.limits
+            if limits.max_calls < old.max_calls or limits.max_output_tokens < old.max_output_tokens:
+                raise conflict("Retry cannot reduce limits")
+            if record.run.status == "budget_exceeded":
+                required = record.required_limits
+                if (body.limits is None or required is None
+                        or (limits.max_calls == old.max_calls and limits.max_output_tokens == old.max_output_tokens)
+                        or limits.max_calls < required.max_calls
+                        or limits.max_output_tokens < required.max_output_tokens):
+                    raise conflict("Exhausted limits must be increased enough for next work")
+            self.authorize_retry(record, limits.model_copy(deep=True))
+            attempt = StageAttempt(stage_id=stage_id, attempt_no=previous.attempt_no + 1,
+                                   contract_version=previous.contract_version, status="pending")
+            private = AttemptState(stage_id=stage_id, attempt_no=attempt.attempt_no,
+                                   input_hash=source.input_hash, input_state=deepcopy(source.input_state))
+            record.run.stages.append(attempt)
+            record.run.stages.sort(key=lambda a: (a.stage_id, a.attempt_no))
+            record.attempts.append(private)
+            record.run.metrics.attempts += 1
+            record.run.limits = limits.model_copy(deep=True)
+            if limits != old:
+                self._event(record, "budget.updated", previous_limits=old.model_dump(),
+                            limits=limits.model_dump(), reason_code="MANUAL_RETRY")
+            record.run.current_stage = stage_id
+            record.run.stop_reason = None
+            self._stage_event(record, attempt, None)
+            self._event(record, "retry.scheduled", stage_id=stage_id, mode="manual",
+                        previous_attempt_no=previous.attempt_no, next_attempt_no=attempt.attempt_no,
+                        reason_code="MANUAL_RETRY")
+            self._status(record, "queued")
+            self._event(record, "metrics.updated", metrics=record.run.metrics.model_dump(),
+                        tokens_complete=record.tokens_complete)
+            record.outbox.append({"id": str(uuid4()), "kind": "retry", "run_id": str(run_id),
+                                  "stage_id": stage_id, "attempt_id": str(private.attempt_id),
+                                  "attempt_no": attempt.attempt_no})
+            response = record.run.model_copy(deep=True)
+            record.replays[key] = {"hash": fingerprint, "response": response.model_dump(mode="json")}
+            return response
+
+    def start_attempt(self, *, owner_id: UUID, run_id: UUID, stage_id: str,
+                      attempt_id: UUID) -> dict:
+        """Worker admission immediately before work; return checkpoint or saved state.
+
+        Worker must hold its external lease, validate inputs/versions and reserve
+        budget. Every additional LLM call needs a new cancellation admission via
+        the common run transaction; this hook admits one stage invocation.
+        """
+        with self.store.transaction(owner_id, run_id) as record:
+            if record.run.status not in {"queued", "running"}:
+                raise conflict()
+            attempt = self._latest(record, stage_id)
+            private = self._private(record, attempt)
+            if private.attempt_id != attempt_id or attempt.status != "pending":
+                raise conflict("Stale or already claimed attempt")
+            cp = record.checkpoint
+            if (cp is not None and cp.run_id == run_id and cp.revision_id == record.run.revision_id
+                    and cp.state_version == record.state_version
+                    and cp.input_hash == private.input_hash
+                    and cp.contract_version == attempt.contract_version):
+                state = cp.state
+            else:
+                state = record.saved_state
+            if not state:
+                raise ControlError(500, "RESUME_STATE_UNAVAILABLE", "Saved recovery state is unavailable")
+            if record.run.status == "queued":
+                self._status(record, "running")
+            attempt.status, attempt.started_at = "running", now()
+            self._stage_event(record, attempt, "pending")
+            return deepcopy(state)
+
+    def admit_call(self, *, owner_id: UUID, run_id: UUID, stage_id: str,
+                   attempt_id: UUID, reserve_budget: Callable[[Record], None]) -> None:
+        """Serialize each LLM admission/reservation against cancel, before dispatch.
+
+        reserve_budget records the real call/reservation in the locked aggregate.
+        An admitted call is active work and must later report a result/deadline,
+        even if cancellation arrives before the provider responds.
+        """
+        with self.store.transaction(owner_id, run_id) as record:
+            attempt = self._latest(record, stage_id)
+            private = self._private(record, attempt)
+            if (record.run.status != "running" or attempt.status != "running"
+                    or private.attempt_id != attempt_id):
+                raise conflict("New calls are forbidden for this execution")
+            reserve_budget(record)
+
+    def finish_attempt(self, *, owner_id: UUID, run_id: UUID, stage_id: str,
+                       attempt_id: UUID, accepted_result: dict,
+                       save_boundary: Callable[[Record], dict]) -> Run:
+        """Safe boundary AFTER validation/usage accounting by worker, BEFORE scheduling.
+
+        accepted_result is the real validated C-02 AgentResult. save_boundary
+        merges artifacts/usage into the locked record and returns a full graph
+        snapshot, preserving other workers' accepted results. It runs in this
+        transaction; failure rolls back everything, including attempt completion.
+        """
+        with self.store.transaction(owner_id, run_id) as record:
+            if record.run.status not in {"running", "cancelling"}:
+                raise conflict()
+            attempt = self._latest(record, stage_id)
+            private = self._private(record, attempt)
+            if private.attempt_id != attempt_id or attempt.status != "running":
+                raise conflict("Stale or already finished attempt")
+            status = accepted_result.get("status")
+            if (status not in {"succeeded", "failed", "waiting_for_input", "cancelled", "skipped"}
+                    or accepted_result.get("run_id") != str(run_id)
+                    or accepted_result.get("stage_id") != stage_id
+                    or accepted_result.get("attempt") != attempt.attempt_no
+                    or accepted_result.get("contract_version") != attempt.contract_version):
+                raise ControlError(422, "VALIDATION_ERROR", "Result identity or recovery state is invalid")
+            private.accepted_result = deepcopy(accepted_result)
+            attempt.status, attempt.finished_at = status, now()
+            previous_metrics = record.run.metrics.model_dump()
+            previous_completeness = dict(record.tokens_complete)
+            saved_state = save_boundary(record)
+            if not isinstance(saved_state, dict) or not saved_state:
+                raise ControlError(500, "RESUME_STATE_UNAVAILABLE", "Saved recovery state is unavailable")
+            record.saved_state = deepcopy(saved_state)
+            record.state_version += 1
+            record.checkpoint = Checkpoint(run_id=run_id, revision_id=record.run.revision_id,
+                                           contract_version=attempt.contract_version,
+                                           input_hash=private.input_hash,
+                                           state_version=record.state_version, state=deepcopy(saved_state))
+            self._stage_event(record, attempt, "running")
+            if (record.run.metrics.model_dump() != previous_metrics
+                    or record.tokens_complete != previous_completeness):
+                self._event(record, "metrics.updated", metrics=record.run.metrics.model_dump(),
+                            tokens_complete=record.tokens_complete)
+            self._cancel_boundary(record)
+            # Normal completion/error/question/budget policy belongs to the
+            # orchestrator. In cancelling it may ONLY finish the cancel barrier.
+            return record.run.model_copy(deep=True)
+
+    def reach_boundary(self, *, owner_id: UUID, run_id: UUID) -> Run:
+        """Dispatcher hook when no call is active (including waiting_for_input)."""
+        with self.store.transaction(owner_id, run_id) as record:
+            self._cancel_boundary(record)
+            return record.run.model_copy(deep=True)
