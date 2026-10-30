@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "model_checksum": "e8141fad967cdde08a3d4368268047fabae2dc8aeca8b8af35321e7c03d4d40c",
+  "interpreter_version": "1.0.0",
+  "initial_state": {
+    "entity": "ticket",
+    "values": {
+      "owner": "alice",
+      "status": "draft",
+      "priority": 1
+    }
+  },
+  "initial_actor": null,
+  "bounds": {
+    "max_depth": 5,
+    "max_states": 1,
+    "timeout_seconds": 2.0,
+    "max_domain_values": 64,
+    "max_scenarios": 10000
+  },
+  "status": "inconclusive",
+  "reason": "STATE_LIMIT",
+  "domain_complete": true,
+  "states_visited": 1,
+  "transitions_checked": 1,
+  "trace": [],
+  "invariant_id": null,
+  "fr_ids": [],
+  "unknown_rules": [],
+  "depth_frontier": false
+}
