@@ -104,7 +104,7 @@ test('budget retry requires increased limits and blocks duplicate submissions', 
   await fixtures(page); await login(page);
   let retried = false;
   let requests = 0;
-  await page.route(`**/api/v1/runs/${runId}`, route => route.fulfill({ json: { ...run,status:retried ? 'completed' : 'budget_exceeded',metrics:{ ...run.metrics,model_calls:10 },stop_reason:'MODEL_CALL_LIMIT' } }));
+  await page.route(`**/api/v1/runs/${runId}`, route => route.fulfill({ json: { ...run,status:retried ? 'completed' : 'budget_exceeded',metrics:{ ...run.metrics,model_calls:10 },stages:[{...run.stages[0],status:'failed',finished_at:date}],stop_reason:'MAX_CALLS' } }));
   await page.route(`**/api/v1/runs/${runId}/retry`, async route => {
     requests++;
     expect(route.request().headers()['idempotency-key']).toBeTruthy();
@@ -180,4 +180,15 @@ test('stale clarification revision is refreshed before the next answer package',
   await answer.fill('Только владелец');
   await page.getByRole('button',{name:'Отправить ответы'}).click();
   await expect(page.getByText('completed',{exact:true})).toBeVisible();
+});
+
+
+test('unsupported input budget before a stage never offers public retry', async ({ page }) => {
+  await fixtures(page); await login(page);
+  await page.route(`**/api/v1/runs/${runId}`, route => route.fulfill({json:{...run,
+    status:'budget_exceeded', stop_reason:'MAX_INPUT_TOKENS', stages:[], questions:[]}}));
+  await page.goto(`/runs/${runId}`);
+  await expect(page.getByText('Повтор не поддерживается для исчерпанного лимита (RETRY_NOT_SUPPORTED).')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Повторить от контрольной точки'})).toHaveCount(0);
+  await expect(page.getByLabel('Лимит вызовов')).toHaveCount(0);
 });
