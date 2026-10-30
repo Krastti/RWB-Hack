@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "contract_version": "1",
-  "profile_id": "web-fastapi-react",
+  "profile_id": "web-fastapi-angular",
   "tasks": [
     {
       "task_id": "frontend",

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://rwb-hack.invalid/templates/profiles/web-fastapi-react/profile.schema.json",
-  "title": "web-fastapi-react profile 1.0",
+  "$id": "https://rwb-hack.invalid/templates/profiles/web-fastapi-angular/profile.schema.json",
+  "title": "web-fastapi-angular profile 1.0",
   "type": "object",
   "properties": {
     "$schema": {
@@ -11,7 +11,7 @@
       "const": "1.0"
     },
     "profile_id": {
-      "const": "web-fastapi-react"
+      "const": "web-fastapi-angular"
     },
     "profile_version": {
       "const": "1.0.0"
@@ -21,9 +21,10 @@
       "properties": {
         "frontend": {
           "const": [
-            "React",
+            "Angular 22",
             "TypeScript",
-            "MUI"
+            "Bootstrap 5.3",
+            "SCSS"
           ]
         },
         "backend": {
@@ -685,10 +686,10 @@
       "type": "object",
       "properties": {
         "name": {
-          "const": "MUI"
+          "const": "Bootstrap"
         },
         "theme_path": {
-          "const": "frontend/src/app/theme.ts"
+          "const": "frontend/src/styles.scss"
         },
         "required_states": {
           "const": [
