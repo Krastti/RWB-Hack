@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0",
+  "contract_version": "1",
+  "profile_id": "web-fastapi-angular",
+  "tasks": [
+    {
+      "task_id": "frontend",
+      "stage_id": "frontend",
+      "owner_agent": "frontend",
+      "depends_on": [],
+      "input_artifact_ids": [
+        "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99",
+        "155fc739-3f89-5db0-ad27-78adba9b7594",
+        "14a4535c-7f26-5bd8-9303-84415f4d6216"
+      ],
+      "output_paths": [],
+      "output_directories": [
+        "frontend"
+      ],
+      "related_fr_ids": [
+        "FR-001"
+      ]
+    },
+    {
+      "task_id": "backend",
+      "stage_id": "backend",
+      "owner_agent": "backend",
+      "depends_on": [],
+      "input_artifact_ids": [
+        "155fc739-3f89-5db0-ad27-78adba9b7594",
+        "c80417dc-33f7-5bc8-9338-e1d911166935"
+      ],
+      "output_paths": [
+        "backend/pyproject.toml",
+        "backend/app/__init__.py",
+        "backend/app/main.py",
+        "backend/.env.example",
+        "backend/alembic.ini"
+      ],
+      "output_directories": [
+        "backend/app/api",
+        "backend/app/core",
+        "backend/app/schemas",
+        "backend/app/services",
+        "backend/app/models",
+        "backend/app/repositories",
+        "backend/app/db"
+      ],
+      "related_fr_ids": [
+        "FR-001"
+      ]
+    },
+    {
+      "task_id": "migrations",
+      "stage_id": "migrations",
+      "owner_agent": "migrations",
+      "depends_on": [
+        "backend"
+      ],
+      "input_artifact_ids": [
+        "c80417dc-33f7-5bc8-9338-e1d911166935"
+      ],
+      "output_paths": [],
+      "output_directories": [
+        "backend/migrations"
+      ],
+      "related_fr_ids": [
+        "FR-001"
+      ]
+    },
+    {
+      "task_id": "documentation",
+      "stage_id": "documentation",
+      "owner_agent": "documentation",
+      "depends_on": [
+        "frontend",
+        "migrations"
+      ],
+      "input_artifact_ids": [
+        "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99"
+      ],
+      "output_paths": [
+        "README.md",
+        "docs/product.md",
+        "docs/architecture.md",
+        "docs/data-model.md",
+        "docs/user-guide.md",
+        "docs/development-guide.md",
+        "docs/limitations.md"
+      ],
+      "output_directories": [],
+      "related_fr_ids": [
+        "FR-001"
+      ]
+    },
+    {
+      "task_id": "assembly",
+      "stage_id": "assembly",
+      "owner_agent": "assembly",
+      "depends_on": [
+        "frontend",
+        "migrations",
+        "documentation"
+      ],
+      "input_artifact_ids": [
+        "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99"
+      ],
+      "output_paths": [
+        "manifest.json",
+        "traceability.json",
+        ".gitignore"
+      ],
+      "output_directories": [],
+      "related_fr_ids": [
+        "FR-001"
+      ]
+    }
+  ]
+}
