@@ -1,0 +1,72 @@
+from pathlib import Path
+import shutil
+import json
+
+import pytest
+from app.agents.profiles.loader import ProfileLoader, ProfileError
+from contracts.agents.validate import Contracts, ContractError
+
+ROOT=Path(__file__).resolve().parents[2]
+
+
+def test_conditional_grants_require_true_and_preserve_path_policy():
+    profile=ProfileLoader().load('web-fastapi-angular')
+    assert profile.allows('integrations','integrations/client.py',conditions={'has_integrations':True})
+    assert not profile.allows('integrations','integrations/client.py',conditions={'has_integrations':False})
+    assert not profile.allows('integrations','integrations/client.py')
+    assert not profile.allows('integrations','backend/app/main.py',conditions={'has_integrations':True})
+    with pytest.raises(ProfileError):
+        profile.allows('integrations','integrations/../secret')
+
+
+def test_repository_root_is_used_for_schema_registry(tmp_path):
+    shutil.copytree(ROOT/'templates',tmp_path/'templates')
+    shutil.copytree(ROOT/'docs',tmp_path/'docs')
+    # No C-02 schemas: loading must not silently use another checkout.
+    with pytest.raises((ProfileError,ContractError)):
+        ProfileLoader(repository_root=tmp_path).load('web-fastapi-angular')
+
+
+def test_rules_size_is_bounded(tmp_path):
+    for directory in ('templates','docs','contracts'):
+        shutil.copytree(ROOT/directory,tmp_path/directory)
+    (tmp_path/'docs/agents.md').write_bytes(b'x'*(1024*1024+1))
+    with pytest.raises(ProfileError) as exc:
+        ProfileLoader(repository_root=tmp_path).load('web-fastapi-angular')
+    assert exc.value.code=='PROFILE_SIZE_LIMIT'
+
+
+def test_plan_uses_frozen_max_path_length():
+    from app.agents.profiles.loader import FrozenProfile
+    loaded=ProfileLoader().load('web-fastapi-angular')
+    data=loaded.data
+    data['limits']['artifacts']['max_path_length']=128
+    profile=FrozenProfile(json.dumps(data).encode(),loaded._rules,ROOT)
+    plan=json.loads((ROOT/'contracts/agents/examples/generation-plan.json').read_text())
+    task=plan['tasks'][0]
+    prefix='backend/app/api/'
+    task['output_paths']=[prefix+'a'*(128-len(prefix))]
+    task['output_directories']=[]
+    profile.validate_plan(plan)
+    task['output_paths'][0]+='a'
+    with pytest.raises(ProfileError):
+        profile.validate_plan(plan)
+
+
+def test_rules_reject_directory_symlink(tmp_path):
+    from contracts.agents.validate import read_policy_bytes
+    outside=tmp_path/'outside';outside.mkdir();(outside/'rules').write_text('secret')
+    root=tmp_path/'root';root.mkdir();(root/'link').symlink_to(outside,target_is_directory=True)
+    with pytest.raises(OSError):
+        read_policy_bytes(root,'link/rules')
+
+
+def test_plan_conditional_grants_match_allows():
+    profile=ProfileLoader().load('web-fastapi-angular')
+    plan=json.loads((ROOT/'contracts/agents/examples/generation-plan.json').read_text())
+    task=dict(plan['tasks'][0])
+    task.update(task_id='integrations',stage_id='integrations',owner_agent='integrations',output_paths=['integrations/README.md'],output_directories=[],depends_on=[])
+    plan['tasks'].append(task)
+    profile.validate_plan(plan,conditions={'has_integrations':True})
+    with pytest.raises(ProfileError):
+        profile.validate_plan(plan,conditions={'has_integrations':False})
