@@ -1,0 +1,1062 @@
+openapi: 3.1.0
+info:
+  title: RWB-Hack Platform API
+  version: 1.0.0
+  description: Контракт C-01. completed означает подготовленные артефакты, без утверждения
+    о тестировании или деплое. Все вложенные ресурсы проверяются по владельцу; чужие
+    и отсутствующие ресурсы возвращают одинаковый 404. Даты UTC. Необязательные поля
+    без значения опускаются. См. README.md для соглашений и примера.
+servers:
+- url: http://localhost:8000
+  description: Локальная разработка
+security:
+- BearerJWT: []
+paths:
+  /api/v1/auth/token:
+    post:
+      operationId: issueToken
+      summary: issueToken
+      parameters: []
+      responses:
+        '200':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      security: []
+  /api/v1/projects:
+    get:
+      operationId: listProjects
+      summary: listProjects
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPage'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createProject
+      summary: createProject
+      parameters: []
+      responses:
+        '201':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreate'
+  /api/v1/projects/{project_id}:
+    get:
+      operationId: getProject
+      summary: getProject
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema: &id001
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/projects/{project_id}/runs:
+    post:
+      operationId: createRun
+      summary: Создать неизменяемую ревизию входа и асинхронный запуск; один активный
+        запуск на пользователя, превышение — 429.
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema: *id001
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunCreate'
+    get:
+      operationId: listRuns
+      summary: listRuns
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema: *id001
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunPage'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/runs/{run_id}:
+    get:
+      operationId: getRun
+      summary: getRun
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: *id001
+      responses:
+        '200':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/runs/{run_id}/events:
+    get:
+      operationId: listEvents
+      summary: seq строго возрастает внутри запуска; только seq > after_seq. При пустой
+        странице next_after_seq равен входному after_seq.
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: *id001
+      - name: after_seq
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventPage'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/runs/{run_id}/answers:
+    post:
+      operationId: answerQuestions
+      summary: Только waiting_for_input и текущая questions_revision. Устаревшая ревизия
+        — 409. ID ответов уникальны, неизвестные ID — 422. Все обязательные вопросы
+        должны быть отвечены одним пакетом; применение атомарно и возобновляет запуск.
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: *id001
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Answers'
+  /api/v1/runs/{run_id}/cancel:
+    post:
+      operationId: cancelRun
+      summary: Запрос отмены на безопасной границе. Повтор возвращает текущее состояние;
+        терминальные запуски не изменяются.
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: *id001
+      responses:
+        '200':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/runs/{run_id}/retry:
+    post:
+      operationId: retryRun
+      summary: failed → queued с новой попыткой от checkpoint; budget_exceeded требует
+        увеличения исчерпанного лимита. Остальные состояния — 409. Успешные независимые
+        этапы сохраняются.
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: *id001
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Run'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Retry'
+  /api/v1/runs/{run_id}/artifacts:
+    get:
+      operationId: listArtifacts
+      summary: listArtifacts
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: *id001
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManifestPage'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/runs/{run_id}/artifacts/{artifact_id}:
+    get:
+      operationId: getArtifact
+      summary: Содержимое артефакта; artifact_id обязан принадлежать run_id. Content-Type
+        из метаданных, Content-Disposition attachment.
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: *id001
+      - name: artifact_id
+        in: path
+        required: true
+        schema: *id001
+      responses:
+        '200':
+          description: Успешный результат
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/runs/{run_id}/archive:
+    get:
+      operationId: downloadArchive
+      summary: ZIP неизменяемого снимка snapshot_id; снимок без готового манифеста
+        — 409. Пути внутри архива относительные.
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: *id001
+      - name: snapshot_id
+        in: query
+        required: true
+        schema: *id001
+      responses:
+        '200':
+          description: Успешный результат
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+  /api/v1/runs/{run_id}/exports:
+    post:
+      operationId: createExport
+      summary: Экспорт готового снимка в GitLab из серверной конфигурации; произвольный
+        URL не принимается. Ошибка экспорта не меняет Run.status.
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: *id001
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Export'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportCreate'
+  /api/v1/runs/{run_id}/exports/{export_id}:
+    get:
+      operationId: getExport
+      summary: Проверяется принадлежность export_id запуску; completed содержит repository_url
+        и commit_sha, failed содержит error.
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: *id001
+      - name: export_id
+        in: path
+        required: true
+        schema: *id001
+      responses:
+        '200':
+          description: Успешный результат
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Export'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    BearerJWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          - details
+          - request_id
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+            request_id:
+              type: string
+      required:
+      - error
+    TokenRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        login:
+          type: string
+          minLength: 1
+          maxLength: 120
+        password:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          writeOnly: true
+      required:
+      - login
+      - password
+    Token:
+      type: object
+      additionalProperties: false
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum:
+          - bearer
+        expires_in:
+          type: integer
+          minimum: 1
+      required:
+      - access_token
+      - token_type
+      - expires_in
+    ProjectCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        requirements_text: &id002
+          type: string
+          minLength: 1
+          maxLength: 100000
+      required:
+      - name
+      - requirements_text
+    RequirementRevision:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        number:
+          type: integer
+          minimum: 1
+        requirements_text: *id002
+        hash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+      required:
+      - id
+      - number
+      - requirements_text
+      - hash
+    Project:
+      type: object
+      additionalProperties: false
+      properties:
+        id: *id001
+        owner_id: *id001
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        created_at: &id003
+          type: string
+          format: date-time
+          description: UTC ISO 8601, суффикс Z.
+        updated_at: *id003
+        current_revision:
+          $ref: '#/components/schemas/RequirementRevision'
+      required:
+      - id
+      - owner_id
+      - name
+      - created_at
+      - updated_at
+      - current_revision
+    Limits:
+      type: object
+      additionalProperties: false
+      properties:
+        max_calls:
+          type: integer
+          minimum: 1
+        max_output_tokens:
+          type: integer
+          minimum: 1
+      required:
+      - max_calls
+      - max_output_tokens
+    RunCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        requirements_text: *id002
+        profile_id:
+          type: string
+          enum:
+          - web-fastapi-react
+          default: web-fastapi-react
+      required:
+      - requirements_text
+    RunStatus:
+      type: string
+      enum:
+      - queued
+      - running
+      - waiting_for_input
+      - completed
+      - cancelling
+      - cancelled
+      - failed
+      - budget_exceeded
+    Metrics:
+      type: object
+      additionalProperties: false
+      properties:
+        tokens_in: &id004
+          type: integer
+          minimum: 0
+        tokens_out: *id004
+        model_calls: *id004
+        attempts: *id004
+        manual_clarifications: *id004
+        duration_ms: *id004
+      required:
+      - tokens_in
+      - tokens_out
+      - model_calls
+      - attempts
+      - manual_clarifications
+      - duration_ms
+    Question:
+      type: object
+      additionalProperties: false
+      properties:
+        question_id: *id001
+        reason:
+          type: string
+          minLength: 1
+        related_fr_ids:
+          type: array
+          items:
+            type: string
+            pattern: ^FR-[0-9]{3,}$
+        required:
+          type: boolean
+        question:
+          type: string
+          minLength: 1
+        answer:
+          type: string
+          minLength: 1
+          maxLength: 10000
+      required:
+      - question_id
+      - reason
+      - related_fr_ids
+      - required
+      - question
+    StageAttempt:
+      type: object
+      additionalProperties: false
+      properties:
+        stage_id:
+          type: string
+          minLength: 1
+        attempt_no:
+          type: integer
+          minimum: 1
+        contract_version:
+          type: string
+        status:
+          type: string
+          enum:
+          - pending
+          - running
+          - waiting_for_input
+          - succeeded
+          - failed
+          - cancelled
+          - skipped
+        started_at: *id003
+        finished_at: *id003
+        reason:
+          type: string
+        error:
+          $ref: '#/components/schemas/Error'
+      required:
+      - stage_id
+      - attempt_no
+      - contract_version
+      - status
+    Run:
+      type: object
+      additionalProperties: false
+      properties:
+        run_id: *id001
+        project_id: *id001
+        revision_id: *id001
+        profile_id:
+          type: string
+          enum:
+          - web-fastapi-react
+        status:
+          $ref: '#/components/schemas/RunStatus'
+        current_stage:
+          type: string
+        limits:
+          $ref: '#/components/schemas/Limits'
+        created_at: *id003
+        updated_at: *id003
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageAttempt'
+        questions_revision:
+          type: integer
+          minimum: 0
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Question'
+        metrics:
+          $ref: '#/components/schemas/Metrics'
+        stop_reason:
+          type: string
+      required:
+      - run_id
+      - project_id
+      - revision_id
+      - profile_id
+      - status
+      - limits
+      - created_at
+      - updated_at
+      - stages
+      - questions_revision
+      - questions
+      - metrics
+    Answer:
+      type: object
+      additionalProperties: false
+      properties:
+        question_id: *id001
+        value:
+          type: string
+          minLength: 1
+          maxLength: 10000
+      required:
+      - question_id
+      - value
+    Answers:
+      type: object
+      additionalProperties: false
+      properties:
+        questions_revision:
+          type: integer
+          minimum: 1
+        answers:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Answer'
+      required:
+      - questions_revision
+      - answers
+    Retry:
+      type: object
+      additionalProperties: false
+      properties:
+        limits:
+          $ref: '#/components/schemas/Limits'
+      required: []
+    Event:
+      type: object
+      additionalProperties: false
+      properties:
+        run_id: *id001
+        seq:
+          type: integer
+          minimum: 1
+        event_type:
+          type: string
+          minLength: 1
+        stage_id:
+          type: string
+        timestamp: *id003
+        data:
+          type: object
+          additionalProperties: true
+      required:
+      - run_id
+      - seq
+      - event_type
+      - timestamp
+      - data
+    EventPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+        next_after_seq: *id004
+        has_more:
+          type: boolean
+      required:
+      - items
+      - next_after_seq
+      - has_more
+    Artifact:
+      type: object
+      additionalProperties: false
+      properties:
+        artifact_id: *id001
+        attempt_id: *id001
+        path:
+          type: string
+          minLength: 1
+          description: Относительный путь внутри снимка; абсолютные пути, .. и выходящие
+            симлинки запрещены.
+        kind:
+          type: string
+          minLength: 1
+        media_type:
+          type: string
+          minLength: 1
+        version:
+          type: integer
+          minimum: 1
+        schema_version:
+          type: string
+        author_agent:
+          type: string
+        checksum:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        size_bytes: *id004
+        related_fr_ids:
+          type: array
+          items:
+            type: string
+            pattern: ^FR-[0-9]{3,}$
+      required:
+      - artifact_id
+      - attempt_id
+      - path
+      - kind
+      - media_type
+      - version
+      - schema_version
+      - author_agent
+      - checksum
+      - size_bytes
+      - related_fr_ids
+    ManifestPage:
+      type: object
+      additionalProperties: false
+      properties:
+        snapshot_id: *id001
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Artifact'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+      required:
+      - snapshot_id
+      - items
+      - next_cursor
+    ExportCreate:
+      type: object
+      additionalProperties: false
+      properties:
+        snapshot_id: *id001
+      required:
+      - snapshot_id
+    Export:
+      type: object
+      additionalProperties: false
+      properties:
+        export_id: *id001
+        run_id: *id001
+        snapshot_id: *id001
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - completed
+          - failed
+        repository_url:
+          type: string
+          format: uri
+        commit_sha:
+          type: string
+          pattern: ^[a-f0-9]{40,64}$
+        error:
+          $ref: '#/components/schemas/Error'
+      required:
+      - export_id
+      - run_id
+      - snapshot_id
+      - status
+    ProjectPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+      required:
+      - items
+      - next_cursor
+    RunPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Run'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+      required:
+      - items
+      - next_cursor
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 100
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+        minLength: 1
+      description: Непрозрачный курсор; отсутствие начинает список. Неверный или чужой
+        контекст — 422.
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: ^[A-Za-z0-9._:-]+$
+      description: 'Область: owner + operation + resource + key. То же нормализованное
+        JSON-тело возвращает исходные статус и тело, иное — 409 IDEMPOTENCY_KEY_CONFLICT;
+        параллельный запрос до фиксации — 409 IDEMPOTENCY_IN_PROGRESS. Успешные результаты
+        хранятся весь срок ресурса; ошибки валидации ключ не резервируют.'
+  responses:
+    Error:
+      description: 'Единая ошибка: 401 UNAUTHORIZED (включая истёкший JWT/неверный
+        пароль); 404 NOT_FOUND; 409 RUN_STATE_CONFLICT / STALE_QUESTIONS_REVISION
+        / IDEMPOTENCY_KEY_CONFLICT / IDEMPOTENCY_IN_PROGRESS / SNAPSHOT_NOT_READY;
+        422 VALIDATION_ERROR; 429 RATE_LIMIT_EXCEEDED; 500 INTERNAL_ERROR. details
+        не содержит секретов. При 429 Retry-After задаёт секунды.'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+          description: Только для 429.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: RUN_STATE_CONFLICT
+              message: Запуск не ожидает ответов
+              details: {}
+              request_id: req-example-1
