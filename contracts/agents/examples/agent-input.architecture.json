@@ -7,7 +7,7 @@
     "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99"
   ],
   "contract_version": "1",
-  "profile_id": "web-fastapi-react",
+  "profile_id": "web-fastapi-angular",
   "limits": {
     "max_calls": 1,
     "max_output_tokens": 8000,

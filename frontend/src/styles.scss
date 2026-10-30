@@ -1,0 +1,33 @@
+@use 'bootstrap/scss/bootstrap' with ($primary: #395be8, $body-bg: #f5f6fa, $body-color: #25314c, $border-color: #e2e6ef);
+
+// SB Admin Angular navigation layout, adapted for Bootstrap 5.3.
+:root { --rwb-sidebar: 15rem; }
+body { margin: 0; }
+a { text-underline-offset: .18em; }
+.sb-topnav { min-height: 3.75rem; position: sticky; top: 0; z-index: 1030; }
+.sb-layout { display: flex; min-height: calc(100dvh - 3.75rem); }
+.sb-sidenav { width: var(--rwb-sidebar); flex-shrink: 0; display: flex; flex-direction: column; }
+.sb-sidenav .nav-link { color: #c2c8d3; border-radius: .375rem; padding: .75rem; margin-bottom: .3rem; }
+.sb-sidenav .nav-link.active, .sb-sidenav .nav-link:hover { background: #ffffff15; color: #fff; }
+.sb-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sb-content main { flex: 1; max-width: 100rem; }
+.skip-link { position: absolute; z-index: 1100; background: white; padding: 1rem; }
+.card { border-radius: .6rem; box-shadow: 0 2px 8px #25314c04; }
+.card-header { background: #fff; padding: 1rem 1.25rem; font-weight: 500; }
+.table > :not(caption) > * > * { padding: .9rem 1.25rem; }
+.table thead th { color: #667189; font-size: .8rem; font-weight: 500; }
+.login-page { min-height: 100dvh; background: #18213a; }
+.login-panel { max-width: 30rem; }
+.requirements, .artifact-content { white-space: pre-wrap; overflow-wrap: anywhere; }
+.markdown { overflow-wrap: anywhere; }
+.markdown pre { overflow-x: auto; background: #f0f2f6; padding: 1rem; }
+.markdown img { max-width: 100%; }
+.sidebar-scrim { display: none; }
+.stage-row { border-left: 3px solid #dce1ee; padding: .75rem 1rem; }
+.stage-row.current { border-left-color: #395be8; background: #395be80a; }
+@media (max-width: 767.98px) {
+  .sb-sidenav { display: none; position: fixed; top: 3.75rem; bottom: 0; left: 0; z-index: 1020; }
+  .sb-sidenav.mobile-open { display: flex; }
+  .sidebar-scrim { display: block; position: fixed; inset: 3.75rem 0 0 var(--rwb-sidebar); z-index: 1010; background: #0008; border: 0; }
+  .session-login { display: none; }
+}

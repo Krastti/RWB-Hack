@@ -627,7 +627,7 @@
       "type": "string"
     },
     "profile_id": {
-      "default": "web-fastapi-react",
+      "default": "web-fastapi-angular",
       "minLength": 1,
       "title": "Profile Id",
       "type": "string"

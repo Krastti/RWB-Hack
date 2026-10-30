@@ -1,4 +1,4 @@
-"""Owner-scoped project HTTP endpoints, C-01 v1.0.0."""
+"""Owner-scoped project HTTP endpoints, C-01 v2.0.0."""
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Query, Request

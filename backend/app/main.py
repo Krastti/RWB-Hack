@@ -36,7 +36,7 @@ def create_app(
         finally:
             engine.dispose()
 
-    app = FastAPI(title="RWB-Hack Platform API", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="RWB-Hack Platform API", version="2.1.0", lifespan=lifespan)
     app.state.engine = engine
     configure_auth(app, AuthService(PostgreSQLUserRepository(sessions), auth_config))
     configure_projects(app, ProjectService(PostgreSQLProjectRepository(sessions, cursor_secret=auth_config.secret_key)))

@@ -1,4 +1,4 @@
-"""Authentication DTOs for C-01 v1.0.0."""
+"""Authentication DTOs for C-01 v2.0.0."""
 from dataclasses import dataclass, field
 from typing import Literal
 from uuid import UUID

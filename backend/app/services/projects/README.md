@@ -3,7 +3,7 @@
 Публичный интерфейс: `app.services.projects.ProjectService` и
 `app.repositories.ProjectRepository`. Ошибки `InvalidProjectInput` и
 `ProjectNotFound` находятся в `app.errors`. Прежние импорты из
-`app.services.projects` сохранены для совместимости. Контракт: `contracts/platform.openapi.yaml`, API 1.0.0
+`app.services.projects` сохранены для совместимости. Контракт: `contracts/platform.openapi.yaml`, API 2.0.0
 (C-01). Код сервиса не использует HTTP, SQLAlchemy или драйвер БД.
 Импорт `app.models.dto` загружает родительский пакет `app.models`,
 который экспортирует ORM-модели и требует установленный SQLAlchemy.

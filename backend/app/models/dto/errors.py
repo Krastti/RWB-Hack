@@ -1,4 +1,4 @@
-"""Common error envelope for platform contract C-01 v1.0.0."""
+"""Common error envelope for platform contract C-01 v2.0.0."""
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict

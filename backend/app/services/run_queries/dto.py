@@ -1,4 +1,4 @@
-"""Read projections for C-01 v1.0.0; ORM entities are deliberately separate."""
+"""Read projections for C-01 v2.1.0; ORM entities are deliberately separate."""
 from datetime import datetime, timezone
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -69,7 +69,7 @@ class Run(ReadDTO):
     run_id: UUID
     project_id: UUID
     revision_id: UUID
-    profile_id: Literal["web-fastapi-react"]
+    profile_id: Literal["web-fastapi-angular"]
     status: RunStatus
     current_stage: str | None = None
     limits: Limits

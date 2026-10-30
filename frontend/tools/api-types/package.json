@@ -1,0 +1,6 @@
+{
+  "name": "rwb-api-types-tool",
+  "private": true,
+  "description": "Isolated generator toolchain; Angular uses TypeScript 6 independently.",
+  "dependencies": { "openapi-typescript": "7.13.0", "typescript": "5.9.3" }
+}
