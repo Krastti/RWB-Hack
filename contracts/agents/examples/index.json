@@ -1,0 +1,138 @@
+{
+  "schema_version": "1.0",
+  "documents": [
+    {
+      "file": "analysis-input.json",
+      "schema": "analysis-input"
+    },
+    {
+      "file": "agent-input.analysis.json",
+      "schema": "agent-input"
+    },
+    {
+      "file": "requirements.json",
+      "schema": "requirements"
+    },
+    {
+      "file": "questions.json",
+      "schema": "questions"
+    },
+    {
+      "file": "agent-result.waiting.json",
+      "schema": "agent-result"
+    },
+    {
+      "file": "artifact.inline.json",
+      "schema": "artifact"
+    },
+    {
+      "file": "artifact.storage.json",
+      "schema": "artifact"
+    },
+    {
+      "file": "analysis-input.resume.json",
+      "schema": "analysis-input"
+    },
+    {
+      "file": "agent-input.resume.json",
+      "schema": "agent-input"
+    },
+    {
+      "file": "requirements.answered.json",
+      "schema": "requirements"
+    },
+    {
+      "file": "questions.answered.json",
+      "schema": "questions"
+    },
+    {
+      "file": "agent-result.succeeded.json",
+      "schema": "agent-result"
+    },
+    {
+      "file": "agent-result.failed.json",
+      "schema": "agent-result"
+    },
+    {
+      "file": "agent-result.cancelled.json",
+      "schema": "agent-result"
+    },
+    {
+      "file": "agent-result.skipped.json",
+      "schema": "agent-result"
+    },
+    {
+      "file": "architecture.json",
+      "schema": "architecture"
+    },
+    {
+      "file": "generation-plan.json",
+      "schema": "generation-plan"
+    },
+    {
+      "file": "agent-input.architecture.json",
+      "schema": "agent-input"
+    },
+    {
+      "file": "agent-result.architecture.json",
+      "schema": "agent-result"
+    },
+    {
+      "file": "traceability.json",
+      "schema": "traceability"
+    },
+    {
+      "file": "artifact.traceability.json",
+      "schema": "artifact"
+    },
+    {
+      "file": "manifest.json",
+      "schema": "manifest"
+    }
+  ],
+  "bundles": [
+    {
+      "input": "agent-input.analysis.json",
+      "result": "agent-result.waiting.json",
+      "resolved_inputs": {
+        "493b4d03-ba3d-5ac1-8d96-bfbb97f9bf39": "analysis-input.json"
+      }
+    },
+    {
+      "input": "agent-input.resume.json",
+      "result": "agent-result.succeeded.json",
+      "resolved_inputs": {
+        "efc7ede1-e60f-5d99-a085-d6c10358738f": "analysis-input.resume.json",
+        "09c6e07d-702a-5cd3-82bd-064979202600": "requirements.json"
+      }
+    },
+    {
+      "input": "agent-input.architecture.json",
+      "result": "agent-result.architecture.json",
+      "resolved_inputs": {
+        "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99": "requirements.answered.json"
+      }
+    },
+    {
+      "input": "agent-input.analysis.json",
+      "result": "agent-result.failed.json",
+      "resolved_inputs": {
+        "493b4d03-ba3d-5ac1-8d96-bfbb97f9bf39": "analysis-input.json"
+      }
+    }
+  ],
+  "snapshots": [
+    {
+      "manifest": "manifest.json",
+      "traceability": "traceability.json",
+      "requirements": "requirements.answered.json",
+      "results": [
+        "agent-result.succeeded.json",
+        "agent-result.architecture.json"
+      ],
+      "additional_artifacts": [
+        "artifact.traceability.json"
+      ]
+    }
+  ]
+}

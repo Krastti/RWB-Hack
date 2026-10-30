@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "requirements_artifact_id": "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99",
+  "coverage": [
+    {
+      "fr_id": "FR-001",
+      "status": "unimplemented",
+      "artifact_ids": [],
+      "operation_ids": [],
+      "entity_ids": [],
+      "screen_ids": [],
+      "notes": "Есть анализ и проектирование; исходники ещё не сформированы."
+    },
+    {
+      "fr_id": "FR-002",
+      "status": "unimplemented",
+      "artifact_ids": [],
+      "operation_ids": [],
+      "entity_ids": [],
+      "screen_ids": [],
+      "notes": "Есть анализ и проектирование; исходники ещё не сформированы."
+    },
+    {
+      "fr_id": "FR-003",
+      "status": "unimplemented",
+      "artifact_ids": [],
+      "operation_ids": [],
+      "entity_ids": [],
+      "screen_ids": [],
+      "notes": "Есть анализ и проектирование; исходники ещё не сформированы."
+    },
+    {
+      "fr_id": "FR-004",
+      "status": "unimplemented",
+      "artifact_ids": [],
+      "operation_ids": [],
+      "entity_ids": [],
+      "screen_ids": [],
+      "notes": "Есть анализ и проектирование; исходники ещё не сформированы."
+    }
+  ]
+}

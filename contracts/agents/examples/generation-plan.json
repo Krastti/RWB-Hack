@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "contract_version": "1",
+  "profile_id": "web-fastapi-react",
+  "tasks": [
+    {
+      "task_id": "backend",
+      "stage_id": "backend",
+      "owner_agent": "backend",
+      "depends_on": [],
+      "input_artifact_ids": [
+        "0c05995a-a3bc-5de6-ae6d-9ab4f50b1456",
+        "155fc739-3f89-5db0-ad27-78adba9b7594",
+        "c80417dc-33f7-5bc8-9338-e1d911166935"
+      ],
+      "output_paths": [],
+      "output_directories": [
+        "backend"
+      ],
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    },
+    {
+      "task_id": "frontend",
+      "stage_id": "frontend",
+      "owner_agent": "frontend",
+      "depends_on": [],
+      "input_artifact_ids": [
+        "0c05995a-a3bc-5de6-ae6d-9ab4f50b1456",
+        "155fc739-3f89-5db0-ad27-78adba9b7594",
+        "14a4535c-7f26-5bd8-9303-84415f4d6216"
+      ],
+      "output_paths": [],
+      "output_directories": [
+        "frontend"
+      ],
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003",
+        "FR-004"
+      ]
+    }
+  ]
+}

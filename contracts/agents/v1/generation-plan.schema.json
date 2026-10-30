@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/contracts/agents/v1/generation-plan.schema.json",
+  "title": "Generation tasks and ownership under a frozen contract",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "contract_version": {
+      "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/contract_version"
+    },
+    "profile_id": {
+      "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/identifier"
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/identifier"
+          },
+          "stage_id": {
+            "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/identifier"
+          },
+          "owner_agent": {
+            "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/identifier"
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/identifier"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "input_artifact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          },
+          "output_paths": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/relative_path"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "output_directories": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/relative_path"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "related_fr_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/fr_id"
+            },
+            "minItems": 0,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "task_id",
+          "stage_id",
+          "owner_agent",
+          "depends_on",
+          "input_artifact_ids",
+          "output_paths",
+          "output_directories",
+          "related_fr_ids"
+        ],
+        "additionalProperties": false,
+        "anyOf": [
+          {
+            "properties": {
+              "output_paths": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "output_directories": {
+                "minItems": 1
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "schema_version",
+    "contract_version",
+    "profile_id",
+    "tasks"
+  ],
+  "additionalProperties": false
+}

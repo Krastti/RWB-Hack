@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/contracts/agents/v1/questions.schema.json",
+  "title": "Questions for one immutable clarification revision",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "questions_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "$ref": "https://rwb-hack.invalid/contracts/agents/v1/common.schema.json#/$defs/question"
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "questions_revision",
+    "questions"
+  ],
+  "additionalProperties": false
+}

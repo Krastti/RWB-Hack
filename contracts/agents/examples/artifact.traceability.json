@@ -1,0 +1,19 @@
+{
+  "artifact_id": "ab1c787b-3a63-54f7-ba14-fbdfc4ede3a8",
+  "attempt_id": "6c823715-7ba8-5bae-a24e-4b45371bd2a1",
+  "path": "traceability.json",
+  "kind": "traceability",
+  "media_type": "application/json",
+  "version": 1,
+  "schema_version": "1.0",
+  "author_agent": "assembly",
+  "checksum": "5d5601d1ca991bdfd11f8abb794cd4f36c14225825013e44ab5066aa17676ba6",
+  "size_bytes": 1324,
+  "related_fr_ids": [
+    "FR-001",
+    "FR-002",
+    "FR-003",
+    "FR-004"
+  ],
+  "content": "{\n  \"schema_version\": \"1.0\",\n  \"requirements_artifact_id\": \"80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99\",\n  \"coverage\": [\n    {\n      \"fr_id\": \"FR-001\",\n      \"status\": \"unimplemented\",\n      \"artifact_ids\": [],\n      \"operation_ids\": [],\n      \"entity_ids\": [],\n      \"screen_ids\": [],\n      \"notes\": \"Есть анализ и проектирование; исходники ещё не сформированы.\"\n    },\n    {\n      \"fr_id\": \"FR-002\",\n      \"status\": \"unimplemented\",\n      \"artifact_ids\": [],\n      \"operation_ids\": [],\n      \"entity_ids\": [],\n      \"screen_ids\": [],\n      \"notes\": \"Есть анализ и проектирование; исходники ещё не сформированы.\"\n    },\n    {\n      \"fr_id\": \"FR-003\",\n      \"status\": \"unimplemented\",\n      \"artifact_ids\": [],\n      \"operation_ids\": [],\n      \"entity_ids\": [],\n      \"screen_ids\": [],\n      \"notes\": \"Есть анализ и проектирование; исходники ещё не сформированы.\"\n    },\n    {\n      \"fr_id\": \"FR-004\",\n      \"status\": \"unimplemented\",\n      \"artifact_ids\": [],\n      \"operation_ids\": [],\n      \"entity_ids\": [],\n      \"screen_ids\": [],\n      \"notes\": \"Есть анализ и проектирование; исходники ещё не сформированы.\"\n    }\n  ]\n}\n"
+}
