@@ -146,7 +146,9 @@ class AnalysisGraph:
         """Continue pending checkpoint work; waiting/completed nodes are not rerun."""
         state = self.snapshot(run_id)
         snapshot = self._graph.get_state(self._config(run_id))
-        if snapshot.next and not any(task.interrupts for task in snapshot.tasks):
+        # A completed task's writes can survive a failed checkpoint put. Its
+        # next tuple is empty until LangGraph finalizes those pending writes.
+        if (snapshot.next or snapshot.tasks) and not any(task.interrupts for task in snapshot.tasks):
             self._graph.invoke(None, self._config(run_id), durability="sync")
             return self.snapshot(run_id)
         return state

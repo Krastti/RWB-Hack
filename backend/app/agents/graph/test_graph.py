@@ -248,6 +248,45 @@ class AnalysisGraphTests(unittest.TestCase):
             self.assertEqual(state["stage_status"], "succeeded")
         self.assertEqual(len(self.calls), 2)
 
+    def _answer_checkpoint_failure(self, *, replay):
+        path = self.path / "graph.sqlite"
+        with open_checkpoints(path) as saver:
+            graph = self.graph(saver)
+            before = self.waiting(graph)
+            original = saver.put
+
+            def fail_after_answers(config, checkpoint, metadata, new_versions):
+                values = checkpoint["channel_values"]
+                if values.get("resume_command") and values.get("stage_status") == "waiting_for_input":
+                    raise OSError("simulated checkpoint outage after answers")
+                return original(config, checkpoint, metadata, new_versions)
+
+            with patch.object(saver, "put", side_effect=fail_after_answers):
+                with self.assertRaises(OSError):
+                    self.resume(graph)
+        self.assertEqual(len(self.calls), 1)
+
+        with open_checkpoints(path) as saver:
+            graph = self.graph(saver)
+            state = self.resume(graph) if replay else graph.recover(self.run_id)
+            self.assertEqual(state["stage_status"], "succeeded")
+            self.assertEqual(state["status"], "running")
+            self.assertEqual(state["request"]["attempt"], 2)
+            self.assertEqual(state["questions_revision"], 1)
+            self.assertEqual(state["attempts"][0], before["attempts"][0])
+            self.assertEqual(state["questions"][0]["answer"],
+                             example("analysis-input.resume")["answers"][0]["value"])
+            self.assertEqual([a["attempt_no"] for a in state["attempts"]], [1, 2])
+            self.assertEqual(graph.recover(self.run_id), state)
+            self.assertEqual(self.resume(graph), state)
+        self.assertEqual(self.calls, [(1, FIRST), (2, SECOND)])
+
+    def test_recover_after_answer_checkpoint_failure(self):
+        self._answer_checkpoint_failure(replay=False)
+
+    def test_redelivered_answer_after_checkpoint_failure(self):
+        self._answer_checkpoint_failure(replay=True)
+
     def test_missing_checkpoint_fails_safely(self):
         with open_checkpoints(self.path / "graph.sqlite") as saver:
             with self.assertRaisesRegex(GraphError, "RESUME_STATE_UNAVAILABLE"):
