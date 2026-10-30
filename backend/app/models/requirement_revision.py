@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 class RequirementRevision(Base):
     __tablename__ = "requirement_revisions"
     __table_args__ = (
+        UniqueConstraint("id", "project_id", name="uq_requirement_revisions_id_project"),
         UniqueConstraint("project_id", "number", name="uq_requirement_revisions_project_number"),
         CheckConstraint("number >= 1", name="number_positive"),
         CheckConstraint("length(requirements_text) BETWEEN 1 AND 100000", name="text_length"),
