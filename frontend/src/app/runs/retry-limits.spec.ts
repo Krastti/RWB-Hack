@@ -19,9 +19,11 @@ describe('retry exhausted budget', () => {
     expect(retryLimitError(run, { max_calls: 11, max_output_tokens: 40000 })).toBeNull();
     expect(retryLimitError(run, { max_calls: 9, max_output_tokens: 40000 })).toContain('уменьшать');
   });
-  it('requires both limits when public metrics do not identify a reservation shortfall', () => {
+  it('allows either limit increase when the server must identify a reservation shortfall', () => {
     const run = makeRun();
-    expect(retryLimitError(run, { max_calls: 11, max_output_tokens: 30000 })).toContain('оба');
+    expect(retryLimitError(run, { max_calls: 10, max_output_tokens: 30000 })).not.toBeNull();
+    expect(retryLimitError(run, { max_calls: 11, max_output_tokens: 30000 })).toBeNull();
+    expect(retryLimitError(run, { max_calls: 10, max_output_tokens: 40000 })).toBeNull();
     expect(retryLimitError(run, { max_calls: 11, max_output_tokens: 40000 })).toBeNull();
   });
 });

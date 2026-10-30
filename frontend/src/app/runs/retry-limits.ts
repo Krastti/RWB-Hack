@@ -1,6 +1,6 @@
 import { DTO, Run } from '../api/client';
 
-/** The public DTO has no required_limits; unknown reservation shortfalls need both limits raised. */
+/** Unknown reservation shortfalls are validated by the server after a limit increase. */
 export function retryLimitError(run: Run, next: DTO['Limits']): string | null {
   const previous = run.limits;
   if (next.max_calls < previous.max_calls || next.max_output_tokens < previous.max_output_tokens) return 'При повторе нельзя уменьшать лимиты.';
@@ -9,8 +9,8 @@ export function retryLimitError(run: Run, next: DTO['Limits']): string | null {
   if (callsExhausted && next.max_calls <= previous.max_calls) return 'Увеличьте исчерпанный лимит вызовов.';
   if (tokensExhausted && next.max_output_tokens <= previous.max_output_tokens) return 'Увеличьте исчерпанный лимит выходных токенов.';
   if (!callsExhausted && !tokensExhausted &&
-      (next.max_calls <= previous.max_calls || next.max_output_tokens <= previous.max_output_tokens)) {
-    return 'Для следующей операции недостаточно бюджета. Увеличьте оба лимита; сервер проверит необходимый запас.';
+      (next.max_calls <= previous.max_calls && next.max_output_tokens <= previous.max_output_tokens)) {
+    return 'Увеличьте хотя бы один лимит; сервер проверит необходимый запас.';
   }
   return null;
 }
