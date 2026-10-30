@@ -115,3 +115,17 @@ Dispatch does not move this recovery backoff timestamp when selecting a due lost
 command; claim acquires the lease under the Run/command locks. A durable successful
 `recovery_generation` is a commit receipt: losing the process before `complete()`
 does not increment technical failures or schedule another domain attempt.
+
+## Intake delivery (V8)
+
+V8 must be applied before deploying the new intake. Existing jobs default to pending
+and are immediately eligible. Registration, stage command and job deletion still
+commit together. Failure rolls back a savepoint under Run/job locks; delivery
+metadata then commits under those same locks. Known immutable-input validation
+errors are rejected immediately; other errors get at most three failures with
+5/10-second backoff. Rejected jobs retain a safe error code for investigation and
+never occupy an active dispatch slot. Valid frozen state allows queued → running
+→ failed through lifecycle. When corrupt snapshots prevent lifecycle loading,
+`TERMINALIZATION_UNAVAILABLE` is persisted with the rejected job for operator
+repair; no terminal Run state is fabricated. Database outages can prevent recording
+failure metadata; the whole transaction then rolls back and delivery remains durable.
