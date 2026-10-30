@@ -22,6 +22,7 @@ class PostgreSQLRuntimeRepository:
     def __init__(self, sessions, queue):
         self.sessions, self.queue = sessions, queue
         self.guard = None  # Configured by compose_runtime.
+        self.states = None
 
     @contextmanager
     def transaction(self, owner_id: UUID, run_id: UUID):
@@ -45,8 +46,24 @@ class PostgreSQLRuntimeRepository:
         record, state = self.load(session, run)
         original = record.model_copy(deep=True)
         yield record
+        # Terminal intent belongs to the server, not the graph snapshot.
+        intent = original.saved_state.get("terminal_intent")
+        finalizing = run.id in session.info.get("finalizing_terminal_intents", set())
+        receipt = original.saved_state.get("terminal_intent_finalized")
+        if not finalizing:
+            if receipt is not None:
+                record.saved_state["terminal_intent_finalized"] = deepcopy(receipt)
+                record.saved_state.pop("terminal_intent", None)
+            else:
+                record.saved_state.pop("terminal_intent_finalized", None)
+                if intent is not None:
+                    record.saved_state["terminal_intent"] = deepcopy(intent)
         if record != original:
             self.save(session, run, state, record, original)
+            intent = record.saved_state.get("terminal_intent")
+            if (intent and record.run.status == "running" and self.states is not None
+                    and not any(a.status in {"pending", "running"} for a in record.run.stages)):
+                self.states.finalize_terminal_intent(session, run)
 
     def load(self, session, run):
         try:

@@ -149,8 +149,7 @@ class PostgreSQLQueueStore:
                     self._assert_lease(session, row, lease)
                     if recovery_complete:
                         session.refresh(attempt)
-                        if attempt.status in {"pending", "running"}:
-                            raise RuntimeError("Recovery did not persist an attempt outcome")
+                        self._assert_recovery_outcome(session, run, attempt)
                         row.recovery_generation = lease.generation
                         session.flush()
                     # Проверка после последней записи, до единственного разрешённого commit.
@@ -163,16 +162,37 @@ class PostgreSQLQueueStore:
 
     def complete(self, lease: Lease) -> None:
         with self.sessions.begin() as session:
-            row, _, attempt = self._require_lease(session, lease)
+            row, run, attempt = self._require_lease(session, lease)
             if not lease.recovery and (
                 not self._latest(session, attempt) or attempt.status in {"pending", "running"}
             ):
                 raise RuntimeError("Orchestrator did not persist an attempt outcome")
-            if lease.recovery and (
-                row.recovery_generation != lease.generation or attempt.status in {"pending", "running"}
-            ):
-                raise RuntimeError("Recovery did not acknowledge a persisted outcome")
+            if lease.recovery:
+                if row.recovery_generation != lease.generation:
+                    raise RuntimeError("Recovery did not acknowledge a persisted outcome")
+                self._assert_recovery_outcome(session, run, attempt)
             self._clear_lease(row, "completed")
+
+    @staticmethod
+    def _assert_recovery_outcome(session, run, attempt):
+        if attempt.status != "failed":
+            raise RuntimeError("Recovery requires a failed attempt")
+        session.refresh(run)
+        if run.status in {"failed", "cancelled", "completed", "budget_exceeded"}:
+            return
+        from ...services.runtime.models import RunRuntimeState
+        state = session.get(RunRuntimeState, run.id)
+        intent = (state.payload.get("saved_state", {}).get("terminal_intent") if state else None)
+        if run.status == "running" and isinstance(intent, dict) and intent.get("target") == "failed":
+            return
+        successor = session.scalar(select(StageAttempt).where(
+            StageAttempt.run_id == attempt.run_id, StageAttempt.stage_id == attempt.stage_id,
+            StageAttempt.attempt_no == attempt.attempt_no + 1))
+        if (successor is None or successor.input_hash != attempt.input_hash
+                or successor.contract_version != attempt.contract_version
+                or session.scalar(select(WorkerCommand.id).where(
+                    WorkerCommand.attempt_id == successor.id)) is None):
+            raise RuntimeError("Recovery did not persist a valid successor command")
 
     def abandon(self, lease: Lease) -> None:
         """Ошибка callable не разрешает повторный внешний вызов старой попытки."""

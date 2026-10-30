@@ -93,6 +93,23 @@ class RunStateService:
         self.repository = repository
         self.guard, self.checkpoint_confirmed = guard, checkpoint_confirmed
 
+    def finalize_terminal_intent(self, session, run):
+        """Consume server-owned intent with its lifecycle transition under Run lock."""
+        finalizing = session.info.setdefault("finalizing_terminal_intents", set())
+        finalizing.add(run.id)
+        try:
+            with self.transaction(session, run) as tx:
+                intent = tx.snapshot.data["saved_state"].get("terminal_intent")
+                if intent is None:
+                    return
+                tx.transition_run(expected="running", target="failed", reason_code=intent["reason_code"])
+                def consume(data):
+                    data["saved_state"].pop("terminal_intent", None)
+                    data["saved_state"]["terminal_intent_finalized"] = deepcopy(intent)
+                tx.update_data(consume)
+        finally:
+            finalizing.remove(run.id)
+
     @contextmanager
     def transaction(self, session, run):
         """Caller holds Run FOR UPDATE; commit belongs to caller (or worker lease)."""
