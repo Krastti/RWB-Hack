@@ -517,3 +517,34 @@ PostgreSQL next_delivery_at + dispatch, heartbeat переносит окно ru
 Для отката transport останавливают beat и workers, а таблицу принятых команд
 сохраняют до обработки/восстановления. Готовность этой схемы на реальной БД/брокере
 не подтверждается offline-тестами остальных модулей.
+
+
+### Budget stop между этапами
+
+`budget_exceeded` может быть сохранён до регистрации следующего StageAttempt.
+Для MAX_CALLS/MAX_OUTPUT_TOKENS public retry допускает первую попытку ещё не
+исполнявшегося ready-узла, не переписывая успешные этапы в failed. В private
+`Record.saved_state` producer сохраняет frozen `generation_plan` по C-02 и
+`pending_inputs[stage_id]={input_hash,input_state}`: полную проверенную AgentInput
+будущего этапа с attempt=1 и неизменяемыми входными artifact IDs. Эти данные не
+приходят из публичного Retry и не добавляются в HTTP DTO. Runtime выбирает первый
+ready task в порядке плана; уже зарегистрированные stage_id не создаются заново.
+
+Проверяются plan/profile/contract, C-02 input context и hash format, точное
+соответствие разрешённым input IDs задачи. Dependencies требуют accepted latest
+succeeded/skipped receipts и согласованный checkpoint Run/revision/state_version/
+contract с authoritative saved_state. Producer/worker по-прежнему проверяет bytes,
+ownership, input hashes и реальные saver receipts; сервис не выдумывает эти данные.
+Нет полного frozen state/ready task/подтверждения — RESUME_STATE_UNAVAILABLE без
+эффектов (UI показывает server error envelope). Затем обычные budget reservations,
+sufficient cause-specific increase и authorize_retry. Новая **первая** pending
+attempt, metrics/events/outbox/replay фиксируются атомарно, receipt прежнего этапа
+и usage не меняются. retry.scheduled с выдуманным previous_attempt_no не создаётся:
+используется stage.status_changed from=null плюс status/budget/metrics events.
+Повтор ключа возвращает исходный ответ без новой attempt/outbox/event. #129 producer
+должен сохранять этот private resume context до остановки, а не угадывать этап.
+
+Event allocator пока проверяет полную историю на каждом append (O(n log n),
+O(n) memory); он предназначен для локальных агрегатов, не долгих production log.
+Выделение по authoritative watermark и проверка истории на load boundary требуют
+отдельной оптимизации с сохранением lock/rollback/duplicate protection.

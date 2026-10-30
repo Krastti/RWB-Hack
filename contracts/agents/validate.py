@@ -231,6 +231,33 @@ def validate_profile_grants(plan, profile):
                 require(allowed, "Generation output exceeds profile grants")
 
 
+
+def load_profile_rules(profile, repository_root=None):
+    """Offline resolution contract, not production profile-loader integration.
+
+    No generic Markdown redirect following. Only this allowlisted local target
+    is recognized, and neither pointer nor target may redirect through symlinks.
+    """
+    require(profile.get("profile_id") == "web-fastapi-angular" and
+            profile.get("rules_document") == "README.md", "Unsupported profile rules reference")
+    root = (Path(repository_root) if repository_root is not None else ROOT.parent.parent).resolve()
+    pointer = root / "templates/profiles/web-fastapi-angular/README.md"
+    target = root / "docs/agents.md"
+    try:
+        require(pointer.resolve(strict=True) == pointer and target.resolve(strict=True) == target,
+                "Profile rules must use trusted local files")
+        pointer_text = pointer.read_text(encoding="utf-8")
+        rules = target.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        raise ContractError("Profile rules document is unavailable") from None
+    import re
+    markers = re.findall(r"<!-- rwb-profile-rules: (.*?) -->", pointer_text)
+    require(markers == ["docs/agents.md#профиль-c-05"], "Unresolved profile rules pointer")
+    for heading in ("## Профиль C-05", "### Ownership и generation plan",
+                    "### Правила генерируемого приложения", "### Limits и остановки"):
+        require(heading in rules.splitlines(), "Incomplete profile rules document")
+    return rules
+
 def example_file(filename):
     path = (ROOT / "examples" / filename).resolve()
     require(path.is_relative_to((ROOT / "examples").resolve()), "Example escapes examples directory")
@@ -369,6 +396,7 @@ def main(argv=None):
             documents, bundles, snapshots = check_examples(contracts)
             validate_profile_grants(load(ROOT / "examples/generation-plan.json"),
                 load(ROOT.parent.parent / "templates/profiles/web-fastapi-angular/profile.json"))
+            load_profile_rules(load(ROOT.parent.parent / "templates/profiles/web-fastapi-angular/profile.json"))
             print(f"OK: {len(contracts.schemas)} schemas, {documents} examples, "
                   f"{bundles} linked bundles, {snapshots} snapshot; offline")
         else:

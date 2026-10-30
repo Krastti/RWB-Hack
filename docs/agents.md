@@ -303,9 +303,17 @@ Durability sync сохраняет границу до следующего уз
 
 State хранит Run/stage/attempt, версии/profile/input_hash, вопросы/ответы,
 references, attempts/times, usage/diagnostics; не file content или provider body.
-Canonical substantive hash исключает request attempt/limits и сортирует references;
-смена требований или confirmed-answer artifacts меняет его. Старые hashes не
-переписываются: INPUT_SNAPSHOT_CHANGED требует контролируемого восстановления (#128).
+Canonical substantive hash (`input_hash_algorithm=substantive-v2`) исключает
+request attempt/limits и сортирует references; смена требований/confirmed-answer
+artifacts меняет его. Это отдельная версия алгоритма, не state_version. Checkpoint
+без маркера проверяется по обоим известным алгоритмам на фактических inputs и
+metadata: full-request-v1 (полный request и исходный порядок references) либо
+substantive-v2. Успешная проверка фиксирует выбранный алгоритм, **не меняя legacy
+hash или историю попыток**. Явная неизвестная/невалидная версия или mismatch не
+позволяют fallback. При новой попытке после подтверждённых ответов используется
+substantive-v2; история сохраняет прежнюю идентичность. Durable receipt читается
+после проверки inputs и восстанавливается без вызова узла. Реальное изменение
+inputs по-прежнему даёт INPUT_SNAPSHOT_CHANGED.
 
 ArtifactStore.read проверяет owner/Run/content, put — immutable/idempotent;
 result возвращает durable receipt, accept атомарно сохраняет output+receipt либо
@@ -512,3 +520,15 @@ input|analysis|result` выводит JSON в stdout. Не перезаписы�
 Миграция/откат действующего контракта требует версии, согласования всех consumers
 и сохранения чтения используемых snapshots. Нельзя менять смысл прежнего поля
 под той же schema_version или выдавать успешный offline пример за real LLM/E2E.
+
+
+### Разрешение rules_document
+
+README профиля явно маркируется как указатель. `load_profile_rules` в существующем
+C-02 validator распознаёт только точный marker `docs/agents.md#профиль-c-05` для
+web-fastapi-angular/README.md и возвращает полный локальный docs/agents.md.
+Никакие произвольные Markdown links, сеть, redirects, symlinks или traversal не
+разрешаются. Нет pointer/target/обязательных разделов — ContractError и отказ,
+а не исполнение с README вместо правил. `validate.py --check` проверяет этот
+offline-контракт. Production loader обязан подключить то же разрешение; такая
+интеграция не заявлена. Profile ID/version/grants/schema/checksum не меняются.

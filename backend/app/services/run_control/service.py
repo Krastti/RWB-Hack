@@ -96,6 +96,56 @@ class RunControlService:
                 self._cancel_boundary(record)
             return record.run.model_copy(deep=True)
 
+    def _next_unstarted_stage(self, record: Record) -> tuple[str, str, dict]:
+        """Resolve only a frozen, ready, never-executed task from trusted saved state.
+
+        Producers retain generation_plan and pending_inputs before the budget stop.
+        This is not an orchestrator: it cannot invent inputs or skip dependencies.
+        """
+        from contracts.agents.validate import Contracts
+        try:
+            plan = record.saved_state["generation_plan"]
+            Contracts().validate("generation-plan", plan)
+            if plan["profile_id"] != record.run.profile_id:
+                raise ValueError()
+            by_id = {task["task_id"]: task for task in plan["tasks"]}
+            latest = {a.stage_id: self._latest(record, a.stage_id) for a in record.run.stages}
+            if any(a.status not in {"succeeded", "skipped"} for a in latest.values()):
+                raise ValueError()
+            ready = [task for task in plan["tasks"] if task["stage_id"] not in latest and all(
+                by_id[parent]["stage_id"] in latest for parent in task["depends_on"])]
+            task = next(iter(ready))
+            if task["depends_on"]:
+                cp = record.checkpoint
+                if (cp is None or cp.run_id != record.run.run_id or cp.revision_id != record.run.revision_id
+                        or cp.state_version != record.state_version or cp.state != record.saved_state
+                        or cp.contract_version != plan["contract_version"]
+                        or cp.input_hash not in {a.input_hash for a in record.attempts if a.accepted_result}):
+                    raise ValueError()
+                for parent in task["depends_on"]:
+                    accepted = latest[by_id[parent]["stage_id"]]
+                    receipt = self._private(record, accepted)
+                    result = receipt.accepted_result or {}
+                    if (result.get("status") != accepted.status or result.get("run_id") != str(record.run.run_id)
+                            or result.get("stage_id") != accepted.stage_id
+                            or result.get("attempt") != accepted.attempt_no
+                            or result.get("contract_version") != accepted.contract_version):
+                        raise ValueError()
+            source = record.saved_state["pending_inputs"][task["stage_id"]]
+            request = source["input_state"]
+            Contracts().validate("agent-input", request)
+            if (not re.fullmatch(r"[a-f0-9]{64}", source["input_hash"])
+                    or request["stage_id"] != task["stage_id"] or request["attempt"] != 1
+                    or request["run_id"] != str(record.run.run_id)
+                    or request["profile_id"] != record.run.profile_id
+                    or request["contract_version"] != plan["contract_version"]
+                    or set(request["input_artifact_ids"]) != set(task["input_artifact_ids"])):
+                raise ValueError()
+            return task["stage_id"], plan["contract_version"], deepcopy(source)
+        except (ValueError, KeyError, TypeError, StopIteration):
+            raise ControlError(500, "RESUME_STATE_UNAVAILABLE",
+                               "Frozen plan, next-stage inputs or confirmed dependency state are unavailable") from None
+
     def retry(self, *, owner_id: UUID, run_id: UUID, key: str, body: Retry) -> Run:
         if not isinstance(key, str) or re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", key) is None:
             raise ControlError(422, "VALIDATION_ERROR", "Invalid Idempotency-Key")
@@ -118,20 +168,24 @@ class RunControlService:
             failed = sorted({a.stage_id for a in record.run.stages
                              if self._latest(record, a.stage_id).status == "failed"})
             stage_id = record.run.current_stage if record.run.current_stage in failed else next(iter(failed), None)
+            previous = None
             if stage_id is None:
-                latest = {a.stage_id: self._latest(record, a.stage_id) for a in record.run.stages}
-                if record.run.status == "failed" and latest and all(
-                        a.status in {"succeeded", "skipped"} for a in latest.values()):
-                    # Public manual retry executes a failed agent. Restoring accepted
-                    # results/checkpoints is the existing internal Lifecycle path.
-                    raise ControlError(409, "RECOVERY_REQUIRED", "Accepted results require internal checkpoint or assembly recovery")
-                raise conflict("Run has no failed execution stage")
-            previous = self._latest(record, stage_id)
-            if previous.status != "failed":
-                raise conflict("Selected stage did not fail")
-            source = self._private(record, previous)
-            if not record.saved_state or not source.input_state or not source.input_hash:
-                raise ControlError(500, "RESUME_STATE_UNAVAILABLE", "Saved recovery state is unavailable")
+                if record.run.status == "budget_exceeded":
+                    stage_id, contract_version, source = self._next_unstarted_stage(record)
+                    attempt_no = 1
+                    input_hash, input_state = source["input_hash"], source["input_state"]
+                else:
+                    latest = {a.stage_id: self._latest(record, a.stage_id) for a in record.run.stages}
+                    if latest and all(a.status in {"succeeded", "skipped"} for a in latest.values()):
+                        raise ControlError(409, "RECOVERY_REQUIRED", "Accepted results require internal checkpoint or assembly recovery")
+                    raise conflict("Run has no failed execution stage")
+            else:
+                previous = self._latest(record, stage_id)
+                source = self._private(record, previous)
+                if not record.saved_state or not source.input_state or not source.input_hash:
+                    raise ControlError(500, "RESUME_STATE_UNAVAILABLE", "Saved recovery state is unavailable")
+                contract_version, attempt_no = previous.contract_version, previous.attempt_no + 1
+                input_hash, input_state = source.input_hash, source.input_state
             limits = body.limits or record.run.limits
             old = record.run.limits
             if limits.max_calls < old.max_calls or limits.max_output_tokens < old.max_output_tokens:
@@ -148,10 +202,10 @@ class RunControlService:
                         or limits.max_output_tokens < required.max_output_tokens):
                     raise conflict("Exhausted limits must be increased enough for next work")
             self.authorize_retry(record, limits.model_copy(deep=True))
-            attempt = StageAttempt(stage_id=stage_id, attempt_no=previous.attempt_no + 1,
-                                   contract_version=previous.contract_version, status="pending")
+            attempt = StageAttempt(stage_id=stage_id, attempt_no=attempt_no,
+                                   contract_version=contract_version, status="pending")
             private = AttemptState(stage_id=stage_id, attempt_no=attempt.attempt_no,
-                                   input_hash=source.input_hash, input_state=deepcopy(source.input_state))
+                                   input_hash=input_hash, input_state=deepcopy(input_state))
             record.run.stages.append(attempt)
             record.run.stages.sort(key=lambda a: (a.stage_id, a.attempt_no))
             record.attempts.append(private)
@@ -163,9 +217,10 @@ class RunControlService:
             record.run.current_stage = stage_id
             record.run.stop_reason = None
             self._stage_event(record, attempt, None)
-            self._event(record, "retry.scheduled", stage_id=stage_id, mode="manual",
-                        previous_attempt_no=previous.attempt_no, next_attempt_no=attempt.attempt_no,
-                        reason_code="MANUAL_RETRY")
+            if previous is not None:
+                self._event(record, "retry.scheduled", stage_id=stage_id, mode="manual",
+                            previous_attempt_no=previous.attempt_no, next_attempt_no=attempt.attempt_no,
+                            reason_code="MANUAL_RETRY")
             self._status(record, "queued")
             self._event(record, "metrics.updated", metrics=record.run.metrics.model_dump(),
                         tokens_complete=record.tokens_complete)
