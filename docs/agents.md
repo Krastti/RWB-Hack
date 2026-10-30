@@ -21,7 +21,7 @@ owner, путь на сервере, следующий узел или Run.stat
 | A-02 Prompt | C-02 context + resolved analysis-input → проверенный draft/Markdown | Есть, не AgentResult node |
 | A-03 Analyst | A-01/A-02 → requirements/questions/system-analysis artifacts | Legacy ядро 0.1 не заменяет bridge C-02 |
 | A-04 LangGraph | AnalysisNode/ArtifactStore/checkpointer → анализ/ожидание/resume | Есть внутренний граф без общего worker/HTTP persistence |
-| A-05–A-09 Architecture | Анализ → architecture, OpenAPI, data-model, ui-spec, generation-plan единой версии | Schemas/fixtures; полного runtime нет |
+| A-05–A-09 Architecture | Анализ → architecture, OpenAPI, data-model, ui-spec, generation-plan единой версии | Есть отдельный A-06; полного архитектурного этапа ещё нет |
 | A-10–A-18 Coding | Frozen API/data/UI/plan → предметные frontend/backend/models/migrations/adapters/docs и fan-out/join | Правила профиля, не готовые агенты |
 | A-19 Assembly | Принятые bytes/metadata → manifest/traceability/snapshot | Правила проверки; не замена build/test |
 | A-20 Budget | Общие резервы/usage → допуск и причины остановки | Полный ledger/admission требует интеграции |
@@ -33,6 +33,13 @@ A-06 владеет предметным OpenAPI, A-07 — data schema, A-08 —
 Конфликт API возвращается архитектору, не исправляется генератором скрыто.
 Mobile Kotlin/Compose (X-01/X-02), PostGIS (X-03), geo-adapters/session events
 (X-04/X-05), mobile graph/manifest/UI (X-06/X-07) — отдельные расширения.
+
+[A-06 OpenAPI generator](../backend/app/agents/generators/openapi/README.md) принимает
+разрешённый C-02 requirements artifact и замороженный профиль, делает один вызов
+A-01, проверяет draft/FR/roles/references и формирует `contracts/openapi.yaml`
+версии 3.1.0 с C-02 metadata/usage. Публичный интерфейс и offline-пример находятся
+рядом с модулем. Подключение к архитектурному этапу — A-09 (#87); генератор не
+меняет Run.status, storage или общий API платформы.
 
 ## Версии и C-02 envelope
 
