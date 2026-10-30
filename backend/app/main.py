@@ -7,6 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
+from starlette.exceptions import HTTPException
 
 from .api.auth import configure_auth
 from .api.common import error_response
@@ -39,6 +40,17 @@ def create_app(
     app.state.engine = engine
     configure_auth(app, AuthService(PostgreSQLUserRepository(sessions), auth_config))
     configure_projects(app, ProjectService(PostgreSQLProjectRepository(sessions, cursor_secret=auth_config.secret_key)))
+
+    @app.exception_handler(404)
+    @app.exception_handler(405)
+    async def routing_error_handler(request: Request, exc: HTTPException):
+        code, message = (
+            ("NOT_FOUND", "Resource not found") if exc.status_code == 404
+            else ("METHOD_NOT_ALLOWED", "Method not allowed")
+        )
+        response = error_response(request, exc.status_code, code, message)
+        response.headers.update(exc.headers or {})
+        return response
 
     @app.exception_handler(SQLAlchemyError)
     async def storage_error_handler(request: Request, exc: SQLAlchemyError):

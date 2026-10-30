@@ -21,7 +21,18 @@ router = APIRouter(
     responses={
         401: {"model": Error, "description": "UNAUTHORIZED"},
         404: {"model": Error, "description": "NOT_FOUND"},
+        409: {
+            "model": Error,
+            "description": "Reserved by C-01; project conflict handling is deferred",
+        },
         422: {"model": Error, "description": "VALIDATION_ERROR"},
+        429: {
+            "model": Error,
+            "description": "RATE_LIMIT_EXCEEDED; rate limiting is deferred",
+            "headers": {
+                "Retry-After": {"schema": {"type": "integer", "minimum": 1}},
+            },
+        },
         500: {"model": Error, "description": "INTERNAL_ERROR"},
     },
 )
