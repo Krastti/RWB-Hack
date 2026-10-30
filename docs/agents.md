@@ -1,6 +1,6 @@
 # Агенты, контракты и профиль
 
-Здесь описаны существующие A-01/A-02/A-04, legacy analyst и правила будущих
+Здесь описаны существующие A-01/A-02/A-04/A-07, legacy analyst и правила будущих
 потребителей. Наличие интерфейса или схемы не означает готового multi-agent runtime.
 Нормативные источники: [C-02 JSON Schema Draft 2020-12](../contracts/agents/v1/),
 [C-03 lifecycle](../contracts/lifecycle.md), [C-01 HTTP](../contracts/platform.openapi.yaml),
@@ -21,7 +21,7 @@ owner, путь на сервере, следующий узел или Run.stat
 | A-02 Prompt | C-02 context + resolved analysis-input → проверенный draft/Markdown | Есть, не AgentResult node |
 | A-03 Analyst | A-01/A-02 → requirements/questions/system-analysis artifacts | Legacy ядро 0.1 не заменяет bridge C-02 |
 | A-04 LangGraph | AnalysisNode/ArtifactStore/checkpointer → анализ/ожидание/resume | Есть внутренний граф без общего worker/HTTP persistence |
-| A-05–A-09 Architecture | Анализ → architecture, OpenAPI, data-model, ui-spec, generation-plan единой версии | Schemas/fixtures; полного runtime нет |
+| A-05–A-09 Architecture | Анализ → architecture, OpenAPI, data-model, ui-spec, generation-plan единой версии | Есть генератор data-model; общий архитектурный этап ещё не подключён |
 | A-10–A-18 Coding | Frozen API/data/UI/plan → предметные frontend/backend/models/migrations/adapters/docs и fan-out/join | Правила профиля, не готовые агенты |
 | A-19 Assembly | Принятые bytes/metadata → manifest/traceability/snapshot | Правила проверки; не замена build/test |
 | A-20 Budget | Общие резервы/usage → допуск и причины остановки | Полный ledger/admission требует интеграции |
@@ -337,6 +337,77 @@ idempotency/outbox/public events. Parallel calls одного Run без вне�
 [StageWorker и queue adapter](backend.md#очередь-и-worker-adapter) принимают
 orchestrator/recovery callable, но автоматически не оборачивают ArtifactStore.accept
 и checkpoint графа в execution.transaction; этот bridge ещё нужен.
+
+## Генератор модели данных
+
+Модуль [data_model](../backend/app/agents/generators/data_model/) создаёт модель
+PostgreSQL по принятому анализу. Формат `data-model/1.0` определён в
+[model.schema.json](../backend/app/agents/generators/data_model/model.schema.json).
+Он описывает содержимое файла; metadata артефакта сохраняет C-02 `schema_version=1.0`.
+Старый иллюстративный data_model в общих fixtures не соответствует этому формату.
+
+| Функция | Назначение |
+|---|---|
+| `build_data_model_prompt(context, requirements_artifact, profile=...)` | Проверить C-02 вход и inline requirements, подготовить prompt и эффективные лимиты |
+| `generate_data_model(llm, prepared)` | Один вызов существующего `generate` port; вернуть проверенный payload или ошибку с исходным usage |
+| `validate_data_model(model, requirements=..., requirements_artifact_id=..., contract_version=..., profile_id=...)` | Проверить payload и его ссылки перед использованием потребителем |
+| `make_data_model_artifact(model, prepared, artifact_id=..., attempt_id=..., version=1)` | Сериализовать проверенные bytes в C-02 артефакт `data-model.json` |
+
+Caller предварительно авторизует входы и передаёт сохранённый snapshot профиля.
+Storage reference сначала разрешается в проверенный inline artifact. Регламент и
+profile checksum фиксирует общий loader; генератор не перечитывает defaults Run.
+Нерешённый required-вопрос и нулевой лимит вызовов отклоняются до LLM.
+Для A-01 нужно установить `prepared.max_output_tokens` и `timeout_seconds` в
+LLMConfig, а перед вызовом зарезервировать бюджет. Retry и учёт Run остаются снаружи.
+
+Модель содержит contract_version/profile_id, UUID исходных requirements,
+entities, relationships, assumptions, unresolved_items и fr_coverage. Сущность
+задаёт имя, исходные source_refs, fields, именованный primary_key, unique/check
+constraints и indexes. source_refs ссылаются на точный text элемента entities,
+roles, functional_requirements, nonfunctional_requirements, constraints или
+security_requirements принятого анализа. Так можно обосновать техническую таблицу
+аудита требованиями безопасности. Имена SQL — lowercase ASCII snake_case до 63
+символов. Каждый FR перечисляется в coverage как modeled с объединением напрямую
+связанных сущностей и обоих концов связанных с FR relationships либо not_applicable
+с причиной. Связь может покрывать FR без дублирования его в related_fr_ids сущностей.
+
+Типы: uuid, varchar, text, integer, bigint, numeric, boolean, date, timestamptz,
+jsonb. Varchar требует max_length; numeric — precision/scale, остальные параметры
+равны null. Numeric literals передаются строками для сохранения точности.
+Nullable и default заданы явно; application_uuid4 — default приложения,
+server_now — серверный default timestamptz. Literal defaults jsonb не поддержаны.
+
+FK содержит source/target fields, cardinality, match и on_delete. Target должен
+быть PK/unique key или unique btree index; one_to_one требует unique source.
+Many-to-many представляется join-сущностью. Проверяются arity/типы FK, nullable
+для set_null, существование полей constraints/indexes, defaults и CHECK predicates.
+Predicates — типизированные eq/ne/lt/lte/gt/gte/in/not_in/is_null/is_not_null;
+SQL expressions, partial/expression indexes и PostGIS в этом формате отсутствуют.
+CHECK сохраняет PostgreSQL null semantics и не заменяет NOT NULL или авторизацию.
+
+Неподдержанное обязательное решение записывается в unresolved_items и блокирует
+приёмку модели. При DATA_MODEL_UNRESOLVED generate_data_model возвращает ok=false,
+исходный usage и data={"unresolved_items": [...]} с копией проверенных пунктов для
+caller; полный payload не возвращается. Прямая валидация сохраняет эти пункты в
+DataModelError.unresolved_items. Текст исключения и LLMError содержат только
+безопасную диагностику. Остальные ошибки структуры, ссылок, бюджета, UTF-8 или
+контекста возвращаются с data=None и исходным usage, без повторного запроса.
+Полнота смысла анализа и согласование имён с OpenAPI проверяются архитектурным этапом.
+
+Владелец выходного артефакта — architecture. IDs и version резервирует caller;
+генератор вычисляет UTF-8 size/checksum, но не пишет в storage, не выпускает
+AgentResult и не меняет состояние Run. Архитектурный агрегатор должен применить
+этот validator и согласовать contract_version до передачи backend/миграциям.
+Общий C-02 validator сам по себе проверяет data_model только как JSON.
+
+Offline пример использует HTTPX MockTransport и ручной fixture:
+
+```sh
+.venv/bin/python -m backend.app.agents.generators.data_model.example
+```
+
+Он проходит через существующий adapter и возвращает валидный data-model payload;
+реальный provider, PostgreSQL и генерация миграций не запускаются.
 
 ## Профиль C-05
 
