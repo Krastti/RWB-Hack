@@ -160,9 +160,17 @@ model, outcome, input_tokens/output_tokens и duration_seconds. Реальная
 
 usage.duration_seconds — время одного этапа без ожидания человека. Оно не обязано
 равняться сумме длительностей вызовов, например при параллельных обращениях.
-В API Metrics: input_tokens → tokens_in, output_tokens → tokens_out,
-calls → model_calls, секунды → duration_ms. История attempts и ручных уточнений
-считается по сохранённым событиям, не выводится из номера последней попытки.
+В публичном OpenAPI Metrics поля остаются неотрицательными целыми числами:
+tokens_in/tokens_out — суммы известных значений из model_calls, calls переводится
+в model_calls, секунды — в duration_ms. Внутренний null не передаётся напрямую
+в числовое поле API и не заменяется фактом нулевого расхода. По C-03 полнота
+сумм публикуется отдельно в metrics.updated: Event.data.tokens_complete.
+При неизвестном usage UI не объявляет эти числовые суммы окончательными;
+для бюджета используется консервативный резерв, а не только известная сумма.
+Подробное преобразование — в [lifecycle-контракте](../lifecycle.md), раздел 10.
+Это уточнение отображения в API, схемы C-02 и nullable внутренний usage не меняются.
+История attempts и ручных уточнений считается по сохранённым событиям,
+не выводится из номера последней попытки.
 
 Diagnostic: code, безопасное message, severity, retryable, related_fr_ids,
 при необходимости artifact_id. retryable — разрешённость обсуждения повтора,
