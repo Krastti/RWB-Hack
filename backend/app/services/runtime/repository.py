@@ -21,6 +21,8 @@ ACTIVE = {"queued", "running", "waiting_for_input", "cancelling"}
 class PostgreSQLRuntimeRepository:
     def __init__(self, sessions, queue):
         self.sessions, self.queue = sessions, queue
+        self.guard = None  # Configured by compose_runtime.
+        self.states = None
 
     @contextmanager
     def transaction(self, owner_id: UUID, run_id: UUID):
@@ -44,8 +46,24 @@ class PostgreSQLRuntimeRepository:
         record, state = self.load(session, run)
         original = record.model_copy(deep=True)
         yield record
+        # Terminal intent belongs to the server, not the graph snapshot.
+        intent = original.saved_state.get("terminal_intent")
+        finalizing = run.id in session.info.get("finalizing_terminal_intents", set())
+        receipt = original.saved_state.get("terminal_intent_finalized")
+        if not finalizing:
+            if receipt is not None:
+                record.saved_state["terminal_intent_finalized"] = deepcopy(receipt)
+                record.saved_state.pop("terminal_intent", None)
+            else:
+                record.saved_state.pop("terminal_intent_finalized", None)
+                if intent is not None:
+                    record.saved_state["terminal_intent"] = deepcopy(intent)
         if record != original:
             self.save(session, run, state, record, original)
+            intent = record.saved_state.get("terminal_intent")
+            if (intent and record.run.status == "running" and self.states is not None
+                    and not any(a.status in {"pending", "running"} for a in record.run.stages)):
+                self.states.finalize_terminal_intent(session, run)
 
     def load(self, session, run):
         try:
@@ -99,7 +117,36 @@ class PostgreSQLRuntimeRepository:
         from ..run_control import RunControlService
         return RunControlService(BoundStore(), authorize_retry=deny_retry)
 
+    def _guard_successes(self, session, row, record, original):
+        """Apply the lifecycle domain guard to every newly accepted result."""
+        from ..lifecycle.models import LifecycleError
+        from ..lifecycle.service import Change
+        from .lifecycle import BoundLifecycleRepository
+
+        previous = {(a.stage_id, a.attempt_no): a.status for a in original.run.stages}
+        successes = [a for a in record.run.stages
+                     if a.status == "succeeded" and previous.get((a.stage_id, a.attempt_no)) != "succeeded"]
+        if not successes:
+            return
+        if not callable(self.guard):
+            raise LifecycleError(409, "DOMAIN_GUARD_REQUIRED", "A domain transition guard is required")
+        repository = BoundLifecycleRepository(self, session, row)
+        with repository.transaction(owner_id=record.owner_id, run_id=row.id) as snapshot:
+            snapshot.data = record.model_dump(mode="json", exclude={"events"})
+            for attempt in successes:
+                source = next((a for a in record.attempts if
+                               (a.stage_id, a.attempt_no) == (attempt.stage_id, attempt.attempt_no)), None)
+                if source is None or previous.get((attempt.stage_id, attempt.attempt_no)) != "running":
+                    raise LifecycleError(409, "RUN_STATE_CONFLICT", "Invalid accepted attempt")
+                change = Change(kind="attempt", source="running", target="succeeded",
+                                attempt_id=source.attempt_id, stage_id=attempt.stage_id)
+                if self.guard(snapshot.model_copy(deep=True), change) is not None:
+                    raise LifecycleError(422, "VALIDATION_ERROR", "Guard must approve with None or raise an error")
+            # This is a detached proposal, not a lifecycle transaction to persist.
+            snapshot.data = original.model_dump(mode="json", exclude={"events"})
+
     def save(self, session, row, state, record, original):
+        self._guard_successes(session, row, record, original)
         if (record.owner_id != original.owner_id or any(
                 getattr(record.run, name) != getattr(original.run, name)
                 for name in ("run_id", "project_id", "revision_id", "profile_id", "created_at"))):

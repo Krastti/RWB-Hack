@@ -53,9 +53,9 @@ flyway -configFiles=backend/flyway.conf migrate
 PYTHONPATH=backend .venv/bin/uvicorn app.main:create_app --factory
 ```
 
-Для штатного API/runtime нужны V1–V7; миграции поставляются в этой ветке
+Для штатного API/runtime нужны V1–V9; миграции поставляются в этой ветке
 и применяются по порядку без пропуска V4. V6 сохраняет private execution/control state.
-V7 сохраняет Clarification, immutable inputs и replay пакетов ответов;
+V9 сохраняет Clarification, immutable inputs и replay пакетов ответов;
 [интерфейс answers](../backend/app/api/answers/README.md) подключён штатной factory.
 API слушает `127.0.0.1:8000`. Flyway/настоящий PostgreSQL-запуск требуют доступной
 инфраструктуры; список локально выполненных проверок приводится в PR, а не

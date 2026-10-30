@@ -15,6 +15,25 @@ def persist_questions(session, run):
     """Producer hook: call under Run lock for EACH published revision, before commit."""
     if run.questions_revision < 1:
         raise ControlError(409, "RUN_STATE_CONFLICT", "No question revision published")
+    from uuid import UUID
+    try:
+        ids = [UUID(str(q["question_id"])) for q in run.questions]
+    except (ValueError, TypeError, KeyError) as exc:
+        raise ControlError(422, "VALIDATION_ERROR", "Invalid question identity") from exc
+    if len(ids) != len(set(ids)):
+        raise ControlError(422, "VALIDATION_ERROR", "Duplicate question identity")
+    published = list(session.scalars(select(Clarification).where(
+        Clarification.run_id == run.id, Clarification.questions_revision == run.questions_revision)))
+    if published and {r.question_id for r in published} != set(ids):
+        raise ControlError(409, "RUN_STATE_CONFLICT", "Published question set changed")
+    by_id = dict(zip(ids, run.questions))
+    confirmed = session.scalars(select(Clarification).where(
+        Clarification.run_id == run.id, Clarification.answer.is_not(None))).all()
+    for old in confirmed:
+        question = by_id.get(old.question_id)
+        if question is None or any(getattr(old, key) != question.get(key) for key in
+                                   ("question", "reason", "related_fr_ids", "required", "answer")):
+            raise ControlError(409, "RUN_STATE_CONFLICT", "Confirmed question must survive unchanged")
     for question in run.questions:
         from uuid import UUID
         identity = (run.id, run.questions_revision, UUID(str(question["question_id"])))
@@ -105,6 +124,7 @@ class AnswersService:
                                        contract_version=stage.contract_version, status="pending")
                 record.attempts.append(private)
                 run.stages.append(attempt)
+                run.stages.sort(key=lambda a: (a.stage_id, a.attempt_no))
                 run.metrics.attempts += 1
                 run.metrics.manual_clarifications += len(changed)
                 record.saved_state["accepted_answers"] = deepcopy(payload)
@@ -113,6 +133,8 @@ class AnswersService:
                 control._event(record, "answers.accepted", questions_revision=run.questions_revision,
                                answered_question_ids=changed, input_artifact_id=str(input_id))
                 control._status(record, "running")
+                snapshot_at = now()
+                run.metrics.duration_ms = max(0, int((snapshot_at - run.created_at).total_seconds() * 1000))
                 control._event(record, "metrics.updated", metrics=run.metrics.model_dump(),
                                tokens_complete=record.tokens_complete)
                 run.updated_at = now()

@@ -52,7 +52,8 @@ class PostgreSQLQueueStore:
             ).order_by(WorkerCommand.next_delivery_at, WorkerCommand.id).limit(limit)
                 .with_for_update(skip_locked=True)).all()
             for row in rows:
-                row.next_delivery_at = now + timedelta(seconds=self.config.redelivery_seconds)
+                if row.state != "lost":
+                    row.next_delivery_at = now + timedelta(seconds=self.config.redelivery_seconds)
             return [row.id for row in rows]
 
     def claim(self, command_id: UUID) -> Lease | None:
@@ -64,12 +65,17 @@ class PostgreSQLQueueStore:
             now = self._now(session)
             if row.state in {"completed", "obsolete"}:
                 return None
+            if row.state == "lost" and row.next_delivery_at > now:
+                raise LeaseBusy()
             if row.state in {"running", "recovering"}:
                 if row.expires_at > now:
                     raise LeaseBusy()
                 if row.state == "running":
                     self._mark_lost(session, row, run, attempt, "WORKER_LOST")
                 else:
+                    if row.recovery_generation != row.generation:
+                        self._recovery_failed(session, row, run, attempt)
+                        return None
                     self._clear_lease(row, "lost")
             recovery = row.state == "lost"
             if not recovery:
@@ -149,8 +155,7 @@ class PostgreSQLQueueStore:
                     self._assert_lease(session, row, lease)
                     if recovery_complete:
                         session.refresh(attempt)
-                        if attempt.status in {"pending", "running"}:
-                            raise RuntimeError("Recovery did not persist an attempt outcome")
+                        self._assert_recovery_outcome(session, run, attempt)
                         row.recovery_generation = lease.generation
                         session.flush()
                     # Проверка после последней записи, до единственного разрешённого commit.
@@ -163,26 +168,72 @@ class PostgreSQLQueueStore:
 
     def complete(self, lease: Lease) -> None:
         with self.sessions.begin() as session:
-            row, _, attempt = self._require_lease(session, lease)
+            row, run, attempt = self._require_lease(session, lease)
             if not lease.recovery and (
                 not self._latest(session, attempt) or attempt.status in {"pending", "running"}
             ):
                 raise RuntimeError("Orchestrator did not persist an attempt outcome")
-            if lease.recovery and (
-                row.recovery_generation != lease.generation or attempt.status in {"pending", "running"}
-            ):
-                raise RuntimeError("Recovery did not acknowledge a persisted outcome")
+            if lease.recovery:
+                if row.recovery_generation != lease.generation:
+                    raise RuntimeError("Recovery did not acknowledge a persisted outcome")
+                self._assert_recovery_outcome(session, run, attempt)
             self._clear_lease(row, "completed")
+
+    @staticmethod
+    def _assert_recovery_outcome(session, run, attempt):
+        if attempt.status != "failed":
+            raise RuntimeError("Recovery requires a failed attempt")
+        session.refresh(run)
+        if run.status in {"failed", "cancelled", "completed", "budget_exceeded"}:
+            return
+        if run.status == "cancelling":
+            active = list(session.scalars(select(StageAttempt.status).where(
+                StageAttempt.run_id == run.id, StageAttempt.status.in_(("pending", "running")))))
+            if active and all(status == "running" for status in active):
+                # Durable cancel owns the remaining safe-boundary callbacks.
+                return
+        from ...services.runtime.models import RunRuntimeState
+        state = session.get(RunRuntimeState, run.id)
+        intent = (state.payload.get("saved_state", {}).get("terminal_intent") if state else None)
+        if run.status == "running" and isinstance(intent, dict) and intent.get("target") == "failed":
+            return
+        successor = session.scalar(select(StageAttempt).where(
+            StageAttempt.run_id == attempt.run_id, StageAttempt.stage_id == attempt.stage_id,
+            StageAttempt.attempt_no == attempt.attempt_no + 1))
+        if (successor is None or successor.input_hash != attempt.input_hash
+                or successor.contract_version != attempt.contract_version
+                or session.scalar(select(WorkerCommand.id).where(
+                    WorkerCommand.attempt_id == successor.id)) is None):
+            raise RuntimeError("Recovery did not persist a valid successor command")
 
     def abandon(self, lease: Lease) -> None:
         """Ошибка callable не разрешает повторный внешний вызов старой попытки."""
         with self.sessions.begin() as session:
             row, run, attempt = self._require_lease(session, lease)
             if lease.recovery:
-                self._clear_lease(row, "lost")
+                if row.recovery_generation == lease.generation:
+                    self._assert_recovery_outcome(session, run, attempt)
+                    self._clear_lease(row, "completed")
+                else:
+                    self._recovery_failed(session, row, run, attempt)
+                return
             else:
                 self._mark_lost(session, row, run, attempt, "ORCHESTRATOR_FAILED")
             row.next_delivery_at = self._now(session)
+
+    def _recovery_failed(self, session, row, run, attempt):
+        row.recovery_failures += 1
+        # Safe diagnostic code; handler exception messages may contain credentials.
+        row.recovery_error = "RECOVERY_HANDLER_FAILED"
+        self._clear_lease(row, "obsolete" if row.recovery_failures >= 3 else "lost")
+        row.next_delivery_at = self._now(session) + timedelta(seconds=min(300, 5 * 2 ** (row.recovery_failures - 1)))
+        if row.recovery_failures >= 3:
+            self._recovery_exhausted(session, run, attempt)
+
+    def _recovery_exhausted(self, session, run, attempt):
+        # Base transport has no domain authority. Durable obsolete + diagnostic
+        # preserves an escalation for integrations without runtime composition.
+        pass
 
     @staticmethod
     def _now(session: Session):

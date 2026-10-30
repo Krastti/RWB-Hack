@@ -2,7 +2,7 @@
 
 C-01 2.1.0, C-03 1.0. Штатный `create_app()` подключает
 `POST /api/v1/runs/{run_id}/answers`, Bearer и обязательный Idempotency-Key.
-Ответ — 202 с Run. Требуются PostgreSQL V1–V7 и runtime из #140.
+Ответ — 202 с Run. Требуются PostgreSQL V1–V9 и runtime из #140.
 
 ```json
 {
@@ -49,6 +49,13 @@ frozen input и полный набор подтверждённых ответ�
 подделывает checkpoint и не требует готового checkpoint для приёма ответов.
 Бюджет следующего модельного вызова проверяет worker; принятые ответы не теряются.
 
-Откат: остановить приём answers и исполнителей, откатить код; сохранить V7
+Откат: остановить приём answers и исполнителей, откатить код; сохранить V9
 Clarification/Input/Replay и V5 commands для восстановления. Не удалять принятые
 ответы и не применять миграцию вниз поверх пользовательских данных.
+
+Clarifications now use V9 after the parent runtime's published V7 (recovery) and
+V8 (intake). Upgrade from runtime V8 is supported without changing its checksums.
+An environment that previously applied the standalone, unmerged clarifications
+V7 must not run this history automatically: its V7 identity conflicts with the
+published runtime V7. Preserve its database and Flyway history for a separately
+reviewed data-preserving migration; do not repair checksums or delete data.
