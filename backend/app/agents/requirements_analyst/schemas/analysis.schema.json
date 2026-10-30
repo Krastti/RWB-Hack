@@ -1,0 +1,531 @@
+{
+  "$defs": {
+    "AcceptanceCriterion": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^AC-[0-9]{3,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "related_fr_ids": {
+          "items": {
+            "pattern": "^FR-[0-9]{3,}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Related Fr Ids",
+          "type": "array"
+        },
+        "given": {
+          "minLength": 1,
+          "title": "Given",
+          "type": "string"
+        },
+        "when": {
+          "minLength": 1,
+          "title": "When",
+          "type": "string"
+        },
+        "then": {
+          "minLength": 1,
+          "title": "Then",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "related_fr_ids",
+        "given",
+        "when",
+        "then"
+      ],
+      "title": "AcceptanceCriterion",
+      "type": "object"
+    },
+    "Assumption": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^ASM-[0-9]{3,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "related_fr_ids": {
+          "items": {
+            "pattern": "^FR-[0-9]{3,}$",
+            "type": "string"
+          },
+          "title": "Related Fr Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "reason",
+        "related_fr_ids"
+      ],
+      "title": "Assumption",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "enum": [
+            "requirements",
+            "answer"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "quote": {
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        },
+        "question_id": {
+          "anyOf": [
+            {
+              "pattern": "^Q-[0-9]{3,}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Question Id"
+        }
+      },
+      "required": [
+        "source",
+        "quote",
+        "question_id"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Finding": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "evidence"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "FunctionalRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^FR-[0-9]{3,}$",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "evidence",
+        "id"
+      ],
+      "title": "FunctionalRequirement",
+      "type": "object"
+    },
+    "NonfunctionalRequirement": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^NFR-[0-9]{3,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "verification": {
+          "minLength": 1,
+          "title": "Verification",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "evidence",
+        "id",
+        "verification"
+      ],
+      "title": "NonfunctionalRequirement",
+      "type": "object"
+    },
+    "Question": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^Q-[0-9]{3,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "critical": {
+          "title": "Critical",
+          "type": "boolean"
+        },
+        "related_fr_ids": {
+          "items": {
+            "pattern": "^FR-[0-9]{3,}$",
+            "type": "string"
+          },
+          "title": "Related Fr Ids",
+          "type": "array"
+        },
+        "answer": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Answer"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "reason",
+        "critical",
+        "related_fr_ids",
+        "answer"
+      ],
+      "title": "Question",
+      "type": "object"
+    },
+    "Risk": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^RISK-[0-9]{3,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "impact": {
+          "minLength": 1,
+          "title": "Impact",
+          "type": "string"
+        },
+        "related_fr_ids": {
+          "items": {
+            "pattern": "^FR-[0-9]{3,}$",
+            "type": "string"
+          },
+          "title": "Related Fr Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "impact",
+        "related_fr_ids"
+      ],
+      "title": "Risk",
+      "type": "object"
+    },
+    "Role": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^ROLE-[0-9]{3,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Permissions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "evidence",
+        "id",
+        "permissions"
+      ],
+      "title": "Role",
+      "type": "object"
+    },
+    "Scenario": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^SC-[0-9]{3,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "role_ids": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Role Ids",
+          "type": "array"
+        },
+        "related_fr_ids": {
+          "items": {
+            "pattern": "^FR-[0-9]{3,}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Related Fr Ids",
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Steps",
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "evidence",
+        "id",
+        "role_ids",
+        "related_fr_ids",
+        "steps"
+      ],
+      "title": "Scenario",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "requirements-analyst/0.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "product_goals": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Product Goals",
+      "type": "array"
+    },
+    "in_scope": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "In Scope",
+      "type": "array"
+    },
+    "out_of_scope": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Out Of Scope",
+      "type": "array"
+    },
+    "roles": {
+      "items": {
+        "$ref": "#/$defs/Role"
+      },
+      "title": "Roles",
+      "type": "array"
+    },
+    "functional_requirements": {
+      "items": {
+        "$ref": "#/$defs/FunctionalRequirement"
+      },
+      "title": "Functional Requirements",
+      "type": "array"
+    },
+    "nonfunctional_requirements": {
+      "items": {
+        "$ref": "#/$defs/NonfunctionalRequirement"
+      },
+      "title": "Nonfunctional Requirements",
+      "type": "array"
+    },
+    "constraints": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Constraints",
+      "type": "array"
+    },
+    "entities": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Entities",
+      "type": "array"
+    },
+    "scenarios": {
+      "items": {
+        "$ref": "#/$defs/Scenario"
+      },
+      "title": "Scenarios",
+      "type": "array"
+    },
+    "integrations": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Integrations",
+      "type": "array"
+    },
+    "security_requirements": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Security Requirements",
+      "type": "array"
+    },
+    "acceptance_criteria": {
+      "items": {
+        "$ref": "#/$defs/AcceptanceCriterion"
+      },
+      "title": "Acceptance Criteria",
+      "type": "array"
+    },
+    "risks": {
+      "items": {
+        "$ref": "#/$defs/Risk"
+      },
+      "title": "Risks",
+      "type": "array"
+    },
+    "assumptions": {
+      "items": {
+        "$ref": "#/$defs/Assumption"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "questions": {
+      "items": {
+        "$ref": "#/$defs/Question"
+      },
+      "title": "Questions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "product_goals",
+    "in_scope",
+    "out_of_scope",
+    "roles",
+    "functional_requirements",
+    "nonfunctional_requirements",
+    "constraints",
+    "entities",
+    "scenarios",
+    "integrations",
+    "security_requirements",
+    "acceptance_criteria",
+    "risks",
+    "assumptions",
+    "questions"
+  ],
+  "title": "Analysis",
+  "type": "object"
+}
