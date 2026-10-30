@@ -318,10 +318,13 @@ Invalid result не применяется, известный usage не тер
 
 Graph/storage/checkpointer errors передаются bridge для сохранения причины и
 восстановления той же команды; отсутствие checkpoint — RESUME_STATE_UNAVAILABLE.
-Rebuild из canonical DB пока обязанность server recovery. B-06/B-08/B-12/B-13
-обеспечивают owner, lease/fencing, atomic accepted answers/pending attempts,
+Rebuild из canonical DB пока обязанность server recovery. Для production связки B-06/B-08/B-12/B-13 должны обеспечить owner, lease/fencing,
+atomic accepted answers/pending attempts,
 idempotency/outbox/public events. Parallel calls одного Run без внешнего lease
-запрещены. Граф не реализует автоматический repair или общий budget ledger.
+запрещены. Граф не реализует автоматический repair или общий budget ledger. Существующие
+[StageWorker и queue adapter](backend.md#очередь-и-worker-adapter) принимают
+orchestrator/recovery callable, но автоматически не оборачивают ArtifactStore.accept
+и checkpoint графа в execution.transaction; этот bridge ещё нужен.
 
 ## Профиль C-05
 

@@ -45,13 +45,13 @@ Mock допускается только для явно обозначенны�
 ## Архитектура и фактическое состояние
 
 Целевая цепочка: Angular → REST `/api/v1` → FastAPI/PostgreSQL → очередь/worker →
-LangGraph → LLM adapter → артефакты/snapshot → ZIP/GitLab. Celery/Redis выбраны
-для фонового исполнения, но наличие этого решения не означает готового worker.
+LangGraph → LLM adapter → артефакты/snapshot → ZIP/GitLab. Celery queue adapter и StageWorker существуют; они требуют внедряемых orchestrator/recovery
+callables и не образуют автоматически сквозной pipeline.
 
 | Область | Что есть в коде | Ограничение интеграции |
 |---|---|---|
-| HTTP и БД | Factory, JWT, проекты/ревизии, PostgreSQL repositories, ORM Run/attempt/event/idempotency, Flyway V1–V3 | Штатная factory подключает auth и projects; остальные HTTP-операции из OpenAPI не подключаются автоматически |
-| Run | Read service/router, lifecycle, cancel/retry и локальные транзакционные адаптеры | Нет общего production write adapter/dispatcher; локальные stores нельзя подключать к одному Run одновременно |
+| HTTP и БД | Factory, JWT, проекты/ревизии, PostgreSQL repositories, ORM Run/attempt/event/idempotency, Flyway V1–V3 и worker V5 | Штатная factory подключает auth и projects; остальные HTTP-операции из OpenAPI не подключаются автоматически |
+| Run | Read service/router, lifecycle, cancel/retry, queue/lease adapter, StageWorker и локальные транзакционные адаптеры | Нет общего production write adapter/dispatcher; локальные stores нельзя подключать к одному Run одновременно |
 | Анализ | A-01 adapter, A-02 prompt/renderer, legacy analyst, A-04 граф с durable SQLite checkpoints | Legacy 0.1 не является узлом C-02; полный bridge аналитика/worker отсутствует |
 | UI | Вход, проекты, Run monitor/timeline, вопросы, просмотр анализа, команды | Доступность экрана не подтверждает наличие соответствующего backend endpoint |
 | Генерация и выдача | Schemas, профиль, связанные fixtures | Полные architecture/coding/assembly/storage/ZIP/GitLab runtime не интегрированы |

@@ -17,6 +17,7 @@ HTTP-источник истины — [C-01 OpenAPI 2.1.0](../contracts/platfor
 | `services/run_queries`, `api/runs` | Чтение Run/событий через `RunReadRepository`; opt-in HTTP |
 | `services/lifecycle` | Guarded transitions, CAS/generation, события и локальный transactional adapter |
 | `services/run_control` | Cancel/retry, worker admission hooks, opt-in router и локальный adapter |
+| `adapters/queue/`, `workers/` | Celery transport, PostgreSQL WorkerCommand lease/fencing, StageWorker |
 | `agents/` | [Агенты и граф](agents.md); не HTTP orchestration |
 
 Штатная factory монтирует **auth и projects**. Run read/control routers существуют,
@@ -48,10 +49,13 @@ Flyway запускается из корня с установленными `F
 `FLYWAY_USER`, `FLYWAY_PASSWORD`:
 
 ```sh
-flyway -configFiles=backend/flyway.conf migrate
+flyway -configFiles=backend/flyway.conf -target=3 migrate
 PYTHONPATH=backend .venv/bin/uvicorn app.main:create_app --factory
 ```
 
+Для штатного API пока применяется target=3: в дереве уже есть V5 worker_commands,
+но V4 создания Run ещё должна прийти с соответствующей интеграцией. Не применяйте
+V5 раньше V4 без отдельного решения о миграции. Порядок worker — в разделе ниже.
 API слушает `127.0.0.1:8000`. Flyway/настоящий PostgreSQL-запуск требуют доступной
 инфраструктуры; список локально выполненных проверок приводится в PR, а не
 предполагается из этой инструкции. Возможна явная сборка:
@@ -404,3 +408,112 @@ project UUID, answerQuestions/retryRun/createExport — Run UUID; keys/hashes н
 публикуются в events/logs, validation errors ничего не резервируют, records без TTL.
 При конфликте SQL locking/IntegrityError обработчик должен вернуть согласованный
 409, не коммитить placeholder. Успешный 202 подтверждает принятие, не исполнение.
+
+
+## Очередь и worker adapter
+
+Существуют `app.adapters.queue.celery.create_worker_app` и `app.workers.StageWorker`.
+Это готовые transport/lease seams, не полный orchestrator и не подключённый
+HTTP→graph pipeline. Нужны PostgreSQL, Redis/RabbitMQ, callable Orchestrator и
+RecoveryHandler; фабрика не выбирает бизнес-функцию из model/message payload.
+Установка — общий requirements-worker с Celery Redis extra. Celery result backend
+не используется: результаты хранятся в БД/artifact store.
+
+`create_worker_app(*,broker_url,sessions,orchestrator,recovery,config=QueueConfig())`
+возвращает Celery с `app.queue_adapter`. Публичные методы adapter:
+`enqueue(transaction:Session,attempt_id:UUID)->UUID` сохраняет одну команду для
+latest pending StageAttempt, без commit/публикации/нового номера; replay возвращает
+тот же UUID. Регистратор берёт Run FOR UPDATE, создаёт attempt/events/metrics и
+вызывает enqueue в **той же** транзакции. Команда createRun до StageAttempt и
+команда исполнения этапа — разные сущности; bridge должен зарегистрировать первую
+попытку, не выдавать create job за готовый этап.
+
+`publish_due(limit=100)` резервирует окно доставки и отправляет только UUID,
+возвращает published/failed counts. Dispatch task `rwb.queue.dispatch.v1`, execution
+`rwb.stage.execute.v1`; PostgreSQL остаётся источником недоставленных команд.
+После ошибки/недоставки повторяется тот же command_id без новой StageAttempt.
+Celery использует JSON-only, persistent delivery, late ACK и prefetch=1;
+при prefork фабрика сбрасывает унаследованный DB pool.
+
+`QueueConfig`: queue_name=rwb.stages, control_queue=rwb.control (должны различаться),
+lease_seconds=90 (≥15), heartbeat_seconds=20 (строго чаще трети lease),
+redelivery_seconds=30, dispatch_seconds=5. Broker/DB/network deadlines задаются
+интегратором; рекомендуемые engine connect_timeout=5, statement_timeout=10000 ms.
+Stage worker и control worker разделяются, чтобы длинный этап не блокировал dispatch.
+
+Миграция V5 создаёт WorkerCommand с уникальной attempt_id и состояниями pending,
+running,lost,recovering,completed,obsolete, generation/recovery_generation,
+owner_token/expires_at и next_delivery_at. Требуется **V1–V3 → V4 → V5**: V5
+структурно ссылается на V2, но Flyway после V5 не должен получать более раннюю V4
+без согласованного out-of-order решения. V4 не поставляется этой веткой. Поэтому
+production запуск worker здесь не считается проверенным и не предлагается с
+готовым module path. Интегратор должен создать engine/sessionmaker и вызвать
+create_worker_app с реальными orchestrator/recovery. Синтаксис будущего запуска
+из backend (это схема команды, а не исполняемая команда поставляемого модуля):
+
+```text
+celery -A <реальный_модуль>:app worker -Q rwb.stages --concurrency=2
+celery -A <реальный_модуль>:app worker -Q rwb.control --concurrency=1
+celery -A <реальный_модуль>:app beat
+```
+
+Готового integration.worker в репозитории нет; выполнение worker/beat с реальной
+PostgreSQL/брокером для документационной проверки — SKIPPED.
+
+Worker блокирует Run→WorkerCommand→StageAttempt, проверяет latest attempt и
+выдаёт lease(owner_token,generation,expires_at) по времени PostgreSQL. Первый claim
+переводит queued→running/pending→running с C-03 events; новую попытку/метрику attempts
+не создаёт. Duplicate с активным lease не вызывает callable. Obsolete/completed/
+несуществующая команда не исполняется; waiting_for_input/отмена/stopped Run
+не запускают pending. Следующая попытка ждёт завершения/recovery предыдущей команды.
+
+`StageCommand` содержит command_id/run_id/attempt_id/stage_id/attempt_no/input_hash/
+contract_version; callable `(command,execution)->None` получает доверенный context.
+`LeasedExecution` ведёт heartbeat отдельным потоком/Session и предоставляет lease,
+heartbeat и `transaction(recovery_complete=False)`. Последний проверяет fencing
+до и после предметной записи, commit принадлежит context. Прямые Session.commit,
+SessionTransaction.commit и Connection.commit блокируются SQLAlchemy hooks;
+rollback/close не подтверждают результат. Raw DBAPI/SQL transaction control и
+изменение worker_commands из callable не входят в интерфейс.
+
+Orchestrator сохраняет реальные accepted refs/статусы/usage/events/checkpoint intent
+через execution.transaction, не под Run-lock во время LLM. Immutable external bytes
+можно записать до транзакции, но их принятие требует fenced commit. К возврату
+attempt должен выйти из pending/running; иначе нужна recovery. Успешная команда
+фиксируется completed и не вызывает callable при redelivery.
+
+Expired lease не разрешает повторно вызывать старую попытку. Worker записывает
+WORKER_LOST, закрывает ещё running attempt как failed, вызывает recovery под
+новым lease; ошибка callable — ORCHESTRATOR_FAILED. Принятый success не заменяется
+ошибкой транспорта. Причина в execution.lease.reason_code. Recovery идемпотентен
+по command_id и сохраняет реальное решение через **transaction(recovery_complete=True)**,
+атомарно ставя recovery_generation текущего lease. Пустой return/обычная transaction
+не подтверждают recovery: команда снова lost и будет доставлена. Другой generation
+не принимается. После сбоя между recovery commit и complete новый recovery проверяет
+уже сохранённое решение. Новый LLM при разрешении — N+1 и новая команда; принятый
+success восстанавливает checkpoint без LLM. Потерянный физический вызов может
+завершиться: fencing не делает external call exactly-once, расход не обнуляется.
+
+Callable/heartbeat/delivery/recovery errors логируются Python logger с traceback,
+command_id и для worker Run/attempt/generation/recovery. Это служебные логи,
+не HTTP/Event payload; callback должен избегать секретов в исключениях. Lease keys
+не публикуются. При ошибке сохранения recovery отдельно сохраняется диагностика
+исходной ошибки. После приёма команд V5 не удаляется откатом Python; остановите
+новые исполнения, сохраните очередь для восстановления. До приёма данных её
+удаление — отдельное согласованное изменение схемы.
+
+Текущий queue store пишет ORM state/events напрямую, а local lifecycle/control
+имеют собственные store seams. Они **не являются одним production write owner**:
+согласование общей транзакции/переходов/seq остаётся #128. AnalysisGraph ArtifactStore
+и checkpoint также должны принимать результаты через этот fenced context (#130),
+иначе старый worker обходит защиту. Эту отсутствующую связку документация не
+объявляет реализованной.
+
+`StageWorker.execute(command_id)` возвращает already_handled/completed/recovered/
+fenced; Celery task при LeaseBusy возвращает lease_busy, при временной ошибке БД —
+delivery_pending. Здесь не используется task.retry: единый планировщик redelivery —
+PostgreSQL next_delivery_at + dispatch, heartbeat переносит окно running-команды.
+Потеря сообщения/брокера не удаляет command; дубль после публикации безопасен.
+Для отката transport останавливают beat и workers, а таблицу принятых команд
+сохраняют до обработки/восстановления. Готовность этой схемы на реальной БД/брокере
+не подтверждается offline-тестами остальных модулей.
