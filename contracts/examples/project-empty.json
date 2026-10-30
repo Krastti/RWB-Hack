@@ -1,0 +1,14 @@
+{
+  "id": "8f596881-0a46-5df0-b381-f1ffae16e9c3",
+  "owner_id": "cd3c1335-e344-538a-b815-c6b3dbaac134",
+  "name": "Парковка",
+  "created_at": "2026-10-30T09:00:00Z",
+  "updated_at": "2026-10-30T09:00:00Z",
+  "current_revision": {
+    "id": "a5a4b32e-3952-551f-b71b-7d43cde9d097",
+    "number": 1,
+    "requirements_text": "Приложение управления парковкой: список зон и запуск парковочной сессии.",
+    "hash": "4d173996a0657ba7127090479eaf5d557c1c87c5459cc549e4ede197fb6ca7be"
+  },
+  "latest_run_status": null
+}
