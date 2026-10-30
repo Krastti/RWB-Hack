@@ -31,6 +31,9 @@ A-06 владеет предметным OpenAPI, A-07 — data schema, A-08 —
 предоставляют шаблоны frontend/backend; A-11/A-13 реализуют код, A-14 — модели/
 миграции, A-15 — внешние adapters, A-16 — docs, A-17 — fan-out/join, A-18 — wiring.
 Конфликт API возвращается архитектору, не исправляется генератором скрыто.
+Для A-08 реализован [генератор UI spec](../backend/app/agents/generators/ui_spec/README.md):
+схема payload, Angular/Bootstrap-каталог, проверка FR/ролей/operationId и C-02 result.
+Подключение модуля к общему архитектурному этапу остаётся в A-09.
 Mobile Kotlin/Compose (X-01/X-02), PostGIS (X-03), geo-adapters/session events
 (X-04/X-05), mobile graph/manifest/UI (X-06/X-07) — отдельные расширения.
 
@@ -74,7 +77,8 @@ questions, assumptions, usage, diagnostics. Succeeded требует миним�
 Схемы: common, agent-input/result, artifact, analysis-input, requirements,
 questions, architecture, generation-plan, manifest, traceability. Common — набор
 defs, не самостоятельный payload. Detailed data-model/ui-spec schemas не входят
-в общий C-02: их должны зафиксировать архитектурные потребители. Illustrative
+в общий C-02: [UI schema A-08](../backend/app/agents/generators/ui_spec/ui-spec.schema.json)
+проверяется своим модулем, data-model schema принадлежит A-07. Illustrative
 payloads не доказывают их валидацию; неподдерживаемый формат блокирует исполнение.
 
 Question: question_id UUID, question/reason/required/related_fr_ids, optional answer.

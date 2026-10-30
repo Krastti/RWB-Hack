@@ -1,0 +1,227 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Repair tickets example",
+    "version": "1"
+  },
+  "paths": {
+    "/tickets": {
+      "post": {
+        "operationId": "createTicket",
+        "x-role-ids": [
+          "ROLE-001"
+        ],
+        "x-fr-ids": [
+          "FR-001"
+        ],
+        "responses": {
+          "201": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ticket"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав"
+          },
+          "422": {
+            "description": "Невалидные данные"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "description": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "description"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listOwnTickets",
+        "x-role-ids": [
+          "ROLE-001"
+        ],
+        "x-fr-ids": [
+          "FR-002"
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Ticket"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав"
+          },
+          "422": {
+            "description": "Невалидные данные"
+          }
+        }
+      }
+    },
+    "/dispatch/tickets": {
+      "get": {
+        "operationId": "listTickets",
+        "x-role-ids": [
+          "ROLE-002"
+        ],
+        "x-fr-ids": [
+          "FR-003"
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Ticket"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав"
+          },
+          "422": {
+            "description": "Невалидные данные"
+          }
+        }
+      }
+    },
+    "/tickets/{id}/status": {
+      "patch": {
+        "operationId": "changeTicketStatus",
+        "x-role-ids": [
+          "ROLE-002"
+        ],
+        "x-fr-ids": [
+          "FR-003"
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешный ответ",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ticket"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав"
+          },
+          "422": {
+            "description": "Невалидные данные"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "new",
+                      "in_progress",
+                      "completed"
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Ticket": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "in_progress",
+              "completed"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "description",
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session"
+      }
+    }
+  },
+  "security": [
+    {
+      "session": []
+    }
+  ]
+}
