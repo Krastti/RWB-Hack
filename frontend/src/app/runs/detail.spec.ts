@@ -105,3 +105,19 @@ it('shows internal recovery instead of retry for accepted results after checkpoi
   expect(fixture.nativeElement.querySelector('form')).toBeNull();
   fixture.componentInstance.retry();expect(api.retry).not.toHaveBeenCalled();
 });
+
+it('allows supported budget continuation after a successful stage without retrying that stage', () => {
+  const updates = new Subject<RunSnapshot>();
+  const api = {retry:vi.fn(() => new Subject())};
+  TestBed.configureTestingModule({providers:[{provide:ApiClient,useValue:api}]});
+  TestBed.overrideComponent(RunDetail,{set:{imports:[],template:'',providers:[{provide:RunMonitor,useValue:{watch:()=>updates}}]}});
+  const fixture=TestBed.createComponent(RunDetail);
+  fixture.componentRef.setInput('id','run');fixture.detectChanges();
+  const run=makeRun({status:'budget_exceeded',stop_reason:'MAX_CALLS',stages:[{stage_id:'analysis',attempt_no:1,contract_version:'1',status:'succeeded'}]});
+  run.metrics.model_calls=run.limits.max_calls;
+  updates.next({run,events:[],error:null});
+  fixture.componentInstance.retryForm.controls.max_calls.setValue(run.limits.max_calls+1);
+  fixture.componentInstance.retry();
+  expect(api.retry).toHaveBeenCalledWith(run.run_id,{limits:{max_calls:run.limits.max_calls+1,max_output_tokens:run.limits.max_output_tokens}},expect.any(String));
+  expect(fixture.componentInstance.requiresInternalRecovery(run)).toBe(false);
+});

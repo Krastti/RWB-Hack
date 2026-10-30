@@ -178,6 +178,7 @@ class AnalysisGraph:
         if (snapshot.next or snapshot.tasks) and not any(task.interrupts for task in snapshot.tasks):
             self._graph.invoke(None, self._config(run_id), durability="sync")
             return self.snapshot(run_id)
+        self._verified_inputs(state)
         return state
 
     def _check_answers(self, state: AnalysisState, command: dict) -> None:

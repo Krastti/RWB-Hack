@@ -110,6 +110,26 @@ class CrossVersionCheckpointTests(AnalysisGraphTests):
                     self.assertEqual(failed['status'],'failed')
             self.assertEqual(len(self.calls),1)
 
+    def test_base_fixture_provenance(self):
+        from hashlib import sha256
+        from pathlib import Path
+        root=Path(__file__).parent/'fixtures/base_bdf55b3'
+        self.assertEqual(sha256((root/'analysis.py').read_bytes()).hexdigest(),'13a93453d57a2509d92909f3485b6d6333b3b11fbb47915048f91481738f961e')
+        self.assertEqual(sha256((root/'state.py').read_bytes()).hexdigest(),'5d44e444891b9928336889af4cd30855d48887d2e2e34533783f7b34d9582731')
+
+    def test_changed_legacy_artifact_metadata_is_rejected(self):
+        self.legacy_outage()
+        with self.store.db:
+            row=self.store._get('artifacts',self.run_id,self.initial['artifact_id'])
+            row['version']+=1
+            self.store.db.execute('UPDATE artifacts SET value=? WHERE run=? AND id=?',
+                (json.dumps(row),self.run_id,row['artifact_id']))
+        with open_checkpoints(self.path / 'legacy.sqlite') as saver:
+            state=AnalysisGraph(self.node,self.store,saver).recover(self.run_id)
+            self.assertEqual(state['status'],'failed')
+            self.assertEqual(state['attempts'][-1]['diagnostics'][0]['code'],'INPUT_SNAPSHOT_CHANGED')
+        self.assertEqual(len(self.calls),1)
+
 
 def load_tests(loader, tests, pattern):
     suite=unittest.TestSuite()

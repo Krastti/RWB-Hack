@@ -126,6 +126,7 @@ class RunControlService:
                     accepted = latest[by_id[parent]["stage_id"]]
                     receipt = self._private(record, accepted)
                     result = receipt.accepted_result or {}
+                    Contracts().validate("agent-result", result)
                     if (result.get("status") != accepted.status or result.get("run_id") != str(record.run.run_id)
                             or result.get("stage_id") != accepted.stage_id
                             or result.get("attempt") != accepted.attempt_no

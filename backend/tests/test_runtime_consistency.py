@@ -141,8 +141,12 @@ class ControlTests(unittest.TestCase):
         self.record.run.stop_reason = cause
         self.record.run.stages[0].status = 'succeeded'
         self.record.run.metrics.attempts = 1
-        self.record.attempts[0].accepted_result = dict(run_id=str(self.id),stage_id='analysis',
-            attempt=1,contract_version='1',status='succeeded')
+        import json
+        result=json.loads((Path(__file__).resolve().parents[2]/'contracts/agents/examples/agent-result.succeeded.json').read_text())
+        result.update(run_id=str(self.id),stage_id='analysis',attempt=1,contract_version='1')
+        for artifact in result['output_artifacts']:
+            artifact['attempt_id']=str(self.record.attempts[0].attempt_id)
+        self.record.attempts[0].accepted_result=result
         aid = str(self.record.run.revision_id)
         def task(name, deps, output):
             return dict(task_id=name,stage_id=name,owner_agent=name,depends_on=deps,
@@ -184,6 +188,17 @@ class ControlTests(unittest.TestCase):
                 self.assertEqual(len(after.outbox),1)
                 self.assertFalse(any(e['event_type']=='retry.scheduled' for e in after.events))
                 self.assertEqual(self.retry(**limits),replies[0]);self.assertEqual(self.get(),after)
+                with self.assertRaises(ControlError):
+                    self.service.start_attempt(owner_id=self.owner,run_id=self.id,stage_id='analysis',
+                        attempt_id=after.attempts[0].attempt_id)
+                self.assertEqual(self.get(),after)
+                state=self.service.start_attempt(owner_id=self.owner,run_id=self.id,stage_id='backend',
+                    attempt_id=after.attempts[1].attempt_id)
+                self.assertEqual(state,before.saved_state)
+                admitted=self.get()
+                self.assertEqual(admitted.run.stages[0],before.run.stages[0])
+                self.assertEqual(admitted.run.stages[1].status,'running')
+                self.assertEqual(admitted.run.metrics.model_calls,before.run.metrics.model_calls)
 
     def test_between_stages_requires_frozen_inputs_and_confirmed_dependencies(self):
         for defect in ('no_plan','no_inputs','unconfirmed','changed_context'):

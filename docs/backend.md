@@ -546,6 +546,8 @@ attempt, metrics/events/outbox/replay фиксируются атомарно, r
 
 Event allocator пока проверяет полную историю на каждом append (O(n log n),
 O(n) memory); он предназначен для локальных агрегатов, не долгих production log.
+Оптимизация authoritative watermark/load-boundary validation —
+[#137](https://github.com/Krastti/RWB-Hack/issues/137).
 Выделение по authoritative watermark и проверка истории на load boundary требуют
 отдельной оптимизации с сохранением lock/rollback/duplicate protection.
 
