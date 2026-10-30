@@ -46,5 +46,5 @@ def configure_run_control(app: FastAPI, service: RunControlService) -> None:
     async def control_error(request: Request, exc: ControlError):
         response = error_response(request, exc.status, exc.code, exc.message)
         if exc.status == 429:
-            response.headers["Retry-After"] = "1"
+            response.headers["Retry-After"] = str(exc.retry_after)
         return response
