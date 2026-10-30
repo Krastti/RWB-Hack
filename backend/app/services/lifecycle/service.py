@@ -1,5 +1,5 @@
 """C-03 state machine; all effects and seq allocation share a repository lock."""
-from .events import EventSequenceError, next_event
+from .events import EventAllocator, EventSequenceError, next_event
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
@@ -81,6 +81,10 @@ class LifecycleTransaction:
     """Use only through LifecycleService.transaction; snapshots are detached."""
     def __init__(self, record: RunRecord, guard: TransitionGuard, checkpoint_confirmed=None):
         self._record, self._guard = record, guard
+        try:
+            self._events = EventAllocator(record.events, record.last_seq)
+        except EventSequenceError as exc:
+            raise conflict(str(exc)) from exc
         self._checkpoint_confirmed = checkpoint_confirmed
         self._open, self._failed, self._dirty = True, False, False
 
@@ -100,7 +104,7 @@ class LifecycleTransaction:
         _json(data)
         record = self._record
         try:
-            event = next_event(run_id=record.run_id, events=record.events,
+            event = self._events.next(run_id=record.run_id,
                                event_type=event_type, data=data, stage_id=stage_id,
                                last_seq=record.last_seq)
         except EventSequenceError as exc:
@@ -155,10 +159,13 @@ class LifecycleTransaction:
         if target == "completed":
             if not latest or any(a.status not in {"succeeded", "skipped"} for a in latest.values()):
                 raise conflict("Unresolved stage results prevent completion")
+            checkpoint_snapshot = self.snapshot
             for attempt in latest.values():
                 if attempt.status == "succeeded" and (self._checkpoint_confirmed is None or
-                        self._checkpoint_confirmed(self.snapshot, attempt.model_copy(deep=True)) is not True):
+                        self._checkpoint_confirmed(checkpoint_snapshot, attempt.model_copy(deep=True)) is not True):
                     raise LifecycleError(409, "CHECKPOINT_REQUIRED", "Confirmed checkpoint is required before completion")
+            if checkpoint_snapshot != record:
+                raise conflict("Checkpoint checker must not mutate its snapshot")
         if expected == "waiting_for_input" and target == "running":
             if not any(a.status == "pending" and a.attempt_no > 1 and any(
                 b.stage_id == a.stage_id and b.attempt_no == a.attempt_no - 1 and b.status == "waiting_for_input"

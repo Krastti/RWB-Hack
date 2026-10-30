@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 
 def now() -> datetime:
@@ -96,6 +96,7 @@ class Checkpoint(Model):
 
 
 class Record(Model):
+    _event_allocator: object = PrivateAttr(default=None)
     owner_id: UUID
     run: Run
     attempts: list[AttemptState]

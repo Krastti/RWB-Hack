@@ -312,3 +312,51 @@ class LifecycleCheckpointTests(unittest.TestCase):
                 with service.transaction(owner_id=owner,run_id=run_id,expected_version=before.version) as tx:
                     tx.publish(event_type='metrics.updated',data={});raise RuntimeError('outage')
             self.assertEqual(service.get(owner_id=owner,run_id=run_id),before)
+
+
+class ReviewPerformanceTests(unittest.TestCase):
+    def test_allocator_scans_history_once_per_transaction(self):
+        from app.services.lifecycle.events import EventAllocator
+        class History(list):
+            scans = 0
+            def __iter__(self):
+                self.scans += 1
+                return super().__iter__()
+        history = History({'seq': i} for i in range(1, 10001))
+        allocator = EventAllocator(history, 10000)
+        for _ in range(100):
+            event = allocator.next(run_id=uuid4(), event_type='metrics.updated', data={})
+            history.append(event.model_dump(mode='json'))
+        self.assertEqual(history.scans, 1)
+        self.assertEqual(history[-1]['seq'], 10100)
+        history.append({'seq': 10101})
+        with self.assertRaises(EventSequenceError):
+            allocator.next(run_id=uuid4(), event_type='metrics.updated', data={})
+        for invalid in ([{'seq': 2}, {'seq': 1}], [{'seq': 1}, {'seq': 1}], [{'seq': True}]):
+            with self.assertRaises(EventSequenceError):
+                EventAllocator(invalid)
+
+    def test_completion_shares_one_detached_snapshot_and_rejects_mutation(self):
+        from app.services.lifecycle.service import LifecycleTransaction
+        record = RunRecord(run_id=uuid4(), owner_id=uuid4(), status='running',
+            context={'profile_id': 'web-fastapi-angular'}, attempts=[
+                Attempt(stage_id=f'stage-{i}', attempt_no=1, contract_version='1',
+                        input_hash='a'*64, status='succeeded') for i in range(60)])
+        snapshots = []
+        def confirmed(snapshot, attempt):
+            snapshots.append(snapshot)
+            return True
+        tx = LifecycleTransaction(record, lambda *_: None, confirmed)
+        tx.transition_run(expected='running', target='completed', reason_code='ASSEMBLED')
+        self.assertEqual(len(snapshots), 60)
+        self.assertTrue(all(s is snapshots[0] for s in snapshots))
+        self.assertIsNot(snapshots[0], record)
+        record.status = 'running'
+        def mutating(snapshot, attempt):
+            snapshot.data['untrusted'] = True
+            return True
+        tx = LifecycleTransaction(record, lambda *_: None, mutating)
+        with self.assertRaises(LifecycleError):
+            tx.transition_run(expected='running', target='completed', reason_code='ASSEMBLED')
+        self.assertEqual(record.status, 'running')
+        self.assertNotIn('untrusted', record.data)

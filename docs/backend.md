@@ -544,12 +544,17 @@ attempt, metrics/events/outbox/replay фиксируются атомарно, r
 Повтор ключа возвращает исходный ответ без новой attempt/outbox/event. #129 producer
 должен сохранять этот private resume context до остановки, а не угадывать этап.
 
-Event allocator пока проверяет полную историю на каждом append (O(n log n),
-O(n) memory); он предназначен для локальных агрегатов, не долгих production log.
-Оптимизация authoritative watermark/load-boundary validation —
-[#137](https://github.com/Krastti/RWB-Hack/issues/137).
-Выделение по authoritative watermark и проверка истории на load boundary требуют
-отдельной оптимизации с сохранением lock/rollback/duplicate protection.
+Event allocator проверяет порядок и уникальность полной истории один раз при
+открытии сервисной транзакции под блокировкой Run (O(n) времени и памяти).
+Дальнейшие append используют локальный watermark за O(1), проверяя длину и хвост
+истории; cursor не сохраняется и не переносится между транзакциями. Исключение
+откатывает события и состояние вместе. Общая сериализация локального агрегата
+по-прежнему зависит от размера истории; production PostgreSQL adapter остаётся
+отдельной интеграцией (#128, #137).
+При completed checkpoint checker получает один отделённый снимок для всех
+успешных этапов. Checker должен только читать снимок: изменение отклоняется до
+перехода статуса и фиксации событий.
+
 
 
 ## Создание Run и PostgreSQL read composition

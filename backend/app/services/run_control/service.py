@@ -1,6 +1,7 @@
 """Cancel/retry commands and worker safe-boundary hooks, C-03 v1.0."""
-from ..lifecycle.events import EventSequenceError, next_event
+from ..lifecycle.events import EventAllocator, EventSequenceError
 from ..lifecycle.service import RUN_TRANSITIONS, STAGE_TRANSITIONS
+from contextlib import contextmanager
 from copy import deepcopy
 from hashlib import sha256
 import json
@@ -22,10 +23,22 @@ class RunControlService:
         # При отказе 429 она передаёт рассчитанный retry_after в ControlError.
         self.authorize_retry = authorize_retry
 
+    @contextmanager
+    def _transaction(self, owner_id, run_id):
+        with self.store.transaction(owner_id, run_id) as record:
+            try:
+                record._event_allocator = EventAllocator(record.events)
+            except EventSequenceError as exc:
+                raise conflict(str(exc)) from exc
+            try:
+                yield record
+            finally:
+                record._event_allocator = None
+
     @staticmethod
     def _event(record: Record, event_type: str, *, stage_id: str | None = None, **data):
         try:
-            event = next_event(run_id=record.run.run_id, events=record.events,
+            event = record._event_allocator.next(run_id=record.run.run_id,
                                event_type=event_type, data=data, stage_id=stage_id)
         except EventSequenceError as exc:
             raise conflict(str(exc)) from exc
@@ -86,7 +99,7 @@ class RunControlService:
             raise ControlError(409, "UNSUPPORTED_RUN_PROFILE", "Historical Run is read-only")
 
     def cancel(self, *, owner_id: UUID, run_id: UUID) -> Run:
-        with self.store.transaction(owner_id, run_id) as record:
+        with self._transaction(owner_id, run_id) as record:
             self._profile(record)
             if record.run.status in {"queued", "running", "waiting_for_input"}:
                 self._status(record, "cancelling")
@@ -152,7 +165,7 @@ class RunControlService:
             raise ControlError(422, "VALIDATION_ERROR", "Invalid Idempotency-Key")
         fingerprint = sha256(json.dumps(body.model_dump(mode="json", exclude_none=True),
                                         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-        with self.store.transaction(owner_id, run_id) as record:
+        with self._transaction(owner_id, run_id) as record:
             self._profile(record)
             replay = record.replays.get(key)  # Scope: owner + run + retry.
             if replay is not None:
@@ -240,7 +253,7 @@ class RunControlService:
         budget. Every additional LLM call needs a new cancellation admission via
         the common run transaction; this hook admits one stage invocation.
         """
-        with self.store.transaction(owner_id, run_id) as record:
+        with self._transaction(owner_id, run_id) as record:
             self._profile(record)
             if record.run.status not in {"queued", "running"}:
                 raise conflict()
@@ -272,7 +285,7 @@ class RunControlService:
         An admitted call is active work and must later report a result/deadline,
         even if cancellation arrives before the provider responds.
         """
-        with self.store.transaction(owner_id, run_id) as record:
+        with self._transaction(owner_id, run_id) as record:
             self._profile(record)
             attempt = self._latest(record, stage_id)
             private = self._private(record, attempt)
@@ -294,7 +307,7 @@ class RunControlService:
         snapshot, preserving other workers' accepted results. It runs in this
         transaction; failure rolls back everything, including attempt completion.
         """
-        with self.store.transaction(owner_id, run_id) as record:
+        with self._transaction(owner_id, run_id) as record:
             self._profile(record)
             if record.run.status not in {"running", "cancelling"}:
                 raise conflict()
@@ -334,7 +347,7 @@ class RunControlService:
 
     def reach_boundary(self, *, owner_id: UUID, run_id: UUID) -> Run:
         """Dispatcher hook when no call is active (including waiting_for_input)."""
-        with self.store.transaction(owner_id, run_id) as record:
+        with self._transaction(owner_id, run_id) as record:
             self._profile(record)
             self._cancel_boundary(record)
             return record.run.model_copy(deep=True)
