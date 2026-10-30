@@ -186,6 +186,12 @@ class PostgreSQLQueueStore:
         session.refresh(run)
         if run.status in {"failed", "cancelled", "completed", "budget_exceeded"}:
             return
+        if run.status == "cancelling":
+            active = list(session.scalars(select(StageAttempt.status).where(
+                StageAttempt.run_id == run.id, StageAttempt.status.in_(("pending", "running")))))
+            if active and all(status == "running" for status in active):
+                # Durable cancel owns the remaining safe-boundary callbacks.
+                return
         from ...services.runtime.models import RunRuntimeState
         state = session.get(RunRuntimeState, run.id)
         intent = (state.payload.get("saved_state", {}).get("terminal_intent") if state else None)

@@ -48,6 +48,8 @@ class RuntimeRecovery:
                     return
                 if latest.status != "failed":
                     raise RuntimeError("Recovery attempt is no longer current")
+                if snapshot.status in {"cancelled", "completed", "failed", "budget_exceeded"}:
+                    return
                 if snapshot.status == "cancelling":
                     for a in snapshot.attempts:
                         if a.status == "pending":
