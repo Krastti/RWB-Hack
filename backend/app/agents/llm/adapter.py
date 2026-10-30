@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
 import json
-import math
 import time
-from typing import Any, Literal
+from typing import Any
 
 import httpx
 from jsonschema import FormatChecker
@@ -15,60 +13,9 @@ from jsonschema.validators import validator_for
 from referencing import Registry
 from referencing.exceptions import NoSuchResource
 
-
-@dataclass(frozen=True)
-class LLMConfig:
-    base_url: str
-    model: str
-    api_key: str = field(repr=False)
-    timeout_seconds: float = 60.0
-    max_output_tokens: int = 2048
-    response_format: Literal["json_schema", "json_object"] = "json_schema"
-
-    def __post_init__(self) -> None:
-        try:
-            url = httpx.URL(self.base_url)
-            valid = (
-                url.scheme in ("http", "https") and bool(url.host)
-                and not url.userinfo and not url.query and not url.fragment
-                and bool(self.model.strip()) and bool(self.api_key.strip())
-                and self.api_key.isascii() and not any(ord(c) < 33 or ord(c) == 127 for c in self.api_key)
-                and math.isfinite(self.timeout_seconds) and self.timeout_seconds > 0
-                and type(self.max_output_tokens) is int and self.max_output_tokens > 0
-                and self.response_format in ("json_schema", "json_object")
-            )
-        except (ValueError, TypeError, AttributeError):
-            valid = False
-        if not valid:
-            raise ValueError("Invalid LLM configuration") from None
-
-
-@dataclass(frozen=True)
-class LLMUsage:
-    tokens_in: int | None = None
-    tokens_out: int | None = None
-    total_tokens: int | None = None
-    latency_ms: int = 0
-    calls: int = 0
-
-
-@dataclass(frozen=True)
-class LLMError:
-    code: str
-    message: str
-    retryable: bool = False
-    http_status: int | None = None
-
-
-@dataclass(frozen=True)
-class LLMResult:
-    data: Any = field(default=None, repr=False)
-    usage: LLMUsage = field(default_factory=LLMUsage)
-    error: LLMError | None = None
-
-    @property
-    def ok(self) -> bool:
-        return self.error is None
+from .config import LLMConfig
+from .dto import LLMResult, LLMUsage
+from .error import LLMError
 
 
 def _no_remote_schema(uri: str) -> Any:
