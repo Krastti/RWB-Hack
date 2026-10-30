@@ -1,3 +1,4 @@
+import { supportsRunCommands } from './profile-policy';
 import { Component, DestroyRef, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
@@ -23,10 +24,11 @@ import { retryLimitError } from './retry-limits';
       <rwb-error [error]="actionError()" />
       <div class="row g-3 mb-4">@for (metric of metrics(r); track metric.name) { <div class="col-6 col-xl-3"><div class="card"><div class="card-body"><div class="text-secondary small">{{ metric.name }}</div><div class="h4 mb-0 mt-2">{{ metric.value }}</div>@if (metric.note) { <p class="small text-secondary mt-2 mb-0">{{ metric.note }}</p> }</div></div></div> }</div>
       <div class="mb-4">
-        @if (['queued','running','waiting_for_input'].includes(r.status)) { <button class="btn btn-outline-danger" type="button" (click)="cancel()" [disabled]="pending()">{{ pending() ? 'Отправка…' : 'Отменить запуск' }}</button> }
+        @if (!supportsRunCommands(r)) { <p class="text-secondary" role="status">Исторический профиль: запуск доступен только для просмотра. Команды управления не поддерживаются.</p> }
+        @if (supportsRunCommands(r) && ['queued','running','waiting_for_input'].includes(r.status)) { <button class="btn btn-outline-danger" type="button" (click)="cancel()" [disabled]="pending()">{{ pending() ? 'Отправка…' : 'Отменить запуск' }}</button> }
         @if (r.status === 'cancelling') { <p role="status">Отмена будет выполнена на границе этапа.</p> }
         @if (r.status === 'cancelled') { <p class="text-secondary">Запуск отменён. Новую генерацию можно начать из карточки проекта.</p> }
-        @if (r.status === 'failed' || r.status === 'budget_exceeded') {
+        @if (supportsRunCommands(r) && (r.status === 'failed' || r.status === 'budget_exceeded')) {
           <form [formGroup]="retryForm" (ngSubmit)="retry()" class="d-flex flex-wrap gap-3 align-items-end">
             @if (r.status === 'budget_exceeded') { <div><label for="max-calls" class="form-label">Лимит вызовов</label><input id="max-calls" class="form-control" type="number" formControlName="max_calls" min="1" required></div><div><label for="max-tokens" class="form-label">Лимит выходных токенов</label><input id="max-tokens" class="form-control" type="number" formControlName="max_output_tokens" min="1" required></div> }
             <button class="btn btn-primary" type="submit" [disabled]="pending() || retryForm.invalid">{{ pending() ? 'Отправка…' : 'Повторить от контрольной точки' }}</button>
@@ -34,11 +36,12 @@ import { retryLimitError } from './retry-limits';
         }
       </div>
       <rwb-timeline [run]="r" [events]="events()" />
-      <rwb-questions [run]="r" (updated)="update($event)" (stale)="monitor.refresh.next()" />
+      @if (supportsRunCommands(r)) { <rwb-questions [run]="r" (updated)="update($event)" (stale)="monitor.refresh.next()" /> }
       <rwb-analysis [runId]="r.run_id" [refreshKey]="analysisRefreshKey(r)" />
     }`,
 })
 export class RunDetail {
+  readonly supportsRunCommands = supportsRunCommands;
   readonly id = input.required<string>();
   private readonly api = inject(ApiClient);
   private readonly destroyRef = inject(DestroyRef);
@@ -88,13 +91,13 @@ export class RunDetail {
   }
   cancel() {
     const run = this.run();
-    if (!run || this.pending() || !['queued','running','waiting_for_input'].includes(run.status)) return;
+    if (!run || !supportsRunCommands(run) || this.pending() || !['queued','running','waiting_for_input'].includes(run.status)) return;
     this.pending.set(true); this.actionError.set(null);
     this.api.cancel(run.run_id).pipe(takeUntil(this.changedRun), takeUntilDestroyed(this.destroyRef), finalize(() => this.pending.set(false))).subscribe({ next: value => this.update(value), error: e => this.actionError.set(normalizeError(e)) });
   }
   retry() {
     const run = this.run();
-    if (!run || this.pending() || this.retryForm.invalid || !['failed','budget_exceeded'].includes(run.status)) return;
+    if (!run || !supportsRunCommands(run) || this.pending() || this.retryForm.invalid || !['failed','budget_exceeded'].includes(run.status)) return;
     const limits = this.retryForm.getRawValue();
     const limitError = run.status === 'budget_exceeded' ? retryLimitError(run, limits) : null;
     if (limitError) {

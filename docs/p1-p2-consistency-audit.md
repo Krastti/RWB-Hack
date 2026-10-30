@@ -35,3 +35,26 @@ GET Run has no shared snapshot identity with metrics.updated. The UI therefore
 labels GET token totals with unknown completeness even when an event claims
 complete usage. This remains safe during failed polling and recovery and does
 not confuse zero totals with evidence of completeness.
+
+## Review follow-up
+
+Historical React runs are now read-only in the Angular UI: cancel/retry/answers
+are hidden and their handlers make no HTTP request when invoked directly.
+Server enforcement is still an explicit #109/#127 integration requirement, not
+claimed as provided by the UI policy.
+
+The grants validator distinguishes explicit files from directory grants and
+rejects a file also used as a directory (including a parent needed by another
+output), even within one task. Negative tests cover foreign migrations/integrations
+paths, unknown owners and mismatched profiles. Directory-as-file and same-task
+collision were reproduced as accepted by a2701c2 and rejected by this follow-up.
+
+Questions now show whitespace/required/maxlength feedback with ARIA association.
+DOM input-event tests exercise required and optional fields and correction.
+RunDetail.metrics has a direct regression proving that complete event flags
+cannot label successive GET metrics complete. Rendered RunDetail tests cover
+historical profiles and direct handler tests cover cancel/retry/answers bypasses.
+
+Follow-up verification: Angular 47 tests PASS and production build PASS under
+Node 24; C-02 6 tests PASS; full validator PASS (11 schemas, 22 examples, 4 bundles,
+1 snapshot); backend 4 PASS / 2 PostgreSQL SKIP; pip check and diff check PASS.
