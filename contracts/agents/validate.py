@@ -132,6 +132,7 @@ def validate_semantics(name, data):
         acyclic(data["components"], "id", "depends_on")
     elif name == "generation-plan":
         unique(data["tasks"], "task_id", "generation task ID")
+        unique(data["tasks"], "stage_id", "generation stage ID")
         acyclic(data["tasks"], "task_id", "depends_on")
         owners = []
         for task in data["tasks"]:
