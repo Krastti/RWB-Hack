@@ -43,7 +43,7 @@
       "operation_id": "listOwnTickets", "path": "/tickets", "method": "get",
       "summary": "Просмотреть свои заявки", "description": "Сотрудник получает только собственные заявки и их статусы.",
       "related_fr_ids": ["FR-002"], "role_ids": ["ROLE-001"], "authentication": "bearer",
-      "authorization_rules": ["Выборка на сервере ограничена owner_id текущего сотрудника."],
+      "authorization_rules": ["Выборка на сервере ограничена owner_id текущего сотрудника.", "Сотрудник просматривает только собственные заявки."],
       "assumption_ids": ["ASM-002"], "integration_indices": [], "parameters": [], "request_body": null,
       "responses": [{"status": 200, "description": "Список собственных заявок", "schema": {"$ref": "#/components/schemas/TicketList"}}],
       "errors": []

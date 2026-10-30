@@ -19,8 +19,10 @@ from referencing import Resource
 from contracts.agents.validate import Contracts, load, loads
 from ....models.dto.llm import LLMResult
 
-from .render import MAX_ARTIFACT_BYTES, OpenAPIError, render_openapi, require
+from .errors import OpenAPIError, require
+from .render import MAX_ARTIFACT_BYTES, render_openapi
 from .schema import draft_schema
+from .policy import validate_api_policy
 
 ROOT = Path(__file__).resolve().parents[5]
 PROFILE_SCHEMA = ROOT / "templates/profiles/web-fastapi-angular/profile.schema.json"
@@ -37,6 +39,7 @@ class OpenAPIPrompt:
     schema: dict = field(repr=False)
     context: dict = field(repr=False)
     requirements: dict = field(repr=False)
+    api_policy: dict | None = field(repr=False)
     requirements_artifact_id: str
     max_calls: int
     max_output_tokens: int
@@ -49,8 +52,9 @@ def _contracts():
     return Contracts()
 
 
-def prepare_openapi(context: dict, requirements_artifact: dict, *, profile: dict) -> OpenAPIPrompt:
-    """Accept an authorized inline artifact and the Run's already frozen profile."""
+def prepare_openapi(context: dict, requirements_artifact: dict, *, profile: dict,
+                    api_policy: dict | None) -> OpenAPIPrompt:
+    """Accept authorized requirements, a frozen profile and an approved API policy."""
     try:
         contracts = _contracts()
         context, artifact, profile = deepcopy(context), deepcopy(requirements_artifact), deepcopy(profile)
@@ -72,16 +76,18 @@ def prepare_openapi(context: dict, requirements_artifact: dict, *, profile: dict
             "OPENAPI_OUTPUT_NOT_ALLOWED")
         requirements = loads(artifact["content"])
         contracts.validate("requirements", requirements)
+        waiting = any(q["required"] and "answer" not in q for q in requirements["questions"])
+        policy = None if waiting else validate_api_policy(contracts, api_policy, requirements, artifact["checksum"])
         limits = profile["limits"]
         tokens = min(context["limits"]["max_output_tokens"], limits["agent"]["max_output_tokens"])
         timeout = min(context["limits"].get("timeout_seconds", limits["agent"]["timeout_seconds"]),
                       limits["agent"]["timeout_seconds"], limits["model_call"]["timeout_seconds"])
-        payload = {"contract_version": context["contract_version"], "requirements": requirements,
+        payload = {"contract_version": context["contract_version"], "requirements": requirements, "api_policy": policy,
                    "profile": {key: profile[key] for key in ("profile_id", "profile_version", "stack")}}
         return OpenAPIPrompt(
             system=Path(__file__).with_name("system.md").read_text(encoding="utf-8"),
             prompt=json.dumps(payload, ensure_ascii=False, allow_nan=False), schema=draft_schema(contracts),
-            context=context, requirements=requirements, requirements_artifact_id=artifact["artifact_id"],
+            context=context, requirements=requirements, api_policy=policy, requirements_artifact_id=artifact["artifact_id"],
             max_calls=min(context["limits"]["max_calls"], limits["agent"]["max_calls"]),
             max_output_tokens=tokens, timeout_seconds=timeout,
             max_artifact_bytes=min(limits["artifacts"]["max_file_bytes"], MAX_ARTIFACT_BYTES),

@@ -1,4 +1,4 @@
-# OpenAPI generator A-06 version 1.0.0
+# OpenAPI generator A-06 version 1.1.0
 
 Return one JSON object matching the supplied openapi-draft/1.0 schema. It is a
 design draft for the generated application, not the platform API or executable
@@ -12,6 +12,15 @@ external integrations, numeric limits, status transitions or customer requiremen
 Explain necessary design choices as assumptions with new ASM IDs; do not redefine
 an existing assumption. Cite their IDs in operations. Critical unanswered questions
 must be resolved upstream; do not silently answer them or turn them into assumptions.
+
+api_policy is the architect-approved surface for this exact requirements checksum.
+Use exactly its operation IDs, HTTP methods/paths, FR links, authentication, granted
+role IDs and authorization_rules. Keep its coverage kinds and operation links.
+The compiler checks these values against the policy and rejects missing/extra
+operations, access changes or a self-selected constraint/outside_api exemption.
+Do not generate or revise the policy. permission_indices refer to existing
+requirements.roles[].permissions, and security_requirement_indices refer to
+requirements.security_requirements. DTOs and responses remain your design work.
 
 Describe HTTP operations with stable, unique operation_id values and explicit
 related_fr_ids. Reuse agreed entity/field names. Define JSON Schema DTOs with
@@ -42,7 +51,7 @@ An empty input permits no integration indices. Never create payment, mapping,
 notification or other integrations just because they are common in similar apps.
 
 coverage lists every FR exactly once. kind=operation requires related operations;
-kind=constraint explains a prohibition or rule; kind=outside_api explains work
+kind=constraint explains an approved prohibition or rule; kind=outside_api explains approved work
 outside this HTTP contract without claiming it is implemented. operation_ids and
 operation.related_fr_ids must agree in both directions. A ban on deletion does
 not justify a DELETE endpoint. Preserve constraints and confirmed answers.

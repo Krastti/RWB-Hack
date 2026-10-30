@@ -35,10 +35,13 @@ Mobile Kotlin/Compose (X-01/X-02), PostGIS (X-03), geo-adapters/session events
 (X-04/X-05), mobile graph/manifest/UI (X-06/X-07) — отдельные расширения.
 
 [A-06 OpenAPI generator](../backend/app/agents/generators/openapi/README.md) принимает
-разрешённый C-02 requirements artifact и замороженный профиль, делает один вызов
+разрешённый C-02 requirements artifact, замороженный профиль и утверждённую
+архитектором API policy, привязанную к checksum требований, делает один вызов
 A-01, проверяет draft/FR/roles/references и формирует `contracts/openapi.yaml`
 версии 3.1.0 с C-02 metadata/usage. Публичный интерфейс и offline-пример находятся
-рядом с модулем. Подключение к архитектурному этапу — A-09 (#87); генератор не
+рядом с модулем. Политика фиксирует маршруты, permissions и покрытие FR; модель
+не вправе самостоятельно менять доступ или исключать FR из API. Её утверждение
+и подключение к архитектурному этапу — A-09 (#87); генератор не
 меняет Run.status, storage или общий API платформы.
 
 ## Версии и C-02 envelope

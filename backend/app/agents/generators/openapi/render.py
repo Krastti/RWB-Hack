@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 import json
+import math
 import re
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -9,8 +10,10 @@ from openapi_spec_validator import OpenAPIV31SpecValidator
 import yaml
 
 from .schema import DRAFT_VERSION
+from .errors import OpenAPIError, require
+from .policy import enforce_api_policy
 
-GENERATOR_VERSION = "1.0.0"
+GENERATOR_VERSION = "1.1.0"
 MAX_ARTIFACT_BYTES = 1048576
 _SEGMENT = r"(?:[A-Za-z0-9_-]+|\{[A-Za-z_][A-Za-z0-9_]*\})"
 _PATH = re.compile(r"^/(?:" + _SEGMENT + r"(?:/" + _SEGMENT + r")*)?$")
@@ -27,15 +30,6 @@ _ERROR = {
         },
     }},
 }
-
-
-class OpenAPIError(ValueError):
-    """Only a fixed public diagnostic code, never a provider value or exception."""
-
-
-def require(condition, code):
-    if not condition:
-        raise OpenAPIError(code)
 
 
 def _nodes(value):
@@ -101,9 +95,21 @@ def _check_schemas(document, prepared, assumptions):
                 require(isinstance(ids, list) and all(isinstance(i, str) for i in ids)
                         and len(set(ids)) == len(ids) and set(ids) <= known, "OPENAPI_UNKNOWN_SCHEMA_PROVENANCE")
         for lower, upper in (("minLength", "maxLength"), ("minItems", "maxItems"),
-                             ("minProperties", "maxProperties"), ("minimum", "maximum")):
+                             ("minProperties", "maxProperties")):
             if lower in item and upper in item:
                 require(item[lower] <= item[upper], "OPENAPI_EMPTY_FIELD_RANGE")
+        lower_bounds = [(item[key], key == "exclusiveMinimum")
+                        for key in ("minimum", "exclusiveMinimum") if key in item]
+        upper_bounds = [(item[key], key == "exclusiveMaximum")
+                        for key in ("maximum", "exclusiveMaximum") if key in item]
+        for lower, lower_open in lower_bounds:
+            for upper, upper_open in upper_bounds:
+                require(lower < upper or lower == upper and not (lower_open or upper_open),
+                        "OPENAPI_EMPTY_FIELD_RANGE")
+                if item.get("type") in ("integer", ["integer"]):
+                    first = math.floor(lower) + 1 if lower_open else math.ceil(lower)
+                    last = math.ceil(upper) - 1 if upper_open else math.floor(upper)
+                    require(first <= last, "OPENAPI_EMPTY_FIELD_RANGE")
 
 
 def compile_openapi(draft, prepared):
@@ -242,6 +248,7 @@ def _compile(draft, prepared):
                 "OPENAPI_FR_LINK_MISMATCH")
     document["x-integrations"] = [{"index": i, **deepcopy(requirements["integrations"][i])}
                                    for i in sorted(integrations_used)]
+    enforce_api_policy(draft, document, prepared.api_policy, requirements)
     _check_schemas(document, prepared, inherited.keys())
     try:
         OpenAPIV31SpecValidator(document).validate()

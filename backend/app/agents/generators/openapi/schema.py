@@ -31,14 +31,14 @@ def draft_schema(contracts: Contracts) -> dict:
 
     text = deepcopy(common["$defs"]["text"])
     text["maxLength"] = 10000
-    name = {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"}
+    name = {"type": "string", "pattern": r"^[A-Za-z_][A-Za-z0-9_]{0,63}$(?![\s\S])"}
     fr = deepcopy(common["$defs"]["fr_id"])
     role = {"type": "string", "pattern": "^ROLE-[0-9]{3,}$(?![\\s\\S])"}
     asm = {"type": "string", "pattern": "^ASM-[0-9]{3,}$(?![\\s\\S])"}
     json_schema = {"type": "object"}
     nullable_schema = {"anyOf": [json_schema, {"type": "null"}]}
     parameter = obj({
-        "name": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_-]{0,127}$"},
+        "name": {"type": "string", "pattern": r"^[A-Za-z_][A-Za-z0-9_-]{0,127}$(?![\s\S])"},
         "in": {"enum": ["path", "query", "header"]},
         "required": {"type": "boolean"}, "description": text,
         "schema": json_schema,
@@ -64,7 +64,7 @@ def draft_schema(contracts: Contracts) -> dict:
         }), 1, 10),
         "errors": array(obj({
             "status": {"type": "integer", "minimum": 400, "maximum": 599},
-            "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,79}$"},
+            "code": {"type": "string", "pattern": r"^[A-Z][A-Z0-9_]{0,79}$(?![\s\S])"},
             "description": text,
         }), maximum=30),
     })

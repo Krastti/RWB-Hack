@@ -24,9 +24,15 @@ def example_input(*, waiting=False):
     return context, artifact, profile
 
 
+def example_policy():
+    """Hand-approved access/coverage fixture, never inferred from the model draft."""
+    return load(Path(__file__).with_name("examples") / "api-policy.json")
+
+
 async def main(*, result_json=False, waiting=False):
     context, artifact, profile = example_input(waiting=waiting)
-    prepared = prepare_openapi(context, artifact, profile=profile)
+    prepared = prepare_openapi(context, artifact, profile=profile,
+                               api_policy=None if waiting else example_policy())
     draft = load(Path(__file__).with_name("examples") / "draft.json")
 
     def reply(request):
