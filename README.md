@@ -50,7 +50,7 @@ callables и не образуют автоматически сквозной p
 
 | Область | Что есть в коде | Ограничение интеграции |
 |---|---|---|
-| HTTP и БД | Factory, JWT, проекты/ревизии, PostgreSQL repositories, ORM Run/attempt/event/idempotency, Flyway V1–V3 и worker V5 | Штатная factory подключает auth и projects; остальные HTTP-операции из OpenAPI не подключаются автоматически |
+| HTTP и БД | Factory, JWT, проекты/ревизии, PostgreSQL repositories, ORM Run/attempt/event/idempotency, Flyway V1–V5 | Штатная factory подключает auth/projects/createRun/Run GET; control/answers/выдача и worker binding требуют отдельной композиции |
 | Run | Read service/router, lifecycle, cancel/retry, queue/lease adapter, StageWorker и локальные транзакционные адаптеры | Нет общего production write adapter/dispatcher; локальные stores нельзя подключать к одному Run одновременно |
 | Анализ | A-01 adapter, A-02 prompt/renderer, legacy analyst, A-04 граф с durable SQLite checkpoints | Legacy 0.1 не является узлом C-02; полный bridge аналитика/worker отсутствует |
 | UI | Вход, проекты, Run monitor/timeline, вопросы, просмотр анализа, команды | Доступность экрана не подтверждает наличие соответствующего backend endpoint |

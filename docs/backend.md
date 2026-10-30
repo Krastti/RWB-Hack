@@ -9,7 +9,7 @@ HTTP-источник истины — [C-01 OpenAPI 2.1.0](../contracts/platfor
 
 | Код | Ответственность |
 |---|---|
-| `backend/app/main.py` | `create_app(database_url=None, auth_config=None)`: engine → sessions → PostgreSQL repositories → auth/projects services → HTTP |
+| `backend/app/main.py` | `create_app(database_url=None, auth_config=None, run_config=None)`: engine → sessions → PostgreSQL repositories → auth/projects services → HTTP |
 | `api/auth`, `api/projects`, `api/common.py` | Bearer, endpoints, валидация и безопасный Error envelope |
 | `models/`, `models/dto/` | Раздельные ORM и HTTP/transport projections; ORM-экспорты разрешаются лениво |
 | `repositories/` | Protocol `UserRepository`/`ProjectRepository`, PostgreSQL-адаптеры |
@@ -20,11 +20,11 @@ HTTP-источник истины — [C-01 OpenAPI 2.1.0](../contracts/platfor
 | `adapters/queue/`, `workers/` | Celery transport, PostgreSQL WorkerCommand lease/fencing, StageWorker |
 | `agents/` | [Агенты и граф](agents.md); не HTTP orchestration |
 
-Штатная factory монтирует **auth и projects**. Run read/control routers существуют,
-но требуют явной настройки с реальными адаптерами. Нет штатного in-memory fallback.
-Создание Run, приём answers, artifact/archive/export endpoints из C-01 не становятся
-доступны от наличия схем и frontend. Их интеграция —
-[#127](https://github.com/Krastti/RWB-Hack/issues/127),
+Штатная factory монтирует auth/projects, POST создания Run и три Run GET-маршрута
+к одной PostgreSQL через общий sessionmaker. Control router существует, но требует
+явного подключения с реальным write adapter. In-memory fallback нет. Answers,
+artifact/archive/export endpoints и сквозной worker binding остаются отдельными
+потребителями [#127](https://github.com/Krastti/RWB-Hack/issues/127)/
 [#128](https://github.com/Krastti/RWB-Hack/issues/128).
 
 ## Установка и запуск
@@ -49,13 +49,12 @@ Flyway запускается из корня с установленными `F
 `FLYWAY_USER`, `FLYWAY_PASSWORD`:
 
 ```sh
-flyway -configFiles=backend/flyway.conf -target=3 migrate
+flyway -configFiles=backend/flyway.conf migrate
 PYTHONPATH=backend .venv/bin/uvicorn app.main:create_app --factory
 ```
 
-Для штатного API пока применяется target=3: в дереве уже есть V5 worker_commands,
-но V4 создания Run ещё должна прийти с соответствующей интеграцией. Не применяйте
-V5 раньше V4 без отдельного решения о миграции. Порядок worker — в разделе ниже.
+Для штатного API нужны V1–V4, для worker также V5; все пять миграций уже
+поставляются в этой ветке и применяются по порядку без пропуска V4.
 API слушает `127.0.0.1:8000`. Flyway/настоящий PostgreSQL-запуск требуют доступной
 инфраструктуры; список локально выполненных проверок приводится в PR, а не
 предполагается из этой инструкции. Возможна явная сборка:
@@ -190,9 +189,10 @@ Refresh tokens/регистрации/командных ролей нет.
 | Endpoints | Подключение |
 |---|---|
 | POST `/auth/token`; POST/GET `/projects`; GET `/projects/{id}` | Штатная factory, реальные PostgreSQL repositories |
-| GET `/projects/{id}/runs`, `/runs/{id}`, `/runs/{id}/events` | Явный `configure_runs(app, RunQueryService(...))` после auth |
+| GET `/projects/{id}/runs`, `/runs/{id}`, `/runs/{id}/events` | Штатная factory с PostgreSQLRunReadRepository; отдельный configure_runs также сохранён |
 | POST `/runs/{id}/cancel`, `/runs/{id}/retry` | Явный `configure_run_control(app, RunControlService(...))` после auth |
-| POST create Run/answers; artifacts/archive/exports | Контракты есть; общего подключения/полного runtime в этой ветке нет |
+| POST `/projects/{id}/runs` | Штатная factory с PostgreSQLRunCreationRepository и PostgreSQLRunQueue |
+| POST answers; artifacts/archive/exports | Контракты есть; общего подключения/полного runtime пока нет |
 
 Не отдавайте внутренний RunRecord как HTTP Run: aggregate version, generation,
 attempt_id, state_version, input_hash и private data не добавляются в закрытые DTO.
@@ -445,8 +445,8 @@ Stage worker и control worker разделяются, чтобы длинный
 running,lost,recovering,completed,obsolete, generation/recovery_generation,
 owner_token/expires_at и next_delivery_at. Требуется **V1–V3 → V4 → V5**: V5
 структурно ссылается на V2, но Flyway после V5 не должен получать более раннюю V4
-без согласованного out-of-order решения. V4 не поставляется этой веткой. Поэтому
-production запуск worker здесь не считается проверенным и не предлагается с
+без согласованного out-of-order решения. V4 и V5 уже присутствуют в дереве.
+Production запуск worker здесь не считается проверенным и не предлагается с
 готовым module path. Интегратор должен создать engine/sessionmaker и вызвать
 create_worker_app с реальными orchestrator/recovery. Синтаксис будущего запуска
 из backend (это схема команды, а не исполняемая команда поставляемого модуля):
@@ -548,3 +548,62 @@ Event allocator пока проверяет полную историю на к�
 O(n) memory); он предназначен для локальных агрегатов, не долгих production log.
 Выделение по authoritative watermark и проверка истории на load boundary требуют
 отдельной оптимизации с сохранением lock/rollback/duplicate protection.
+
+
+## Создание Run и PostgreSQL read composition
+
+`RunCreationConfig(limits=Limits(...))` задаётся через `create_app(run_config=...)`
+с приоритетом над окружением. RUN_MAX_CALLS/RUN_MAX_OUTPUT_TOKENS необязательны:
+по умолчанию C-05 limits.run (60/180000). Заданные значения — положительные целые;
+ошибка конфигурации останавливает factory до открытия соединений. Только DATABASE_URL
+и JWT_SECRET_KEY обязательны. Тело createRun не меняет серверный бюджет.
+
+`RunCreationService(repository,limits=...,profile=...).create_run(owner_id=...,
+project_id=...,idempotency_key=...,body=RunCreate(...))` возвращает CreationResponse
+(status_code и исходное JSON body). `RunCreationRepository` задаёт атомарную запись;
+`PostgreSQLRunCreationRepository(sessions,queue)` использует PostgreSQLRunQueue.
+`configure_run_creation(app,service)` сохранён для отдельной композиции после auth.
+
+POST `/api/v1/projects/{project_id}/runs` принимает requirements_text и optional
+Angular profile, обязательный Idempotency-Key; возвращает 202 queued Run с новой
+revision_id, limits, пустыми stages/questions и нулевыми metrics. Project.updated_at
+обновляется; исходные ревизии не меняются. RunCreate отвергает whitespace-only 422,
+валидные bytes и SHA-256 сохраняются без trim. V4 хранит run_input_snapshots (текст,
+hash, revision, полный profile/contracts/effective limits), run_creation_responses
+(исходный HTTP status/body) и уникальные run_queue_jobs createRun.
+
+Scope createRun: owner/project/key. Hash — нормализованное валидированное тело с
+profile default и стабильным JSON порядком плюс scope. Пропущенный profile равен
+явному default; изменение пробелов требований меняет fingerprint. Доступ проверяется
+до replay; совпавшие key/body возвращают исходный 202 независимо от нынешнего Run,
+настроек и рестарта. Иное тело — IDEMPOTENCY_KEY_CONFLICT; одновременная операция
+той же области — IDEMPOTENCY_IN_PROGRESS через pg_try_advisory_xact_lock.
+
+После replay берётся User FOR UPDATE, затем Project FOR UPDATE. Один active Run
+во всех проектах пользователя даёт 429 RATE_LIMIT_EXCEEDED **без Retry-After**:
+момент освобождения слота неизвестен (в том числе при waiting_for_input). Повтор
+имеет смысл после остановки активного Run. Это отличается от control policy,
+которая передаёт вычисленный retry_after. Future writers/resume соблюдают тот же
+порядок User→Project/Run; номер ревизии выделяют под Project lock. Isolation —
+PostgreSQL READ COMMITTED. Любой сбой откатывает revision/run/key/response/job/events;
+validation/rate denial не резервируют ключ. Response_ref — UUID immutable ответа
+без TTL. Keys/hash не публикуются в events.
+
+`RunQueue.enqueue(transaction:Session,run_id:UUID)->None` добавляет job в эту же
+транзакцию, не делает commit и не обращается к брокеру. Начальные run.created seq1
+и metrics.updated seq2 получают timestamp=Run.created_at после ожидания locks,
+не transaction-start now(). 202 — durable принятие job, не исполнение графа.
+Create-job и worker StageCommand остаются разными сущностями, bridge ещё нужен.
+
+`PostgreSQLRunReadRepository(sessions)` из services/runs/postgresql.py реализует
+RunReadRepository той же БД и монтируется factory. Каждый SQL owner-scoped;
+Run и все StageAttempts загружаются одним SELECT/joinedload. History —
+created_at/id descending с keyset, events — seq ascending; cursors/extra owner
+checks остаются в RunQueryService. Stored questions/metrics/events не выдумываются;
+invalid saved snapshot преобразуется в безопасный 500 INTERNAL_ERROR. Query service
+сам не зависит от ORM и не устанавливает локальный fallback. Production SQL,
+миграции и конкурентный HTTP требуют проверки реальной инфраструктуры.
+
+Rollback createRun: остановить POST/исполнителей и откатить код, не удалять V4
+таблицы с принятыми входами/ответами/jobs. Только до приёма данных возможно
+согласованное удаление run_queue_jobs → run_creation_responses → run_input_snapshots.
