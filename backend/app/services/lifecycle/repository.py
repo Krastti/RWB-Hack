@@ -62,9 +62,12 @@ class SQLiteLifecycleRepository:
             record = RunRecord.model_validate_json(row[0]) if row else None
             if record is None or record.owner_id != owner_id:
                 raise LifecycleError(404, "NOT_FOUND", "Run not found")
+            original = record.model_dump_json()
             yield record
-            db.execute("UPDATE lifecycle_runs SET payload = ? WHERE run_id = ?",
-                       (record.model_dump_json(), str(run_id)))
+            payload = record.model_dump_json()
+            if payload != original:
+                db.execute("UPDATE lifecycle_runs SET payload = ? WHERE run_id = ?",
+                           (payload, str(run_id)))
             db.commit()
         except sqlite3.Error as exc:
             if db is not None:

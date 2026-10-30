@@ -143,17 +143,28 @@ class LifecycleTransaction:
         if target in {"waiting_for_input", "completed", "failed", "budget_exceeded", "cancelled"}:
             if any(a.status in ACTIVE_ATTEMPTS for a in record.attempts):
                 raise conflict("Active attempts have not reached a safe boundary")
+        latest = {}
+        for attempt in record.attempts:
+            if attempt.stage_id not in latest or attempt.attempt_no > latest[attempt.stage_id].attempt_no:
+                latest[attempt.stage_id] = attempt
         if target == "completed":
-            latest = {a.stage_id: max((b for b in record.attempts if b.stage_id == a.stage_id),
-                                     key=lambda b: b.attempt_no) for a in record.attempts}
             if not latest or any(a.status not in {"succeeded", "skipped"} for a in latest.values()):
                 raise conflict("Unresolved stage results prevent completion")
-        if expected in {"failed", "budget_exceeded", "waiting_for_input"} and target in {"queued", "running"}:
-            previous_status = "waiting_for_input" if expected == "waiting_for_input" else "failed"
+        if expected == "waiting_for_input" and target == "running":
             if not any(a.status == "pending" and a.attempt_no > 1 and any(
-                b.stage_id == a.stage_id and b.attempt_no == a.attempt_no - 1 and b.status == previous_status
+                b.stage_id == a.stage_id and b.attempt_no == a.attempt_no - 1 and b.status == "waiting_for_input"
                 for b in record.attempts) for a in record.attempts):
                 raise conflict("Resume requires a new pending attempt, not rewriting history")
+        if expected in {"failed", "budget_exceeded"} and target == "queued":
+            has_pending = any(a.status == "pending" for a in latest.values())
+            # Checkpoint/assembly can fail after all agent results were accepted.
+            # Recover those durable results without inventing an agent attempt or
+            # re-running a successful node. The guard checks the recovery intent,
+            # accepted refs and budget; this structural exception is not approval.
+            results_accepted = bool(latest) and all(
+                a.status in {"succeeded", "skipped"} for a in latest.values())
+            if not has_pending and not results_accepted:
+                raise conflict("Retry requires pending work or accepted results to recover")
         self._check(Change(kind="run", source=str(expected), target=str(target)))
         source = record.status
         record.status = target
@@ -185,7 +196,8 @@ class LifecycleTransaction:
             raise conflict("Attempt is active or its successful result must be preserved")
         if record.status in {"failed", "budget_exceeded", "waiting_for_input"}:
             required = "waiting_for_input" if record.status == "waiting_for_input" else "failed"
-            if previous is None or previous.status != required:
+            if ((record.status == "waiting_for_input" and previous is None)
+                    or (previous is not None and previous.status != required)):
                 raise conflict("Stopped run requires retry/resume of its unsuccessful stage")
         if previous and (previous.contract_version != contract_version or previous.input_hash != input_hash):
             # Answers are allowed to create a new immutable input; the guard
