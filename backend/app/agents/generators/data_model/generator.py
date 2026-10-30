@@ -90,12 +90,16 @@ def build_data_model_prompt(context: dict, requirements_artifact: dict, *, profi
 
 
 def _validate(model: dict, prepared: DataModelPrompt) -> str:
+    try:
+        content = json.dumps(model, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+        size = len(content.encode("utf-8"))
+    except (ValueError, TypeError):
+        raise DataModelError("DATA_MODEL_INVALID_JSON") from None
+    require(size <= prepared.max_file_bytes, "DATA_MODEL_FILE_BUDGET_EXCEEDED")
     validate_data_model(model, requirements=prepared.requirements,
                         requirements_artifact_id=prepared.requirements_artifact_id,
                         contract_version=prepared.context["contract_version"],
                         profile_id=prepared.context["profile_id"])
-    content = json.dumps(model, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
-    require(len(content.encode("utf-8")) <= prepared.max_file_bytes, "DATA_MODEL_FILE_BUDGET_EXCEEDED")
     return content
 
 
@@ -111,7 +115,11 @@ async def generate_data_model(llm: StructuredLLM, prepared: DataModelPrompt) -> 
         _validate(result.data, prepared)
     except ContractError as exc:
         code = str(exc) if isinstance(exc, DataModelError) else "DATA_MODEL_INVALID"
-        return LLMResult(usage=result.usage, error=LLMError(code, "The data model failed validation.", False))
+        data = None
+        if isinstance(exc, DataModelError) and exc.unresolved_items:
+            data = {"unresolved_items": exc.unresolved_items}
+        return LLMResult(data=data, usage=result.usage,
+                         error=LLMError(code, "The data model failed validation.", False))
     return result
 
 

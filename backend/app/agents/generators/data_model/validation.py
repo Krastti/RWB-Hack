@@ -18,7 +18,11 @@ from contracts.agents.validate import ContractError, Contracts, load, walk
 
 
 class DataModelError(ContractError):
-    """A public diagnostic code without input data."""
+    """A safe diagnostic code with optional structured blockers."""
+
+    def __init__(self, code: str, *, unresolved_items: list[dict] | None = None) -> None:
+        super().__init__(code)
+        self.unresolved_items = deepcopy(unresolved_items or [])
 
 
 def require(condition: bool, code: str) -> None:
@@ -150,7 +154,8 @@ def _check(check: dict, fields: dict) -> None:
                     "DATA_MODEL_CHECK_INVALID")
         values = value if operation in {"in", "not_in"} else [value]
         require(isinstance(values, list) and bool(values) and
-                all(item is not None and _literal(item, field) for item in values), "DATA_MODEL_CHECK_INVALID")
+                all(item is not None and _literal(item, field) for item in values),
+                "DATA_MODEL_CHECK_INVALID")
         require(operation in {"in", "not_in"} or not isinstance(value, list), "DATA_MODEL_CHECK_INVALID")
     if field["default"]["kind"] == "literal":
         require(_accepts_default(check, field), "DATA_MODEL_DEFAULT_VIOLATES_CHECK")
@@ -161,7 +166,7 @@ def validate_data_model(model: dict, *, requirements: dict,
                         profile_id: str = "web-fastapi-angular") -> None:
     """Validate a model against its accepted requirements and contract version."""
     try:
-        json.dumps(model, allow_nan=False)
+        json.dumps(model, ensure_ascii=False, allow_nan=False).encode("utf-8")
     except (ValueError, TypeError):
         raise DataModelError("DATA_MODEL_INVALID_JSON") from None
     validator = Draft202012Validator(_schema(), format_checker=FormatChecker())
@@ -172,11 +177,12 @@ def validate_data_model(model: dict, *, requirements: dict,
             "DATA_MODEL_CONTEXT_MISMATCH")
     require(not any(q["required"] and "answer" not in q for q in requirements["questions"]),
             "DATA_MODEL_REQUIRES_ANSWERS")
-    require(not model["unresolved_items"], "DATA_MODEL_UNRESOLVED")
     frs = {item["id"] for item in requirements["functional_requirements"]}
     for item in walk(model):
         if isinstance(item, dict) and "related_fr_ids" in item:
             require(set(item["related_fr_ids"]) <= frs, "DATA_MODEL_UNKNOWN_FR")
+    if model["unresolved_items"]:
+        raise DataModelError("DATA_MODEL_UNRESOLVED", unresolved_items=model["unresolved_items"])
     _unique(model["entities"], "name", "DATA_MODEL_DUPLICATE_ENTITY")
     _unique(model["relationships"], "name", "DATA_MODEL_DUPLICATE_RELATIONSHIP")
     entities = {item["name"]: item for item in model["entities"]}
@@ -233,10 +239,11 @@ def validate_data_model(model: dict, *, requirements: dict,
     for coverage in model["fr_coverage"]:
         require(set(coverage["entity_names"]) <= entities.keys(), "DATA_MODEL_UNKNOWN_ENTITY")
         actual = {name for name, entity in entities.items() if coverage["fr_id"] in entity["related_fr_ids"]}
+        for relation in model["relationships"]:
+            if coverage["fr_id"] in relation["related_fr_ids"]:
+                actual.update((relation["source_entity"], relation["target_entity"]))
         require(set(coverage["entity_names"]) == actual, "DATA_MODEL_COVERAGE_MISMATCH")
         if coverage["status"] == "modeled":
-            require(bool(coverage["entity_names"]) and all(
-                coverage["fr_id"] in entities[name]["related_fr_ids"] for name in coverage["entity_names"]),
-                "DATA_MODEL_COVERAGE_MISMATCH")
+            require(bool(actual), "DATA_MODEL_COVERAGE_MISMATCH")
         else:
             require(not coverage["entity_names"], "DATA_MODEL_COVERAGE_MISMATCH")

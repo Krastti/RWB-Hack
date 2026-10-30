@@ -360,9 +360,12 @@ LLMConfig, а перед вызовом зарезервировать бюдж�
 entities, relationships, assumptions, unresolved_items и fr_coverage. Сущность
 задаёт имя, исходные source_refs, fields, именованный primary_key, unique/check
 constraints и indexes. source_refs ссылаются на точный text элемента entities,
-roles или functional_requirements принятого анализа. Имена SQL — lowercase ASCII
-snake_case до 63 символов. Каждый FR перечисляется в coverage как modeled с
-полным списком связанных сущностей либо not_applicable с причиной.
+roles, functional_requirements, nonfunctional_requirements, constraints или
+security_requirements принятого анализа. Так можно обосновать техническую таблицу
+аудита требованиями безопасности. Имена SQL — lowercase ASCII snake_case до 63
+символов. Каждый FR перечисляется в coverage как modeled с объединением напрямую
+связанных сущностей и обоих концов связанных с FR relationships либо not_applicable
+с причиной. Связь может покрывать FR без дублирования его в related_fr_ids сущностей.
 
 Типы: uuid, varchar, text, integer, bigint, numeric, boolean, date, timestamptz,
 jsonb. Varchar требует max_length; numeric — precision/scale, остальные параметры
@@ -379,9 +382,13 @@ SQL expressions, partial/expression indexes и PostGIS в этом формат�
 CHECK сохраняет PostgreSQL null semantics и не заменяет NOT NULL или авторизацию.
 
 Неподдержанное обязательное решение записывается в unresolved_items и блокирует
-приёмку модели. Ошибка структуры, ссылок, бюджета или контекста возвращается с
-безопасным кодом и исходным usage, без повторного запроса. Полнота смысла анализа
-и согласование имён с OpenAPI проверяются архитектурным этапом.
+приёмку модели. При DATA_MODEL_UNRESOLVED generate_data_model возвращает ok=false,
+исходный usage и data={"unresolved_items": [...]} с копией проверенных пунктов для
+caller; полный payload не возвращается. Прямая валидация сохраняет эти пункты в
+DataModelError.unresolved_items. Текст исключения и LLMError содержат только
+безопасную диагностику. Остальные ошибки структуры, ссылок, бюджета, UTF-8 или
+контекста возвращаются с data=None и исходным usage, без повторного запроса.
+Полнота смысла анализа и согласование имён с OpenAPI проверяются архитектурным этапом.
 
 Владелец выходного артефакта — architecture. IDs и version резервирует caller;
 генератор вычисляет UTF-8 size/checksum, но не пишет в storage, не выпускает

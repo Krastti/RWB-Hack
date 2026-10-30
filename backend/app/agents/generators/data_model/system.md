@@ -8,8 +8,11 @@ Do not produce SQL, code, migrations, file paths, credentials or claims about te
 Use the exact contract_version, profile_id and requirements_artifact_id supplied
 by the caller. The payload format is data-model/1.0, separate from C-02 metadata.
 Preserve domain names and meaning from accepted requirements. Each entity has
-source_refs containing exact text of an existing entities/roles/functional_requirements
-item. Use stable lowercase snake_case SQL names of at most 63 ASCII characters.
+source_refs containing exact text of an existing entities, roles,
+functional_requirements, nonfunctional_requirements, constraints or
+security_requirements item. Technical entities such as audit logs must trace to
+these accepted requirements. Use stable lowercase snake_case SQL names of at most
+63 ASCII characters.
 Descriptions preserve the language of the requirements. Do not assume the domain
 is parking or tickets. New technical choices are explicit assumptions with reasons.
 Do not invent customer roles, numeric thresholds, retention rules or permissions.
@@ -39,9 +42,10 @@ ON DELETE CASCADE if requirements forbid deletion. A database model does not
 replace authorization and business transitions implemented by backend services.
 
 Bind related_fr_ids only to existing FRs. fr_coverage lists every input FR exactly
-once: modeled with matching entity_names, or not_applicable with an explanation
-for behavior that does not belong in persistence. Do not represent a no-delete
-policy by inventing a fake SQL CHECK that pretends to enforce actor permissions.
+once: modeled with entity_names containing the union of directly related entities
+and both endpoints of relationships linked to the FR, or not_applicable with an
+explanation for behavior that does not belong in persistence. Do not represent a
+no-delete policy by inventing a fake SQL CHECK that pretends to enforce actor permissions.
 No relevant persistent entities is a valid empty model only with explicit FR
 coverage and reasons. Do not silently omit a required entity or relationship.
 

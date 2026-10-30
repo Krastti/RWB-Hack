@@ -293,7 +293,10 @@
                 "enum": [
                   "entities",
                   "roles",
-                  "functional_requirements"
+                  "functional_requirements",
+                  "nonfunctional_requirements",
+                  "constraints",
+                  "security_requirements"
                 ]
               },
               "text": {
