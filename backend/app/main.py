@@ -12,17 +12,25 @@ from starlette.exceptions import HTTPException
 from .api.auth import configure_auth
 from .api.common import error_response
 from .api.projects import configure_projects
+from .api.runs import configure_run_creation
 from .config.auth import AuthConfig
+from .config.runs import RunCreationConfig, load_run_profile
 from .repositories.postgresql import PostgreSQLProjectRepository, PostgreSQLUserRepository
 from .services.auth import AuthService
 from .services.projects import ProjectService
+from .services.runs import RunCreationService
+from .services.runs.postgresql import PostgreSQLRunCreationRepository
+from .services.runs.queue import PostgreSQLRunQueue
 
 
 def create_app(
     *, database_url: str | None = None, auth_config: AuthConfig | None = None,
+    run_config: RunCreationConfig | None = None,
 ) -> FastAPI:
     database_url = database_url if database_url is not None else os.environ["DATABASE_URL"]
     auth_config = auth_config if auth_config is not None else AuthConfig(secret_key=os.environ["JWT_SECRET_KEY"])
+    run_config = run_config if run_config is not None else RunCreationConfig.from_env()
+    run_profile = load_run_profile()
     url = make_url(database_url)
     if url.get_backend_name() != "postgresql":
         raise ValueError("DATABASE_URL must use PostgreSQL")
@@ -40,6 +48,10 @@ def create_app(
     app.state.engine = engine
     configure_auth(app, AuthService(PostgreSQLUserRepository(sessions), auth_config))
     configure_projects(app, ProjectService(PostgreSQLProjectRepository(sessions, cursor_secret=auth_config.secret_key)))
+    configure_run_creation(app, RunCreationService(
+        PostgreSQLRunCreationRepository(sessions, PostgreSQLRunQueue()),
+        limits=run_config.limits, profile=run_profile,
+    ))
 
     @app.exception_handler(404)
     @app.exception_handler(405)
