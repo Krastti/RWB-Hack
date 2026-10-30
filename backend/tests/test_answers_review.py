@@ -48,6 +48,30 @@ def test_question_publication_rejects_loss_and_identity_changes(db, change):
         assert len(list(s.scalars(select(Clarification).where(Clarification.run_id==run_id))))==1
 
 
+
+def test_question_publication_rejects_revision_rollback(db):
+    _, _, run_id, _, _ = prepare_recovery(db)
+    first, second = question(), question()
+    for revision, questions in [(1, [first]), (2, [second]), (2, [second])]:
+        with db.begin() as s:
+            row = s.scalar(select(Run).where(Run.id == run_id).with_for_update())
+            row.questions_revision = revision
+            row.questions = questions
+            persist_questions(s, row)
+    with pytest.raises(ControlError) as exc:
+        with db.begin() as s:
+            row = s.scalar(select(Run).where(Run.id == run_id).with_for_update())
+            row.questions_revision = 1
+            row.questions = [first]
+            persist_questions(s, row)
+    assert exc.value.code == "RUN_STATE_CONFLICT"
+    with db() as s:
+        row = s.get(Run, run_id)
+        assert (row.questions_revision, row.questions) == (2, [second])
+        assert set(s.scalars(select(Clarification.questions_revision).where(
+            Clarification.run_id == run_id))) == {1, 2}
+
+
 def test_answer_snapshot_duration_order_and_replay(db, monkeypatch):
     from datetime import datetime, timedelta, timezone
     from app.models import StageAttempt, Project, RunEvent

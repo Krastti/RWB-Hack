@@ -22,6 +22,10 @@ def persist_questions(session, run):
         raise ControlError(422, "VALIDATION_ERROR", "Invalid question identity") from exc
     if len(ids) != len(set(ids)):
         raise ControlError(422, "VALIDATION_ERROR", "Duplicate question identity")
+    latest_revision = session.scalar(select(func.max(Clarification.questions_revision)).where(
+        Clarification.run_id == run.id))
+    if latest_revision is not None and run.questions_revision < latest_revision:
+        raise ControlError(409, "RUN_STATE_CONFLICT", "Question revision cannot decrease")
     published = list(session.scalars(select(Clarification).where(
         Clarification.run_id == run.id, Clarification.questions_revision == run.questions_revision)))
     if published and {r.question_id for r in published} != set(ids):
