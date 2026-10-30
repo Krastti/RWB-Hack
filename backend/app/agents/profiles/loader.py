@@ -12,7 +12,7 @@ from referencing import Resource
 from referencing.exceptions import Unresolvable
 
 from contracts.agents.validate import (
-    ContractError, Contracts, load_profile_rules, loads, validate_profile_grants,
+    ContractError, Contracts, load_profile_rules, loads, validate_profile_grants, read_policy_bytes,
 )
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -65,6 +65,7 @@ class ProfileSource:
 class FrozenProfile:
     _raw: bytes = field(repr=False)
     _rules: bytes = field(repr=False)
+    _root: Path = field(default=ROOT, repr=False, compare=False)
 
     @property
     def data(self) -> dict[str, Any]:
@@ -102,9 +103,13 @@ class FrozenProfile:
         _require(owner in grants, "PROFILE_UNKNOWN_OWNER")
         return grants[owner]
 
-    def allows(self, owner: str, path: str, *, directory: bool = False) -> bool:
+    def allows(self, owner: str, path: str, *, directory: bool = False, conditions: Mapping[str, bool] | None = None) -> bool:
         _path(path, self.data["limits"]["artifacts"]["max_path_length"])
         grant = self.grant(owner)
+        for conditional in self.data["conditional_directories"]:
+            if any(path == d or path.startswith(d + "/") for d in conditional["directories"]):
+                if (conditions or {}).get(conditional["condition"]) is not True:
+                    return False
         return (not directory and path in grant["paths"] or
                 any(_covers(d, True, path, target_directory=directory) for d in grant["directories"]))
 
@@ -130,10 +135,15 @@ class FrozenProfile:
         self.grant(owner)
         return self.data["limits"]
 
-    def validate_plan(self, plan: dict) -> None:
+    def validate_plan(self, plan: dict, *, conditions: Mapping[str, bool] | None = None) -> None:
         try:
-            Contracts().validate("generation-plan", plan)
+            Contracts(repository_root=self._root).validate("generation-plan", plan)
             validate_profile_grants(plan, self.data)
+            for task in plan["tasks"]:
+                for kind in ("output_paths", "output_directories"):
+                    for path in task[kind]:
+                        _require(self.allows(task["owner_agent"], path, directory=kind == "output_directories",
+                                             conditions=conditions), "PROFILE_PLAN_MISMATCH")
         except (ContractError, KeyError, TypeError):
             raise ProfileError("PROFILE_PLAN_MISMATCH") from None
 
@@ -161,8 +171,9 @@ class ProfileLoader:
         path = self._root / name
         try:
             _require(path.resolve(strict=True) == path and path.is_file(), "PROFILE_UNTRUSTED_PATH")
-            with path.open("rb") as stream:
-                raw = stream.read(MAX_POLICY_BYTES + 1)
+            raw = read_policy_bytes(self._root, name, MAX_POLICY_BYTES)
+        except ContractError as exc:
+            raise ProfileError("PROFILE_SIZE_LIMIT" if str(exc) == "PROFILE_SIZE_LIMIT" else "PROFILE_UNTRUSTED_PATH") from None
         except OSError:
             raise ProfileError("PROFILE_UNAVAILABLE") from None
         _require(len(raw) <= MAX_POLICY_BYTES, "PROFILE_SIZE_LIMIT")
@@ -173,7 +184,7 @@ class ProfileLoader:
         schema = _parse(self._read(source.schema_path))
         try:
             Draft202012Validator.check_schema(schema)
-            registry = Contracts().registry.with_resource(schema["$id"], Resource.from_contents(schema))
+            registry = Contracts(repository_root=self._root).registry.with_resource(schema["$id"], Resource.from_contents(schema))
             validator = Draft202012Validator(schema, registry=registry, format_checker=FormatChecker())
             _require(validator.is_valid(profile), "PROFILE_SCHEMA_INVALID")
         except ProfileError:
@@ -191,10 +202,12 @@ class ProfileLoader:
         profile = self._validate(raw, profile_id, version, source)
         try:
             rules = load_profile_rules(profile, self._root).encode("utf-8")
-        except (ContractError, UnicodeError):
+        except ContractError as exc:
+            raise ProfileError("PROFILE_SIZE_LIMIT" if str(exc) == "PROFILE_SIZE_LIMIT" else "PROFILE_RULES_UNAVAILABLE") from None
+        except UnicodeError:
             raise ProfileError("PROFILE_RULES_UNAVAILABLE") from None
         _require(len(rules) <= MAX_POLICY_BYTES, "PROFILE_SIZE_LIMIT")
-        return FrozenProfile(raw, rules)
+        return FrozenProfile(raw, rules, self._root)
 
     def restore(self, snapshot: dict, *, expected_checksum: str, expected_rules_checksum: str) -> FrozenProfile:
         """Restore saved bytes, never current defaults. Expected hashes are trusted Run metadata."""
@@ -215,7 +228,7 @@ class ProfileLoader:
                  "PROFILE_SNAPSHOT_CHANGED")
         version, source = self._source(snapshot["profile_id"], snapshot["profile_version"])
         self._validate(raw, snapshot["profile_id"], version, source)
-        return FrozenProfile(raw, rules)
+        return FrozenProfile(raw, rules, self._root)
 
 
 def _validate_policy(profile: dict) -> None:

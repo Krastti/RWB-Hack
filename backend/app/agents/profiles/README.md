@@ -59,3 +59,11 @@ python -m backend.app.agents.profiles.example
 При упаковке нужны ресурсы `contracts/agents`, `templates/profiles` и `docs/agents.md`
 от одной версии checkout. Откат — исключить вызовы loader и вернуть код; уже
 сохранённые snapshots не удалять и не заменять новым текущим профилем.
+
+Conditional output regions are denied unless their condition is explicitly `True`.
+Pass the same trusted `conditions` mapping to `allows()` and `validate_plan()`.
+Paths are checked against the frozen max_path_length in both methods. Restored
+profiles retain the loader's repository root for C-02 validation; a missing local
+schema registry cannot fall back to another checkout. Rules reads are capped at
+1 MiB before decoding and use descriptor-relative no-follow opens on Linux,
+including parent directories, to avoid symlink replacement between check/open.
