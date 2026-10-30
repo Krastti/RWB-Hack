@@ -2,4 +2,6 @@
 
 from .projects import InvalidProjectInput, ProjectNotFound
 
-__all__ = ["InvalidProjectInput", "ProjectNotFound"]
+from .llm import LLMError
+
+__all__ = ['LLMError', "InvalidProjectInput", "ProjectNotFound"]

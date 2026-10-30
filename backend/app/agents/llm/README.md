@@ -37,10 +37,12 @@ python -m backend.app.agents.llm.example
 
 ## Публичный интерфейс
 
-Типы разделены на пакеты: `config` — `LLMConfig`, `dto` — `LLMResult`
-и `LLMUsage`, `error` — `LLMError`. В `adapter.py` остается логика вызова
-и обработки ответа. Все публичные классы доступны через `backend.app.agents.llm`;
-существующие импорты из `adapter` также сохранены.
+Типы следуют структуре приложения по сущностям: `app/config/llm.py` —
+`LLMConfig`, `app/models/dto/llm.py` — `LLMResult` и `LLMUsage`,
+`app/errors/llm.py` — `LLMError`. В `agents/llm/adapter.py` остается логика
+вызова и обработки ответа. Все публичные классы доступны через
+`backend.app.agents.llm`; существующие импорты из `adapter` также сохранены.
+Импорт DTO не загружает ORM; экспорты моделей БД разрешаются при обращении.
 
 ```python
 from backend.app.agents.llm import LLMAdapter, LLMConfig

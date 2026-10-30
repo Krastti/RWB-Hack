@@ -2,4 +2,6 @@
 
 from .projects import Project, ProjectPage, RequirementRevision
 
-__all__ = ["Project", "ProjectPage", "RequirementRevision"]
+from .llm import LLMResult, LLMUsage
+
+__all__ = ['LLMResult', 'LLMUsage', "Project", "ProjectPage", "RequirementRevision"]

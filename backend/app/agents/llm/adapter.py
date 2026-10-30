@@ -13,9 +13,9 @@ from jsonschema.validators import validator_for
 from referencing import Registry
 from referencing.exceptions import NoSuchResource
 
-from .config import LLMConfig
-from .dto import LLMResult, LLMUsage
-from .error import LLMError
+from ...config.llm import LLMConfig
+from ...models.dto.llm import LLMResult, LLMUsage
+from ...errors.llm import LLMError
 
 
 def _no_remote_schema(uri: str) -> Any:
