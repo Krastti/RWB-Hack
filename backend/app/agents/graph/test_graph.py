@@ -128,6 +128,31 @@ class AnalysisGraphTests(unittest.TestCase):
         arguments.update(changes)
         return graph.resume(self.run_id, **arguments)
 
+    def test_input_identity_excludes_execution_controls(self):
+        with open_checkpoints(self.path / "hash.sqlite") as saver:
+            graph = self.graph(saver)
+            _, original = graph._inputs(self.request)
+            retry = deepcopy(self.request)
+            retry["attempt"] += 1
+            retry["limits"]["max_calls"] += 10
+            retry["limits"]["max_output_tokens"] += 1000
+            self.assertEqual(graph._inputs(retry)[1], original)
+            artifact = deepcopy(self.initial)
+            payload = json.loads(artifact["content"])
+            payload["requirements_text"] += " Additional requirement."
+            artifact["content"] = json.dumps(payload, ensure_ascii=False)
+            artifact["checksum"] = sha256(artifact["content"].encode()).hexdigest()
+            artifact["size_bytes"] = len(artifact["content"].encode())
+            with patch.object(graph, "_artifact", return_value=artifact):
+                self.assertNotEqual(graph._inputs(retry)[1], original)
+
+    def test_confirmed_answers_change_input_identity(self):
+        with open_checkpoints(self.path / "answers-hash.sqlite") as saver:
+            graph = self.graph(saver)
+            before = self.waiting(graph)
+            after = self.resume(graph)
+            self.assertNotEqual(before["input_hash"], after["input_hash"])
+
     def test_restart_resume_and_duplicate_delivery(self):
         with open_checkpoints(self.path / "graph.sqlite") as saver:
             before = self.waiting(self.graph(saver))

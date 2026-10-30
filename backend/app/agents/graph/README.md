@@ -128,3 +128,11 @@ python -m venv .venv-worker
 Версии JSON Schema/referencing определяет contracts/agents/requirements.txt;
 модульные requirements подключают его, а не конкурирующие pins.
 Legacy requirements-analyst/0.1 остаётся отдельным протоколом от C-02 1.0.
+
+
+Canonical input identity excludes request `attempt` and execution `limits`.
+Input artifact IDs/references are sorted; frozen substantive fields, contract
+version, requirements and confirmed-answer artifacts remain part of the hash.
+Ordinary retry preserves this identity, while changed requirements/answers change
+it. Existing saved checkpoints with the earlier hash are not silently rewritten;
+replay detects INPUT_SNAPSHOT_CHANGED and requires controlled recovery (#128).

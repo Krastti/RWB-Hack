@@ -801,3 +801,18 @@ issues; помощник не публикует их автоматически
 при описанном поведении старого клиента на неизвестном типе. Смена смысла
 существующего поля под тем же schema_version недопустима. Откат документа до
 подключения — revert PR; после подключения сначала согласовать откат потребителей.
+
+
+### Budget retry stabilization policy
+
+C-01 Retry can raise max_calls/max_output_tokens only. Run.stop_reason uses
+MAX_CALLS or MAX_OUTPUT_TOKENS for these causes; required_limits includes the
+reservation for next work, and the cause-specific limit must increase. Cumulative
+usage and frozen profile are preserved; authorization is mandatory. MAX_INPUT_TOKENS
+and RUN_TIMEOUT (active Run execution time), and unknown causes, reject public
+retry with HTTP 409 RETRY_NOT_SUPPORTED without effects. UI hides this retry.
+The existing elapsed duration_ms includes wall-clock waiting and is not proof of
+active-time exhaustion. A single model_call.timeout_seconds is a request deadline,
+not RUN_TIMEOUT; it follows the existing failed-attempt policy. No API for changing
+input/time limits is introduced. Accounting producers must supply the cause; an
+unknown cause never grants continuation.

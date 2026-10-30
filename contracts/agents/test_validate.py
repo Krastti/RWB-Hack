@@ -80,5 +80,14 @@ class ProfileGrantsTests(unittest.TestCase):
                     validate()
 
 
+class ArtifactIntegrityTests(unittest.TestCase):
+    def test_corrupt_fixture_size_or_checksum_is_rejected(self):
+        for field, value in (("size_bytes", 0), ("checksum", "0" * 64)):
+            artifact = load(ROOT / "examples/agent-result.architecture.json")["output_artifacts"][0]
+            artifact[field] = value
+            with self.assertRaises(ContractError):
+                Contracts().validate("artifact", artifact)
+
+
 if __name__ == "__main__":
     unittest.main()

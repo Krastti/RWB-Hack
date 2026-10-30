@@ -225,3 +225,18 @@ PostgreSQL Run repository B-05/B-11 реализуют этот порт и уб
 заявляет готовность этой интеграции. Откат: убрать вызовы сервиса и revert PR,
 не удаляя принятые события/outbox/snapshot из хранилища. Новые тесты, CI/CD,
 контейнеризация, сканеры и deploy в scope #66 не входят.
+
+
+Completion requires `checkpoint_confirmed(record, attempt) is True` for each
+latest succeeded attempt, in addition to the existing mandatory domain guard.
+The callback reads authoritative durable saver confirmation under the Run lock;
+it must verify matching Run/revision/attempt/input/contract identities and must
+not perform an external write or treat receipt/intent as confirmation. If omitted,
+completion fails closed with 409 CHECKPOINT_REQUIRED. Accepted data remains
+committed; recovery supplies confirmation and completes without registering a new
+agent attempt. This seam is not a production persistence adapter. Dependency
+admission remains the mandatory domain guard's responsibility (#128).
+
+Both lifecycle and control use the C-03 event allocator and transition tables.
+Only one authoritative store and writer may own a Run; the two standalone local
+stores must never jointly manage the same Run. Shared write integration is #128.

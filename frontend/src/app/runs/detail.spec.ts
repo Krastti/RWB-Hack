@@ -73,3 +73,21 @@ it.each(['running','waiting_for_input','failed','budget_exceeded'] as const)('re
   expect(fixture.nativeElement.querySelector('button')).toBeNull();
   expect(fixture.nativeElement.querySelector('rwb-questions')).toBeNull();
 });
+
+it('clears the old Run and metrics on route changes and ignores the old subscription', () => {
+  const streams = new Map([['first',new Subject<RunSnapshot>()],['second',new Subject<RunSnapshot>()]]);
+  TestBed.configureTestingModule({providers:[{provide:ApiClient,useValue:{}}]});
+  TestBed.overrideComponent(RunDetail,{set:{imports:[],template:'',providers:[{provide:RunMonitor,useValue:{watch:(id:string)=>streams.get(id)!}}]}});
+  const fixture = TestBed.createComponent(RunDetail);
+  fixture.componentRef.setInput('id','first');fixture.detectChanges();
+  const first = makeRun({run_id:'first'});first.metrics.tokens_in=99;
+  streams.get('first')!.next({run:first,events:[],error:null});
+  fixture.componentRef.setInput('id','second');fixture.detectChanges();
+  expect(fixture.componentInstance.run()).toBeNull();expect(fixture.componentInstance.events()).toEqual([]);
+  streams.get('first')!.next({run:first,events:[],error:null});
+  expect(fixture.componentInstance.run()).toBeNull();
+  const second=makeRun({run_id:'second'});
+  streams.get('second')!.next({run:second,events:[],error:null});
+  expect(fixture.componentInstance.metrics(fixture.componentInstance.run()!)[0].value).toBe('0 / 0');
+  expect(fixture.componentInstance.metrics(second)[0].note).toContain('полнота неизвестна');
+});

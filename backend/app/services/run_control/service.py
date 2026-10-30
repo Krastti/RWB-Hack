@@ -1,4 +1,6 @@
 """Cancel/retry commands and worker safe-boundary hooks, C-03 v1.0."""
+from ..lifecycle.events import next_event
+from ..lifecycle.service import RUN_TRANSITIONS, STAGE_TRANSITIONS
 from copy import deepcopy
 from hashlib import sha256
 import json
@@ -22,21 +24,22 @@ class RunControlService:
 
     @staticmethod
     def _event(record: Record, event_type: str, *, stage_id: str | None = None, **data):
-        event = dict(run_id=str(record.run.run_id), seq=len(record.events) + 1,
-                     event_type=event_type, timestamp=now().isoformat(),
-                     data=deepcopy({"schema_version": "1.0", **data}))
-        if stage_id is not None:
-            event["stage_id"] = stage_id
-        record.events.append(event)
+        event = next_event(run_id=record.run.run_id, events=record.events,
+                           event_type=event_type, data=data, stage_id=stage_id)
+        record.events.append(event.model_dump(mode="json", exclude_none=True))
         record.run.updated_at = now()
 
     def _status(self, record: Record, status: str):
         previous = record.run.status
+        if (previous, status) not in RUN_TRANSITIONS:
+            raise conflict("Forbidden lifecycle transition")
         record.run.status = status
         self._event(record, "run.status_changed", **{"from": previous, "to": status,
                                                      "reason_code": "RUN_CONTROL"})
 
     def _stage_event(self, record: Record, attempt: StageAttempt, previous: str | None):
+        if previous is not None and (previous, attempt.status) not in STAGE_TRANSITIONS:
+            raise conflict("Forbidden lifecycle stage transition")
         self._event(record, "stage.status_changed", stage_id=attempt.stage_id,
                     attempt_no=attempt.attempt_no, contract_version=attempt.contract_version,
                     **{"from": previous, "to": attempt.status, "reason_code": "RUN_CONTROL"})
@@ -74,8 +77,14 @@ class RunControlService:
             self._event(record, "metrics.updated", metrics=record.run.metrics.model_dump(),
                         tokens_complete=record.tokens_complete)
 
+    @staticmethod
+    def _profile(record):
+        if record.run.profile_id != "web-fastapi-angular":
+            raise ControlError(409, "UNSUPPORTED_RUN_PROFILE", "Historical Run is read-only")
+
     def cancel(self, *, owner_id: UUID, run_id: UUID) -> Run:
         with self.store.transaction(owner_id, run_id) as record:
+            self._profile(record)
             if record.run.status in {"queued", "running", "waiting_for_input"}:
                 self._status(record, "cancelling")
                 # A worker/barrier dispatcher observes the durable intent even
@@ -90,6 +99,7 @@ class RunControlService:
         fingerprint = sha256(json.dumps(body.model_dump(mode="json", exclude_none=True),
                                         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         with self.store.transaction(owner_id, run_id) as record:
+            self._profile(record)
             replay = record.replays.get(key)  # Scope: owner + run + retry.
             if replay is not None:
                 if replay["hash"] != fingerprint:
@@ -115,9 +125,15 @@ class RunControlService:
             if limits.max_calls < old.max_calls or limits.max_output_tokens < old.max_output_tokens:
                 raise conflict("Retry cannot reduce limits")
             if record.run.status == "budget_exceeded":
+                if record.run.stop_reason not in {"MAX_CALLS", "MAX_OUTPUT_TOKENS"}:
+                    raise ControlError(409, "RETRY_NOT_SUPPORTED", "Retry cannot increase the exhausted limit")
                 required = record.required_limits
                 if (body.limits is None or required is None
                         or (limits.max_calls == old.max_calls and limits.max_output_tokens == old.max_output_tokens)
+                        or (record.run.stop_reason == "MAX_CALLS" and limits.max_calls <= old.max_calls)
+                        or (record.run.stop_reason == "MAX_OUTPUT_TOKENS" and limits.max_output_tokens <= old.max_output_tokens)
+                        or limits.max_calls <= record.run.metrics.model_calls
+                        or limits.max_output_tokens <= record.run.metrics.tokens_out
                         or limits.max_calls < required.max_calls
                         or limits.max_output_tokens < required.max_output_tokens):
                     raise conflict("Exhausted limits must be increased enough for next work")
@@ -159,6 +175,7 @@ class RunControlService:
         the common run transaction; this hook admits one stage invocation.
         """
         with self.store.transaction(owner_id, run_id) as record:
+            self._profile(record)
             if record.run.status not in {"queued", "running"}:
                 raise conflict()
             attempt = self._latest(record, stage_id)
@@ -190,6 +207,7 @@ class RunControlService:
         even if cancellation arrives before the provider responds.
         """
         with self.store.transaction(owner_id, run_id) as record:
+            self._profile(record)
             attempt = self._latest(record, stage_id)
             private = self._private(record, attempt)
             if (record.run.status != "running" or attempt.status != "running"
@@ -215,6 +233,7 @@ class RunControlService:
         transaction; failure rolls back everything, including attempt completion.
         """
         with self.store.transaction(owner_id, run_id) as record:
+            self._profile(record)
             if record.run.status not in {"running", "cancelling"}:
                 raise conflict()
             attempt = self._latest(record, stage_id)
@@ -254,5 +273,6 @@ class RunControlService:
     def reach_boundary(self, *, owner_id: UUID, run_id: UUID) -> Run:
         """Dispatcher hook when no call is active (including waiting_for_input)."""
         with self.store.transaction(owner_id, run_id) as record:
+            self._profile(record)
             self._cancel_boundary(record)
             return record.run.model_copy(deep=True)

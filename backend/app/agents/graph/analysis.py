@@ -101,8 +101,13 @@ class AnalysisGraph:
         for key in ("previous_requirements_artifact_id", "analysis_rules_artifact_id"):
             _require(source[key] is None or source[key] in request["input_artifact_ids"],
                      "INPUT_REFERENCE_NOT_ALLOWED")
-        digest = sha256(_json({"request": request,
-                               "artifacts": [_reference(a) for a in artifacts]}).encode()).hexdigest()
+        # Retry changes execution controls, not frozen substantive inputs.
+        substantive = {key: deepcopy(value) for key, value in request.items()
+                       if key not in {"attempt", "limits"}}
+        substantive["input_artifact_ids"] = sorted(request["input_artifact_ids"])
+        digest = sha256(_json({"request": substantive,
+                               "artifacts": sorted((_reference(a) for a in artifacts),
+                                                   key=lambda a: a["artifact_id"])}).encode()).hexdigest()
         return source, digest
 
     def _config(self, run_id: str) -> dict:

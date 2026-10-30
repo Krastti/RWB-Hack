@@ -27,8 +27,8 @@ configure_run_control(app, RunControlService(shared_store, authorize_retry=retry
 Чужой и отсутствующий Run одинаково дают 404; используется существующий current_user.
 
 Роутер подключается явно: штатный `create_app` не получает отдельное хранилище
-запусков автоматически. B-05/B-06, общий PostgreSQL run repository и граф A-04
-в этой базе ещё отсутствуют. Это готовый модуль управления с проверенным локальным
+запусков автоматически. Модели PostgreSQL B-05, lifecycle B-06 и граф A-04 существуют, но общий
+транзакционный write adapter для их совместной работы ещё не подключён. Это готовый модуль управления с проверенным локальным
 адаптером, а не заявление готовности полного пайплайна.
 
 ## Публичные операции
@@ -134,3 +134,23 @@ cancel до worker → cancelled/cancelled. Дальнейшая интегра�
 из используемой конфигурации после подключения общего транзакционного хранилища.
 Feature flag не вводится; включение — явный configure_run_control.
 Откат B-10: отключить этот configure и revert PR; принятые данные/outbox не удалять.
+
+
+## Stabilization policy
+
+Run defaults to Angular; historical React records deserialize unchanged but every
+control/worker admission rejects them with 409 UNSUPPORTED_RUN_PROFILE. UI checks
+are not the authorization boundary.
+
+Budget causes are normalized in Run.stop_reason: MAX_CALLS, MAX_OUTPUT_TOKENS,
+MAX_INPUT_TOKENS, RUN_TIMEOUT. Unknown reasons fail closed. Only calls/output
+causes permit public retry, with increased cause-specific limit, positive remaining
+capacity versus cumulative usage, required_limits sufficient for reservations,
+and mandatory authorize_retry policy. Input/time/unknown causes return 409
+RETRY_NOT_SUPPORTED before any attempts/events/outbox/budget changes. Cumulative
+usage, automatic retry counts and frozen inputs/profile are never reset.
+
+Event allocation and transition tables are shared with lifecycle. This does NOT
+make two independent repositories a single Run owner. Production integration
+must use one authoritative transaction/lock/sequence and one state writer (#128).
+Do not connect the standalone SQLite control and lifecycle stores to the same Run.

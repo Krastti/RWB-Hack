@@ -1,4 +1,4 @@
-"""C-01 v1.0.0 DTOs and private C-03 v1.0 control state."""
+"""C-01 v2.1.0 DTOs and private C-03 v1.0 control state."""
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID, uuid4
@@ -63,7 +63,7 @@ class Run(Model):
     run_id: UUID
     project_id: UUID
     revision_id: UUID
-    profile_id: Literal["web-fastapi-react"] = "web-fastapi-react"
+    profile_id: Literal["web-fastapi-angular", "web-fastapi-react"] = "web-fastapi-angular"
     status: Literal["queued", "running", "waiting_for_input", "completed", "cancelling", "cancelled", "failed", "budget_exceeded"]
     limits: Limits
     created_at: datetime = Field(default_factory=now)

@@ -27,3 +27,12 @@ describe('retry exhausted budget', () => {
     expect(retryLimitError(run, { max_calls: 11, max_output_tokens: 40000 })).toBeNull();
   });
 });
+
+it.each(['MAX_INPUT_TOKENS','RUN_TIMEOUT','unknown',undefined])('rejects unsupported budget cause %s even with both limits raised', stop_reason => {
+  const run = makeRun({status:'budget_exceeded',stop_reason});
+  expect(retryLimitError(run,{max_calls:100,max_output_tokens:999999})).toContain('RETRY_NOT_SUPPORTED');
+});
+it('requires the cause-specific limit increase even below visible reservation totals', () => {
+  const run = makeRun({status:'budget_exceeded',stop_reason:'MAX_CALLS'});
+  expect(retryLimitError(run,{max_calls:10,max_output_tokens:40000})).toContain('вызовов');
+});
