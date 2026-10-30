@@ -1,7 +1,7 @@
 # Сервис проектов B-03 (#58)
 
 Публичный интерфейс: `app.services.projects.ProjectService` и
-`app.repository.ProjectRepository`. Ошибки `InvalidProjectInput` и
+`app.repositories.ProjectRepository`. Ошибки `InvalidProjectInput` и
 `ProjectNotFound` находятся в `app.errors`. Прежние импорты из
 `app.services.projects` сохранены для совместимости. Контракт: `contracts/platform.openapi.yaml`, API 1.0.0
 (C-01). Код сервиса не использует HTTP, SQLAlchemy или драйвер БД.
