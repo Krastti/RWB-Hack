@@ -25,7 +25,7 @@ def make_plan(context, requirements_id, requirements, profile, design):
             "depends_on": dependencies[owner], "input_artifact_ids": [requirements_id],
             "output_paths": list(grant.get("paths", [])),
             "output_directories": list(grant.get("directories", [])),
-            "related_fr_ids": fr_ids,
+            "related_fr_ids": list(fr_ids),
         })
     plan = {"schema_version": "1.0", "profile_id": context["profile_id"],
             "contract_version": context["contract_version"], "tasks": tasks}
@@ -49,7 +49,8 @@ def make_tree(profile, design):
     if has_integrations:
         for condition in profile["conditional_directories"]:
             directories.update(condition["directories"])
-    grants = [directory for owner in OWNERS if owner != "integrations" or has_integrations
+    # Design directories include contracts; coding tasks keep their own grants.
+    grants = [directory for owner in ("architecture", *OWNERS) if owner != "integrations" or has_integrations
               for directory in profile["ownership"]["agents"][owner].get("directories", [])]
     for component in design["components"]:
         for path in component["output_directories"]:

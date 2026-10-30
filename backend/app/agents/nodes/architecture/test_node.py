@@ -118,6 +118,33 @@ class ArchitectureNodeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(first.ok and second.ok)
         self.assertEqual(first.data, second.data)
 
+    async def test_task_fr_scopes_are_independent(self):
+        result = await self.generate()
+        self.assertTrue(result.ok, result.error)
+        tasks = result.data["generation_plan"]["tasks"]
+        expected = deepcopy([t["related_fr_ids"] for t in tasks])
+        tasks[0]["related_fr_ids"].remove("FR-004")
+        self.assertNotIn("FR-004", tasks[0]["related_fr_ids"])
+        self.assertEqual([t["related_fr_ids"] for t in tasks[1:]], expected[1:])
+
+    async def test_architecture_directory_does_not_expand_coding_grants(self):
+        self.design["components"].append({
+            "id": "CMP-003", "name": "API contracts",
+            "responsibilities": ["Versioned event schemas"],
+            "output_directories": ["contracts/events"], "depends_on": [],
+            "related_fr_ids": ["FR-001"],
+        })
+        result = await self.generate()
+        self.assertTrue(result.ok, result.error)
+        tree = {entry["path"]: entry for entry in result.data["project_tree"]}
+        self.assertEqual(tree["contracts/events"]["type"], "directory")
+        plan = result.data["generation_plan"]
+        validate_profile_grants(plan, self.profile)
+        for task in plan["tasks"]:
+            self.assertNotEqual(task["owner_agent"], "architecture")
+            self.assertFalse(any(path == "contracts" or path.startswith("contracts/")
+                                 for path in task["output_paths"] + task["output_directories"]))
+
     async def test_effective_limits_reach_the_transport(self):
         self.context["limits"].update(max_output_tokens=400, timeout_seconds=7)
         with patch("backend.app.agents.nodes.architecture.node.LLMAdapter", wraps=LLMAdapter) as adapter:
