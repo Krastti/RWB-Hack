@@ -210,6 +210,18 @@
         ],
         "additionalProperties": false
       }
+    },
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session"
+      }
     }
-  }
+  },
+  "security": [
+    {
+      "session": []
+    }
+  ]
 }

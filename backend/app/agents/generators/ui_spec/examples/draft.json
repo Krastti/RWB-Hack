@@ -88,7 +88,10 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": [
+            "rows"
+          ]
         },
         {
           "id": "COMP-002",
@@ -103,7 +106,8 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": []
         },
         {
           "id": "COMP-003",
@@ -118,7 +122,10 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": [
+            "value"
+          ]
         },
         {
           "id": "COMP-004",
@@ -133,7 +140,8 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": []
         },
         {
           "id": "COMP-005",
@@ -148,7 +156,8 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": []
         },
         {
           "id": "COMP-006",
@@ -164,7 +173,10 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": [
+            "created_ticket"
+          ]
         },
         {
           "id": "COMP-007",
@@ -179,7 +191,8 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": []
         }
       ],
       "actions": [
@@ -201,7 +214,38 @@
           "related_fr_ids": [
             "FR-001"
           ],
-          "success_effect": "После ответа 201 очистить форму и обновить listOwnTickets."
+          "success_effect": "После ответа 201 очистить форму и обновить listOwnTickets.",
+          "security": [
+            {
+              "schemes": [
+                {
+                  "scheme_id": "session",
+                  "scopes": []
+                }
+              ]
+            }
+          ],
+          "request_bindings": [
+            {
+              "component_id": "COMP-003",
+              "component_field": "value",
+              "location": "body",
+              "parameter_name": null,
+              "media_type": "application/json",
+              "field_path": [
+                "description"
+              ]
+            }
+          ],
+          "response_bindings": [
+            {
+              "component_id": "COMP-006",
+              "component_field": "created_ticket",
+              "status_code": "201",
+              "media_type": "application/json",
+              "field_path": []
+            }
+          ]
         },
         {
           "id": "ACT-002",
@@ -221,7 +265,27 @@
           "related_fr_ids": [
             "FR-002"
           ],
-          "success_effect": "Показать список или empty state."
+          "success_effect": "Показать список или empty state.",
+          "security": [
+            {
+              "schemes": [
+                {
+                  "scheme_id": "session",
+                  "scopes": []
+                }
+              ]
+            }
+          ],
+          "request_bindings": [],
+          "response_bindings": [
+            {
+              "component_id": "COMP-001",
+              "component_field": "rows",
+              "status_code": "200",
+              "media_type": "application/json",
+              "field_path": []
+            }
+          ]
         }
       ],
       "states": {
@@ -315,7 +379,12 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": [
+            "rows",
+            "selected_ticket_id",
+            "updated_ticket"
+          ]
         },
         {
           "id": "COMP-012",
@@ -330,7 +399,10 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": [
+            "value"
+          ]
         },
         {
           "id": "COMP-013",
@@ -345,7 +417,8 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": []
         },
         {
           "id": "COMP-014",
@@ -360,7 +433,8 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": []
         },
         {
           "id": "COMP-015",
@@ -375,7 +449,8 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": []
         },
         {
           "id": "COMP-016",
@@ -390,7 +465,8 @@
             "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
             "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
             "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
-          }
+          },
+          "data_fields": []
         }
       ],
       "actions": [
@@ -412,7 +488,27 @@
           "related_fr_ids": [
             "FR-003"
           ],
-          "success_effect": "Показать список всех доступных заявок."
+          "success_effect": "Показать список всех доступных заявок.",
+          "security": [
+            {
+              "schemes": [
+                {
+                  "scheme_id": "session",
+                  "scopes": []
+                }
+              ]
+            }
+          ],
+          "request_bindings": [],
+          "response_bindings": [
+            {
+              "component_id": "COMP-011",
+              "component_field": "rows",
+              "status_code": "200",
+              "media_type": "application/json",
+              "field_path": []
+            }
+          ]
         },
         {
           "id": "ACT-004",
@@ -432,7 +528,46 @@
           "related_fr_ids": [
             "FR-003"
           ],
-          "success_effect": "После 200 заменить статус данными ответа; при ошибке сохранить прежний."
+          "success_effect": "После 200 заменить статус данными ответа; при ошибке сохранить прежний.",
+          "security": [
+            {
+              "schemes": [
+                {
+                  "scheme_id": "session",
+                  "scopes": []
+                }
+              ]
+            }
+          ],
+          "request_bindings": [
+            {
+              "component_id": "COMP-011",
+              "component_field": "selected_ticket_id",
+              "location": "path",
+              "parameter_name": "id",
+              "media_type": null,
+              "field_path": []
+            },
+            {
+              "component_id": "COMP-012",
+              "component_field": "value",
+              "location": "body",
+              "parameter_name": null,
+              "media_type": "application/json",
+              "field_path": [
+                "status"
+              ]
+            }
+          ],
+          "response_bindings": [
+            {
+              "component_id": "COMP-011",
+              "component_field": "updated_ticket",
+              "status_code": "200",
+              "media_type": "application/json",
+              "field_path": []
+            }
+          ]
         }
       ],
       "states": {

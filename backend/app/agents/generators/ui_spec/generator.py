@@ -19,7 +19,7 @@ from .validation import (
     validate_shape, validate_ui_spec as validate_payload,
 )
 
-PROMPT_VERSION = "1.0.0"
+PROMPT_VERSION = "1.1.0"
 CATALOG_VERSION = "1.0.0"
 REPO = ROOT.parents[4]
 MAX_INPUT_BYTES = 1048576
@@ -104,8 +104,9 @@ def prepare_ui_spec(
                         for key, value in [("requirements", requirements_artifact), ("openapi", openapi_artifact)]},
         }
         inputs = {"context": context, "metadata": metadata, "requirements": requirements,
-                  "operations": operations, "profile": profile}
+                  "operations": operations, "profile": profile, "openapi": document}
         prompt = {"requirements": requirements, "openapi": document, "component_catalog": catalog,
+                  "operation_security": {key: value["security"] for key, value in operations.items()},
                   "profile_policy": {key: profile[key] for key in ("profile_id", "profile_version", "stack", "ui_kit")},
                   "contract_version": context["contract_version"]}
         defaults = profile["limits"]["agent"]
@@ -123,7 +124,7 @@ def prepare_ui_spec(
 
 
 def _validate(spec: dict, inputs: dict) -> None:
-    validate_payload(spec, **{key: inputs[key] for key in ("metadata", "requirements", "operations", "profile")})
+    validate_payload(spec, **{key: inputs[key] for key in ("metadata", "requirements", "operations", "profile", "openapi")})
     require(len(_json(spec).encode("utf-8")) <= inputs["profile"]["limits"]["artifacts"]["max_file_bytes"],
             "UI_ARTIFACT_TOO_LARGE")
 

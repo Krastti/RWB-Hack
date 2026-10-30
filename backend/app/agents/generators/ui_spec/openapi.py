@@ -9,7 +9,7 @@ import yaml
 
 from contracts.agents.validate import loads, walk
 
-from .validation import UiSpecError, require
+from .errors import UiSpecError, require
 
 METHODS = frozenset({"get", "post", "put", "patch", "delete", "options", "head", "trace"})
 
@@ -72,6 +72,78 @@ def _path_item(document: dict, item: dict) -> dict:
     return item
 
 
+def resolve_object(document: dict, value: dict) -> dict:
+    seen = set()
+    require(isinstance(value, dict), "UI_OPENAPI_INVALID_OBJECT")
+    while "$ref" in value:
+        reference = value["$ref"]
+        require(reference not in seen, "UI_OPENAPI_CYCLIC_REF")
+        require(set(value) <= {"$ref", "summary", "description"}, "UI_OPENAPI_REF_SIBLINGS")
+        seen.add(reference)
+        value = _pointer(document, reference)
+        require(isinstance(value, dict), "UI_OPENAPI_INVALID_OBJECT")
+    return value
+
+
+def _security(document: dict, value: list) -> list[dict]:
+    require(isinstance(value, list), "UI_OPENAPI_INVALID_SECURITY")
+    schemes = document.get("components", {}).get("securitySchemes", {})
+    require(isinstance(schemes, dict), "UI_OPENAPI_INVALID_SECURITY")
+    result = []
+    for alternative in value:
+        require(isinstance(alternative, dict), "UI_OPENAPI_INVALID_SECURITY")
+        entries = []
+        for name, scopes in sorted(alternative.items()):
+            require(name in schemes, "UI_OPENAPI_UNKNOWN_SECURITY_SCHEME")
+            require(isinstance(scopes, list) and all(isinstance(scope, str) and scope for scope in scopes)
+                    and len(set(scopes)) == len(scopes), "UI_OPENAPI_INVALID_SECURITY")
+            scheme = resolve_object(document, schemes[name])
+            kind = scheme.get("type")
+            require(kind in {"apiKey", "http", "oauth2", "openIdConnect", "mutualTLS"},
+                    "UI_OPENAPI_INVALID_SECURITY")
+            if kind == "oauth2":
+                flows = scheme.get("flows")
+                require(isinstance(flows, dict) and bool(flows), "UI_OPENAPI_INVALID_SECURITY")
+                available = set()
+                for flow_name, flow in flows.items():
+                    if flow_name.startswith("x-"):
+                        continue
+                    require(flow_name in {"implicit", "password", "clientCredentials", "authorizationCode"}
+                            and isinstance(flow, dict) and isinstance(flow.get("scopes"), dict),
+                            "UI_OPENAPI_INVALID_SECURITY")
+                    available.update(flow["scopes"])
+                require(set(scopes) <= available, "UI_OPENAPI_UNKNOWN_SCOPE")
+            entries.append({"scheme_id": name, "scopes": sorted(scopes)})
+        normalized = {"schemes": entries}
+        if normalized not in result:
+            result.append(normalized)
+    return result
+
+
+def _parameters(document: dict, item: dict, operation: dict, path: str) -> list[dict]:
+    result = {}
+    for owner in (item, operation):
+        values = owner.get("parameters", [])
+        require(isinstance(values, list), "UI_OPENAPI_INVALID_PARAMETER")
+        seen = set()
+        for raw in values:
+            parameter = resolve_object(document, raw)
+            name, location = parameter.get("name"), parameter.get("in")
+            require(isinstance(name, str) and bool(name) and location in {"path", "query", "header", "cookie"},
+                    "UI_OPENAPI_INVALID_PARAMETER")
+            key = (location, name)
+            require(key not in seen, "UI_OPENAPI_DUPLICATE_PARAMETER")
+            require(type(parameter.get("required", False)) is bool, "UI_OPENAPI_INVALID_PARAMETER")
+            if location == "path":
+                require(parameter.get("required") is True and "{" + name + "}" in path,
+                        "UI_OPENAPI_INVALID_PARAMETER")
+            seen.add(key)
+            result[key] = parameter
+    require(all(("path", name) in result for name in re.findall(r"\{([^{}]+)\}", path)),
+            "UI_OPENAPI_MISSING_PATH_PARAMETER")
+    return list(result.values())
+
+
 def operation_index(document: dict, *, contract_version: str, fr_ids: set[str],
                     role_ids: set[str]) -> dict[str, dict]:
     require(document.get("openapi") == "3.1.0", "UI_OPENAPI_VERSION")
@@ -82,6 +154,7 @@ def operation_index(document: dict, *, contract_version: str, fr_ids: set[str],
     for node in walk(document):
         if isinstance(node, dict) and "$ref" in node:
             _pointer(document, node["$ref"])
+    security = _security(document, document.get("security", []))
     result = {}
     for path, raw_item in document["paths"].items():
         if path.startswith("x-"):
@@ -104,5 +177,9 @@ def operation_index(document: dict, *, contract_version: str, fr_ids: set[str],
                             and all(isinstance(value, str) for value in values)
                             and len(set(values)) == len(values) and set(values) <= allowed,
                             "UI_OPENAPI_UNKNOWN_BINDING")
-            result[operation_id] = {"method": method, "path": path, "operation": operation}
+            result[operation_id] = {
+                "method": method, "path": path, "operation": operation,
+                "parameters": _parameters(document, item, operation, path),
+                "security": _security(document, operation["security"]) if "security" in operation else security,
+            }
     return result

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
@@ -12,19 +11,11 @@ from referencing.exceptions import NoSuchResource
 
 from contracts.agents.validate import load, walk
 
+from .bindings import validate_bindings
+from .errors import UiSpecError, require
+
 ROOT = Path(__file__).resolve().parent
 DRAFT_FIELDS = ("flows", "screens", "non_ui_requirements")
-
-
-class UiSpecError(ValueError):
-    def __init__(self, code: str):
-        self.code = code
-        super().__init__(code)
-
-
-def require(condition: bool, code: str) -> None:
-    if not condition:
-        raise UiSpecError(code)
 
 
 def _no_remote(uri: str):
@@ -70,8 +61,19 @@ def _within(child: dict, parent: dict) -> bool:
             or child["mode"] == "roles" and set(child["role_ids"]) <= set(parent["role_ids"]))
 
 
+def _security_key(security: list[dict]) -> frozenset:
+    alternatives = []
+    for alternative in security:
+        schemes = alternative["schemes"]
+        require(len({scheme["scheme_id"] for scheme in schemes}) == len(schemes),
+                "UI_SECURITY_MISMATCH")
+        alternatives.append(frozenset((scheme["scheme_id"], frozenset(scheme["scopes"])) for scheme in schemes))
+    require(len(set(alternatives)) == len(alternatives), "UI_SECURITY_MISMATCH")
+    return frozenset(alternatives)
+
+
 def validate_ui_spec(spec: dict, *, metadata: dict, requirements: dict,
-                     operations: dict, profile: dict) -> None:
+                     operations: dict, profile: dict, openapi: dict) -> None:
     validate_shape(spec, ui_spec_schema())
     require({key: value for key, value in spec.items() if key not in DRAFT_FIELDS} == metadata,
             "UI_SOURCE_MISMATCH")
@@ -91,9 +93,10 @@ def validate_ui_spec(spec: dict, *, metadata: dict, requirements: dict,
     widths = set(profile["ui_kit"]["responsive_widths_px"])
     states = set(profile["ui_kit"]["required_states"])
     for screen in screens.values():
-        # Parameter names do not distinguish Angular routes.
-        route = re.sub(":[A-Za-z][A-Za-z0-9_]*", ":param", screen["route"])
-        require(route not in routes, "UI_DUPLICATE_ROUTE")
+        route = tuple(part for part in screen["route"].split("/") if part)
+        require(not any(len(route) == len(previous) and all(
+            left == right or left.startswith(":") or right.startswith(":")
+            for left, right in zip(route, previous)) for previous in routes), "UI_DUPLICATE_ROUTE")
         routes.add(route)
         components = _index(screen["components"], "UI_DUPLICATE_COMPONENT")
         actions = _index(screen["actions"], "UI_DUPLICATE_ACTION")
@@ -106,6 +109,8 @@ def validate_ui_spec(spec: dict, *, metadata: dict, requirements: dict,
         covered.update(screen_frs)
         for component in components.values():
             require(set(component["related_fr_ids"]) <= screen_frs, "UI_COMPONENT_FR_MISMATCH")
+        implemented_frs = {fr for item in [*components.values(), *actions.values()] for fr in item["related_fr_ids"]}
+        require(screen_frs <= implemented_frs, "UI_SCREEN_FR_UNCOVERED")
         for action in actions.values():
             require(set(action["related_fr_ids"]) <= screen_frs, "UI_ACTION_FR_MISMATCH")
             require(_within(action["access"], screen["access"]), "UI_ACTION_ACCESS_WIDENED")
@@ -117,7 +122,12 @@ def validate_ui_spec(spec: dict, *, metadata: dict, requirements: dict,
                 require(_within(action["access"], screens[target]["access"]), "UI_TARGET_ACCESS_MISMATCH")
             if action["kind"] == "api":
                 require(action["operation_id"] in operations, "UI_UNKNOWN_OPERATION")
-                operation = operations[action["operation_id"]]["operation"]
+                indexed = operations[action["operation_id"]]
+                operation = indexed["operation"]
+                require(_security_key(action["security"]) == _security_key(indexed["security"]),
+                        "UI_SECURITY_MISMATCH")
+                if indexed["security"] and all(item["schemes"] for item in indexed["security"]):
+                    require(action["access"]["mode"] == "roles", "UI_OPERATION_AUTH_REQUIRED")
                 if "x-role-ids" in operation:
                     require(action["access"]["mode"] == "roles"
                             and set(action["access"]["role_ids"]) <= set(operation["x-role-ids"]),
@@ -125,9 +135,12 @@ def validate_ui_spec(spec: dict, *, metadata: dict, requirements: dict,
                 if "x-fr-ids" in operation:
                     require(set(action["related_fr_ids"]) <= set(operation["x-fr-ids"]),
                             "UI_OPERATION_FR_MISMATCH")
+                validate_bindings(action, components, indexed, openapi)
             else:
                 require(action["operation_id"] is None, "UI_INVALID_ACTION")
                 require((action["kind"] == "navigate") == (target is not None), "UI_INVALID_ACTION")
+                require(not action["security"] and not action["request_bindings"]
+                        and not action["response_bindings"], "UI_INVALID_ACTION")
         require(set(screen["states"]) == states, "UI_MISSING_STATE")
         for state in screen["states"].values():
             require(set(state["component_ids"]) <= components.keys(), "UI_UNKNOWN_COMPONENT")
