@@ -195,6 +195,7 @@ python3 -m venv contracts/agents/.venv
 source contracts/agents/.venv/bin/activate
 python -m pip install -r contracts/agents/requirements.txt
 python contracts/agents/validate.py --check
+python -m unittest discover -s contracts/agents -p 'test_*.py' -v
 ```
 
 Ожидается:
@@ -202,6 +203,9 @@ python contracts/agents/validate.py --check
 ```text
 OK: 11 schemas, 22 examples, 4 linked bundles, 1 snapshot; offline
 ```
+
+Unit-тесты проверяют, что разные задачи одного агента с разными stage_id
+принимаются, а повторяющийся stage_id отклоняется.
 
 Отдельный документ:
 
