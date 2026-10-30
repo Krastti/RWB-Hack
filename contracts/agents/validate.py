@@ -201,6 +201,20 @@ class Contracts:
             loads(artifact["content"])
 
 
+def validate_profile_grants(plan, profile):
+    """C-05 policy is supplied explicitly; universal C-02 stays profile-neutral."""
+    require(plan["profile_id"] == profile["profile_id"], "Profile identity mismatch")
+    for task in plan["tasks"]:
+        grant = profile["ownership"]["agents"].get(task["owner_agent"], {})
+        directories = grant.get("directories", [])
+        for kind in ("output_paths", "output_directories"):
+            for path in task[kind]:
+                allowed = any(path == d or path.startswith(d + "/") for d in directories)
+                if kind == "output_paths":
+                    allowed = allowed or path in grant.get("paths", [])
+                require(allowed, "Generation output exceeds profile grants")
+
+
 def example_file(filename):
     path = (ROOT / "examples" / filename).resolve()
     require(path.is_relative_to((ROOT / "examples").resolve()), "Example escapes examples directory")
@@ -337,6 +351,8 @@ def main(argv=None):
         contracts = Contracts()
         if args.check:
             documents, bundles, snapshots = check_examples(contracts)
+            validate_profile_grants(load(ROOT / "examples/generation-plan.json"),
+                load(ROOT.parent.parent / "templates/profiles/web-fastapi-angular/profile.json"))
             print(f"OK: {len(contracts.schemas)} schemas, {documents} examples, "
                   f"{bundles} linked bundles, {snapshots} snapshot; offline")
         else:

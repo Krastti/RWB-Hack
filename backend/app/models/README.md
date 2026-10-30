@@ -68,7 +68,7 @@ run_id = uuid4()
 with Session(engine) as session, session.begin():
     run = Run(
         id=run_id, project_id=project_id, revision_id=revision_id,
-        profile_id="web-fastapi-react",
+        profile_id="web-fastapi-angular",
         limits={"max_calls": 20, "max_output_tokens": 10000},
         metrics={"tokens_in": 0, "tokens_out": 0, "model_calls": 0,
                  "attempts": 1, "manual_clarifications": 0, "duration_ms": 0},
@@ -84,7 +84,7 @@ with Session(engine) as session, session.begin():
             run_id=run_id, seq=1, event_type="run.created",
             data={"schema_version": "1.0", "status": "queued",
                   "project_id": str(project_id), "revision_id": str(revision_id),
-                  "profile_id": "web-fastapi-react"},
+                  "profile_id": "web-fastapi-angular"},
         ),
         RunEvent(
             run_id=run_id, seq=2, event_type="stage.status_changed", stage_id="analysis",

@@ -7,7 +7,7 @@
 
 ## Зависимости и запуск
 
-Python 3.11+. Пока backend не имеет общего файла зависимостей, зависимости
+Python 3.11+. Для отдельного адаптера зависимости
 этого модуля фиксируются отдельно:
 
 ```sh
@@ -128,3 +128,18 @@ usage/diagnostics этапа. Схемы C-02 содержат межфайло�
 - [Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
 - [HTTPX timeouts](https://www.python-httpx.org/advanced/timeouts/)
 - [jsonschema validation](https://python-jsonschema.readthedocs.io/en/stable/validate/)
+
+## Совместное окружение worker (#121)
+
+Python 3.11+. Из корня репозитория, в новом venv:
+
+```sh
+python -m venv .venv-worker
+.venv-worker/bin/python -m pip install -r backend/requirements-worker.txt
+.venv-worker/bin/python -m pip check
+```
+
+Один resolver устанавливает API, A-01, A-02, C-02, A-04 и legacy analyst.
+Версии JSON Schema/referencing определяет contracts/agents/requirements.txt;
+модульные requirements подключают его, а не конкурирующие pins.
+Legacy requirements-analyst/0.1 остаётся отдельным протоколом от C-02 1.0.

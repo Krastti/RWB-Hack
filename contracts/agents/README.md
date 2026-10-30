@@ -245,3 +245,7 @@ contract_version предметного проекта меняет архите
 Перед merge нужны review и согласование с #75/#76/#77/#78 и владельцем C-03.
 Результат локальной проверки — необходимое свидетельство, но не независимое
 одобрение и не автоматическое принятие контракта.
+
+C-05 example policy: `validate.py --check` also checks the Angular generation-plan
+against the actual profile ownership grants. C-02 schema validation alone does
+not authorize output paths. The profile grants are never widened by examples.

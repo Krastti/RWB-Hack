@@ -10,7 +10,6 @@ import { RunMonitor } from './monitor';
 import { Timeline } from './timeline';
 import { Questions } from './questions';
 import { Analysis } from './analysis';
-import { tokenUsageNote } from './metrics';
 import { retryLimitError } from './retry-limits';
 
 @Component({
@@ -85,7 +84,7 @@ export class RunDetail {
     return `${run.status}:${run.questions_revision}:${artifacts.at(-1)?.seq ?? 0}`;
   }
   metrics(run: Run) {
-    return [{ name: 'Токены вход / выход', value: `${run.metrics.tokens_in} / ${run.metrics.tokens_out}`, note: tokenUsageNote(this.events()) }, { name: 'Вызовы модели', value: run.metrics.model_calls, note: '' }, { name: 'Попытки', value: run.metrics.attempts, note: '' }, { name: 'Время, сек', value: Math.round(run.metrics.duration_ms / 1000), note: '' }];
+    return [{ name: 'Токены вход / выход', value: `${run.metrics.tokens_in} / ${run.metrics.tokens_out}`, note: 'Известный расход · полнота неизвестна' }, { name: 'Вызовы модели', value: run.metrics.model_calls, note: '' }, { name: 'Попытки', value: run.metrics.attempts, note: '' }, { name: 'Время, сек', value: Math.round(run.metrics.duration_ms / 1000), note: '' }];
   }
   cancel() {
     const run = this.run();

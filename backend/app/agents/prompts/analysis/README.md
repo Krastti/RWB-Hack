@@ -130,10 +130,23 @@ python -m venv /tmp/rwb-a02-env
 сохраняется UUID вопроса, ревизия 1 и прежние FR; добавляется FR-004.
 
 requirements.txt использует точный набор C-02, HTTPX из A-01 и Pydantic для
-существующего пакета DTO. У A-01 отдельный старый lock (`jsonschema==4.23.0`,
-`referencing==0.36.2`), у C-02 — `4.25.1`/`0.37.0`: не устанавливать оба файла
-одновременно. Для этого примера выбран C-02; общие зависимости не переписаны.
+существующего пакета DTO. A-01 и C-02 подключают единый набор зависимостей.
 
 Обычные проверки примеров и прав не заменяют тесты приложения. Тестовые наборы,
 deploy/CI/CD/контейнеризация, миграция старого аналитика и вызов реального LLM
 с секретом не входят в данный модуль.
+
+## Совместное окружение worker (#121)
+
+Python 3.11+. Из корня репозитория, в новом venv:
+
+```sh
+python -m venv .venv-worker
+.venv-worker/bin/python -m pip install -r backend/requirements-worker.txt
+.venv-worker/bin/python -m pip check
+```
+
+Один resolver устанавливает API, A-01, A-02, C-02, A-04 и legacy analyst.
+Версии JSON Schema/referencing определяет contracts/agents/requirements.txt;
+модульные requirements подключают его, а не конкурирующие pins.
+Legacy requirements-analyst/0.1 остаётся отдельным протоколом от C-02 1.0.

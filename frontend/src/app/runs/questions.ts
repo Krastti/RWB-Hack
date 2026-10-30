@@ -1,6 +1,7 @@
+import { meaningfulText } from '../shared/meaningful-text';
 import { Component, DestroyRef, effect, inject, input, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormControl, FormRecord, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormControl, FormRecord, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Subject, finalize, takeUntil } from 'rxjs';
 import { ApiClient, Run } from '../api/client';
 import { ApiError, normalizeError } from '../api/errors';
@@ -41,7 +42,7 @@ export class Questions {
       this.scopedRunId = run.run_id;
       this.key = ''; this.submitted = '';
       for (const key of Object.keys(this.form.controls)) this.form.removeControl(key);
-      for (const question of run.questions) this.form.addControl(question.question_id, new FormControl(question.answer ?? '', { nonNullable: true, validators: [Validators.maxLength(10000), ...(question.required ? [Validators.required] : [])] }));
+      for (const question of run.questions) this.form.addControl(question.question_id, new FormControl(question.answer ?? '', { nonNullable: true, validators: [Validators.maxLength(10000), ...(question.required ? [Validators.required, meaningfulText] : [(control: AbstractControl) => control.value ? meaningfulText(control) : null])] }));
     });
   }
   submit() {

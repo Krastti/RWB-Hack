@@ -2,7 +2,7 @@
 
 import unittest
 
-from validate import ContractError, Contracts, ROOT, load
+from validate import ContractError, Contracts, ROOT, load, validate_profile_grants
 
 
 class GenerationPlanTests(unittest.TestCase):
@@ -29,6 +29,16 @@ class GenerationPlanTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ContractError, "^Duplicate generation stage ID$"):
             self.contracts.validate("generation-plan", self.plan)
+
+
+class ProfileGrantsTests(unittest.TestCase):
+    def test_example_and_parent_directory_denial(self):
+        plan = load(ROOT / "examples/generation-plan.json")
+        profile = load(ROOT.parent.parent / "templates/profiles/web-fastapi-angular/profile.json")
+        validate_profile_grants(plan, profile)
+        plan["tasks"][0]["output_directories"] = ["backend"]
+        with self.assertRaisesRegex(ContractError, "exceeds profile grants"):
+            validate_profile_grants(plan, profile)
 
 
 if __name__ == "__main__":
