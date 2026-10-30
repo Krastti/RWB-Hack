@@ -1,3 +1,4 @@
+import { meaningfulText } from '../shared/meaningful-text';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -17,7 +18,7 @@ import { ErrorBanner } from '../shared/error-banner';
           @if (form.controls.name.touched && form.controls.name.invalid) { <div class="text-danger small" role="alert">Введите название до 120 символов.</div> }
         </div>
         <div class="mb-4"><label for="requirements" class="form-label">Требования</label><textarea id="requirements" formControlName="requirements_text" class="form-control" rows="12" maxlength="100000" required aria-describedby="requirements-help"></textarea><div id="requirements-help" class="form-text">От 1 до 100 000 символов. Укажите пользователей, сценарии и ограничения.</div>
-          @if (form.controls.requirements_text.touched && form.controls.requirements_text.invalid) { <div class="text-danger small" role="alert">Заполните требования в пределах 100 000 символов.</div> }
+          @if (form.controls.requirements_text.touched && form.controls.requirements_text.invalid) { <div class="text-danger small" role="alert">Введите непробельные требования в пределах 100 000 символов.</div> }
         </div>
         <button class="btn btn-primary" type="submit" [disabled]="form.invalid || pending()">{{ pending() ? 'Сохранение…' : 'Создать проект' }}</button>
       </form>
@@ -29,7 +30,7 @@ export class ProjectCreate {
   private readonly destroyRef = inject(DestroyRef);
   readonly pending = signal(false);
   readonly error = signal<ApiError | null>(null);
-  readonly form = inject(FormBuilder).nonNullable.group({ name: ['', [Validators.required, Validators.maxLength(120)]], requirements_text: ['', [Validators.required, Validators.maxLength(100000)]] });
+  readonly form = inject(FormBuilder).nonNullable.group({ name: ['', [Validators.required, Validators.maxLength(120)]], requirements_text: ['', [meaningfulText, Validators.required, Validators.maxLength(100000)]] });
   submit() {
     if (this.form.invalid || this.pending()) return;
     this.error.set(null); this.pending.set(true);

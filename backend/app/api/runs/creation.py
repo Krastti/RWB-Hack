@@ -48,7 +48,4 @@ def configure_run_creation(app: FastAPI, service: RunCreationService) -> None:
 
     @app.exception_handler(RunCreationError)
     async def creation_error(request: Request, exc: RunCreationError):
-        response = error_response(request, exc.status_code, exc.code, exc.message)
-        if exc.status_code == 429:
-            response.headers["Retry-After"] = "1"
-        return response
+        return error_response(request, exc.status_code, exc.code, exc.message)

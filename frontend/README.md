@@ -141,3 +141,8 @@ PYTHONPATH=backend RWB_TEST_DATABASE_URL=postgresql+psycopg://user:password@loca
 
 Нужна отдельная UTF-8 тестовая БД. Тесты применяют реальные миграции в собственных
 схемах и удаляют только созданные ими схемы.
+
+Metrics: GET Run has no identity shared with metrics.updated. Its displayed totals
+always carry «полнота неизвестна», including after event polling failure/recovery.
+Completeness helpers select the greatest metrics.updated seq before schema checks;
+an unknown newest version invalidates completeness from older events.

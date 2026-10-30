@@ -4,12 +4,14 @@ import json
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session, sessionmaker
+from pydantic import ValidationError
+from sqlalchemy import func, select, tuple_
+from sqlalchemy.orm import Session, joinedload, sessionmaker
 
 from ...models import IdempotencyRecord, Project, RequirementRevision, Run, RunEvent, User
 from ...models.run_creation import RunCreationResponse, RunInputSnapshot
-from ..run_queries.dto import Limits, Metrics, Run as RunDTO
+from ..run_queries import Event, InvalidReadSnapshot, OwnedRun, RunKey
+from ..run_queries.dto import Limits, Metrics, Run as RunDTO, StageAttempt as StageAttemptDTO
 from .dto import CreationResponse, RunCreate, RunCreationError
 from .queue import RunQueue
 
@@ -137,12 +139,13 @@ class PostgreSQLRunCreationRepository:
 
     @staticmethod
     def _append_initial_events(session: Session, run: Run) -> None:
+        # События описывают создание Run; now() был бы раньше при ожидании блокировок.
         session.add_all([
-            RunEvent(run_id=run.id, seq=1, event_type="run.created", data={
+            RunEvent(run_id=run.id, seq=1, timestamp=run.created_at, event_type="run.created", data={
                 "schema_version": "1.0", "status": "queued", "project_id": str(run.project_id),
                 "revision_id": str(run.revision_id), "profile_id": run.profile_id,
             }),
-            RunEvent(run_id=run.id, seq=2, event_type="metrics.updated", data={
+            RunEvent(run_id=run.id, seq=2, timestamp=run.created_at, event_type="metrics.updated", data={
                 "schema_version": "1.0", "metrics": dict(run.metrics),
                 "tokens_complete": {"tokens_in": True, "tokens_out": True},
             }),
@@ -165,3 +168,68 @@ class PostgreSQLRunCreationRepository:
             request_hash=request_hash, response_ref=str(response_id),
         ))
         return CreationResponse(202, body)
+
+
+class PostgreSQLRunReadRepository:
+    """Чтение сохранённых запусков и событий с проверкой владельца в каждом SQL."""
+
+    def __init__(self, sessions: sessionmaker[Session]) -> None:
+        self._sessions = sessions
+
+    def project_exists(self, *, owner_id: UUID, project_id: UUID) -> bool:
+        with self._sessions() as session:
+            return session.scalar(select(Project.id).where(
+                Project.owner_id == owner_id, Project.id == project_id,
+            )) is not None
+
+    @staticmethod
+    def _query(owner_id: UUID):
+        # Один SELECT для Run и всех его попыток даёт согласованный снимок.
+        return select(Run, Project.owner_id).join(Project, Run.project_id == Project.id).where(
+            Project.owner_id == owner_id,
+        ).options(joinedload(Run.stage_attempts))
+
+    def get_run(self, *, owner_id: UUID, run_id: UUID) -> OwnedRun | None:
+        with self._sessions() as session:
+            row = session.execute(self._query(owner_id).where(Run.id == run_id)).unique().one_or_none()
+            return self._snapshot(*row) if row is not None else None
+
+    def list_runs(
+        self, *, owner_id: UUID, project_id: UUID, before: RunKey | None, limit: int,
+    ) -> tuple[OwnedRun, ...]:
+        query = self._query(owner_id).where(Run.project_id == project_id)
+        if before is not None:
+            query = query.where(tuple_(Run.created_at, Run.id) < tuple_(*before))
+        query = query.order_by(Run.created_at.desc(), Run.id.desc()).limit(limit)
+        with self._sessions() as session:
+            return tuple(self._snapshot(*row) for row in session.execute(query).unique().all())
+
+    def list_events(
+        self, *, owner_id: UUID, run_id: UUID, after_seq: int, limit: int,
+    ) -> tuple[Event, ...]:
+        query = select(RunEvent).join(Run, RunEvent.run_id == Run.id).join(
+            Project, Run.project_id == Project.id,
+        ).where(
+            Project.owner_id == owner_id, RunEvent.run_id == run_id, RunEvent.seq > after_seq,
+        ).order_by(RunEvent.seq).limit(limit)
+        with self._sessions() as session:
+            try:
+                return tuple(Event.model_validate(event, from_attributes=True)
+                             for event in session.scalars(query))
+            except ValidationError as exc:
+                raise InvalidReadSnapshot("Invalid stored event snapshot") from exc
+
+    @staticmethod
+    def _snapshot(run: Run, owner_id: UUID) -> OwnedRun:
+        try:
+            return OwnedRun(owner_id, RunDTO(
+                run_id=run.id, project_id=run.project_id, revision_id=run.revision_id,
+                profile_id=run.profile_id, status=run.status, current_stage=run.current_stage,
+                limits=run.limits, created_at=run.created_at, updated_at=run.updated_at,
+                stages=tuple(StageAttemptDTO.model_validate(attempt, from_attributes=True)
+                             for attempt in run.stage_attempts),
+                questions_revision=run.questions_revision, questions=run.questions,
+                metrics=run.metrics, stop_reason=run.stop_reason,
+            ))
+        except ValidationError as exc:
+            raise InvalidReadSnapshot("Invalid stored run snapshot") from exc

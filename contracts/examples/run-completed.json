@@ -1,0 +1,73 @@
+{
+  "run_id": "a0d6a63f-4735-5590-844b-f4d52d31c492",
+  "project_id": "8f596881-0a46-5df0-b381-f1ffae16e9c3",
+  "revision_id": "e70a29b2-c444-57cb-9abb-9f917861b6d5",
+  "profile_id": "web-fastapi-angular",
+  "created_at": "2026-10-30T10:00:00Z",
+  "limits": {
+    "max_calls": 20,
+    "max_output_tokens": 30000
+  },
+  "status": "completed",
+  "updated_at": "2026-10-30T10:05:00Z",
+  "stages": [
+    {
+      "stage_id": "analysis",
+      "attempt_no": 1,
+      "contract_version": "1",
+      "status": "succeeded",
+      "started_at": "2026-10-30T10:00:01Z",
+      "finished_at": "2026-10-30T10:00:30Z"
+    },
+    {
+      "stage_id": "architecture",
+      "attempt_no": 1,
+      "contract_version": "1",
+      "status": "succeeded",
+      "started_at": "2026-10-30T10:00:31Z",
+      "finished_at": "2026-10-30T10:01:30Z"
+    },
+    {
+      "stage_id": "assembly",
+      "attempt_no": 1,
+      "contract_version": "1",
+      "status": "succeeded",
+      "started_at": "2026-10-30T10:03:01Z",
+      "finished_at": "2026-10-30T10:05:00Z"
+    },
+    {
+      "stage_id": "backend",
+      "attempt_no": 1,
+      "contract_version": "1",
+      "status": "succeeded",
+      "started_at": "2026-10-30T10:01:31Z",
+      "finished_at": "2026-10-30T10:03:00Z"
+    },
+    {
+      "stage_id": "documentation",
+      "attempt_no": 1,
+      "contract_version": "1",
+      "status": "succeeded",
+      "started_at": "2026-10-30T10:01:31Z",
+      "finished_at": "2026-10-30T10:03:00Z"
+    },
+    {
+      "stage_id": "frontend",
+      "attempt_no": 1,
+      "contract_version": "1",
+      "status": "succeeded",
+      "started_at": "2026-10-30T10:01:31Z",
+      "finished_at": "2026-10-30T10:03:00Z"
+    }
+  ],
+  "questions_revision": 1,
+  "questions": [],
+  "metrics": {
+    "tokens_in": 12000,
+    "tokens_out": 18500,
+    "model_calls": 5,
+    "attempts": 6,
+    "manual_clarifications": 0,
+    "duration_ms": 300000
+  }
+}

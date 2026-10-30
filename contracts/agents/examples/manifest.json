@@ -70,7 +70,7 @@
       "version": 1,
       "schema_version": "1.0",
       "author_agent": "architecture",
-      "checksum": "e67c957e028023600319b4fff648b16563cd6989082ce6e03a8005bbcaafc95f",
+      "checksum": "4811411213b08cd5d90b42042f03a448cb7528d9402a83adc17d5318f5ba9fe6",
       "size_bytes": 3836,
       "related_fr_ids": [
         "FR-001",
@@ -142,8 +142,8 @@
       "version": 1,
       "schema_version": "1.0",
       "author_agent": "architecture",
-      "checksum": "1b16ee8a3d03cb4fc4986c9a67a6b91ef5bc4fafb2096a122de3389ae8c900cb",
-      "size_bytes": 1109,
+      "checksum": "d5288dbab3e6d92852c60a7d31416a23dd4df16eaa6869fe87fd654f8ebc3719",
+      "size_bytes": 1469,
       "related_fr_ids": [
         "FR-001",
         "FR-002",

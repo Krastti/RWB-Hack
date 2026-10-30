@@ -136,6 +136,7 @@ def validate_semantics(name, data):
         acyclic(data["tasks"], "task_id", "depends_on")
         owners = []
         for task in data["tasks"]:
+            validate_file_directory_conflicts(task)
             for kind in ("output_paths", "output_directories"):
                 for path in task[kind]:
                     for other, owner, is_directory in owners:
@@ -199,6 +200,35 @@ class Contracts:
             self.validate(PAYLOAD_SCHEMAS[artifact["kind"]], loads(artifact["content"]))
         elif artifact["media_type"] == "application/json":
             loads(artifact["content"])
+
+
+def validate_file_directory_conflicts(task):
+    # A file cannot also be a directory, or an ancestor needed as a directory.
+    files = task["output_paths"]
+    directories = task["output_directories"]
+    for path in files:
+        require(not any(other == path or other.startswith(path + "/")
+                        for other in directories), "Conflicting output file and directory")
+        require(not any(other != path and other.startswith(path + "/")
+                        for other in files), "Conflicting output file and directory")
+
+
+def validate_profile_grants(plan, profile):
+    """C-05 policy is supplied explicitly; universal C-02 stays profile-neutral."""
+    require(plan["profile_id"] == profile["profile_id"], "Profile identity mismatch")
+    for task in plan["tasks"]:
+        validate_file_directory_conflicts(task)
+        require(task["owner_agent"] in profile["ownership"]["agents"], "Unknown profile owner agent")
+        grant = profile["ownership"]["agents"][task["owner_agent"]]
+        directories = grant.get("directories", [])
+        for kind in ("output_paths", "output_directories"):
+            for path in task[kind]:
+                if kind == "output_paths":
+                    allowed = (path in grant.get("paths", []) or
+                               any(path.startswith(d + "/") for d in directories))
+                else:
+                    allowed = any(path == d or path.startswith(d + "/") for d in directories)
+                require(allowed, "Generation output exceeds profile grants")
 
 
 def example_file(filename):
@@ -337,6 +367,8 @@ def main(argv=None):
         contracts = Contracts()
         if args.check:
             documents, bundles, snapshots = check_examples(contracts)
+            validate_profile_grants(load(ROOT / "examples/generation-plan.json"),
+                load(ROOT.parent.parent / "templates/profiles/web-fastapi-angular/profile.json"))
             print(f"OK: {len(contracts.schemas)} schemas, {documents} examples, "
                   f"{bundles} linked bundles, {snapshots} snapshot; offline")
         else:

@@ -1,3 +1,4 @@
+-r ../../../../contracts/agents/requirements.txt
 httpx==0.28.1
-jsonschema==4.23.0
-referencing==0.36.2
+# Shared DTO package imports Pydantic models.
+pydantic>=2.9,<3

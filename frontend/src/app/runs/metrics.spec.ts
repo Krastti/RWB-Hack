@@ -18,3 +18,9 @@ describe('C-03 token completeness', () => {
     expect(tokenUsageNote([event(1,{ schema_version:'1.0',tokens_complete:{ tokens_in:true,tokens_out:true } },'unknown.type')])).toContain('полнота неизвестна');
   });
 });
+
+it('latest seq wins before schema filtering, regardless of delivery order', () => {
+  const supported = event(1, {schema_version:'1.0', tokens_complete:{tokens_in:true,tokens_out:true}});
+  const unknown = event(2, {schema_version:'2.0'});
+  expect(tokenUsageNote([unknown, supported, supported])).toContain('полнота неизвестна');
+});

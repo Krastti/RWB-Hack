@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 @dataclass(frozen=True)
@@ -43,3 +43,10 @@ class ProjectCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     name: str = Field(min_length=1, max_length=120)
     requirements_text: str = Field(min_length=1, max_length=100000)
+
+    @field_validator("requirements_text")
+    @classmethod
+    def meaningful_requirements(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("requirements_text must contain a non-whitespace character")
+        return value

@@ -15,10 +15,11 @@ class RunCreationConfig(BaseModel):
     limits: Limits
 
     @classmethod
-    def from_env(cls) -> "RunCreationConfig":
+    def from_env(cls, *, profile: dict[str, Any] | None = None) -> "RunCreationConfig":
+        defaults = (profile if profile is not None else load_run_profile())["limits"]["run"]
         return cls(limits=Limits(
-            max_calls=int(os.environ["RUN_MAX_CALLS"]),
-            max_output_tokens=int(os.environ["RUN_MAX_OUTPUT_TOKENS"]),
+            max_calls=int(os.environ.get("RUN_MAX_CALLS", defaults["max_calls"])),
+            max_output_tokens=int(os.environ.get("RUN_MAX_OUTPUT_TOKENS", defaults["max_output_tokens"])),
         ))
 
 

@@ -113,3 +113,18 @@ python -m unittest discover -s backend/app/agents/graph -p 'test_*.py' -v
 
 Реальные LLM, HTTP, очередь, PostgreSQL и переход к архитектуре здесь не
 подключены. Их готовность не следует из успешного локального вызова графа.
+
+## Совместное окружение worker (#121)
+
+Python 3.11+. Из корня репозитория, в новом venv:
+
+```sh
+python -m venv .venv-worker
+.venv-worker/bin/python -m pip install -r backend/requirements-worker.txt
+.venv-worker/bin/python -m pip check
+```
+
+Один resolver устанавливает API, A-01, A-02, C-02, A-04 и legacy analyst.
+Версии JSON Schema/referencing определяет contracts/agents/requirements.txt;
+модульные requirements подключают его, а не конкурирующие pins.
+Legacy requirements-analyst/0.1 остаётся отдельным протоколом от C-02 1.0.
