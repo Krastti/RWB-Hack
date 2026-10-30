@@ -6,7 +6,7 @@ import jwt
 from ...config.auth import AuthConfig
 from ...errors.auth import Unauthorized
 from ...models.dto.auth import CurrentUser, Token
-from ...repository.users import UserRepository
+from ...repositories.users import UserRepository
 from .passwords import hash_password, verify_password
 
 

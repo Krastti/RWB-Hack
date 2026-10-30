@@ -17,7 +17,7 @@ from app.config.auth import AuthConfig
 from app.models.dto.auth import CurrentUser
 from app.services.auth import AuthService, hash_password
 
-# repository реализует app.repository.UserRepository.
+# repository реализует app.repositories.UserRepository.
 # Пользователи создаются заранее: сохранить hash_password(password)
 # в User.password_hash; plaintext не сохранять и не логировать.
 service = AuthService(repository, AuthConfig(secret_key=os.environ["JWT_SECRET_KEY"]))
@@ -39,7 +39,7 @@ def private(user: CurrentUser = Depends(current_user)):
 
 - `app.services.auth`: `AuthService`, `hash_password`, `verify_password`.
 - `app.models.dto.auth`: `UserCredentials`, `CurrentUser`, `TokenRequest`, `Token`.
-- `app.repository.users`: синхронный `UserRepository` с `get_by_login(login)`
+- `app.repositories.users`: синхронный `UserRepository` с `get_by_login(login)`
   и `get_by_id(user_id)`; отсутствующий пользователь возвращается как `None`.
 - `app.errors.auth`: `Unauthorized`.
 - `app.api.auth`: router, `configure_auth`, `current_user`, `get_auth_service`.
