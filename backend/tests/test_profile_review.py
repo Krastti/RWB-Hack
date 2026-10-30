@@ -70,3 +70,60 @@ def test_plan_conditional_grants_match_allows():
     profile.validate_plan(plan,conditions={'has_integrations':True})
     with pytest.raises(ProfileError):
         profile.validate_plan(plan,conditions={'has_integrations':False})
+
+
+def restore(loader, snapshot):
+    return loader.restore(snapshot, expected_checksum=snapshot['checksum'],
+                          expected_rules_checksum=snapshot['rules_checksum'])
+
+
+@pytest.mark.parametrize('field', ['profile_json', 'rules_text'])
+def test_restore_rejects_changed_snapshot_bytes(field):
+    loader = ProfileLoader()
+    snapshot = loader.load('web-fastapi-angular').snapshot()
+    snapshot[field] += ' '
+    with pytest.raises(ProfileError) as exc:
+        restore(loader, snapshot)
+    assert exc.value.code == 'PROFILE_SNAPSHOT_CHANGED'
+
+
+def test_restore_uses_saved_bytes_after_current_profile_and_defaults_change(tmp_path):
+    for directory in ('templates', 'docs', 'contracts'):
+        shutil.copytree(ROOT / directory, tmp_path / directory)
+    original = ProfileLoader(repository_root=tmp_path).load('web-fastapi-angular')
+    snapshot = original.snapshot()
+    (tmp_path / 'templates/profiles/web-fastapi-angular/profile.json').write_text('{}')
+    (tmp_path / 'docs/agents.md').write_text('changed rules')
+    loader = ProfileLoader(repository_root=tmp_path, defaults={'web-fastapi-angular': '2.0.0'})
+    restored = restore(loader, snapshot)
+    assert restored.snapshot() == snapshot
+    assert restored.rules_text == original.rules_text
+    with pytest.raises(ProfileError):
+        loader.load('web-fastapi-angular')
+
+
+def test_restore_old_version_with_registered_schema():
+    from app.agents.profiles.loader import ProfileSource
+    source = ProfileSource('templates/profiles/web-fastapi-angular/profile.json',
+                           'templates/profiles/web-fastapi-angular/profile.schema.json')
+    snapshot = ProfileLoader().load('web-fastapi-angular').snapshot()
+    loader = ProfileLoader(registry={('web-fastapi-angular', '1.0.0'): source},
+                           defaults={'web-fastapi-angular': '2.0.0'})
+    assert restore(loader, snapshot).snapshot() == snapshot
+
+
+def test_restore_rejects_unknown_snapshot_version():
+    loader = ProfileLoader()
+    snapshot = loader.load('web-fastapi-angular').snapshot()
+    snapshot['snapshot_version'] = '2.0'
+    with pytest.raises(ProfileError) as exc:
+        restore(loader, snapshot)
+    assert exc.value.code == 'PROFILE_SNAPSHOT_INVALID'
+
+
+def test_restore_rejects_unregistered_profile_version():
+    loader = ProfileLoader(registry={})
+    snapshot = ProfileLoader().load('web-fastapi-angular').snapshot()
+    with pytest.raises(ProfileError) as exc:
+        restore(loader, snapshot)
+    assert exc.value.code == 'PROFILE_NOT_SUPPORTED'

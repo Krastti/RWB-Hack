@@ -1,0 +1,2 @@
+-r app/agents/profiles/requirements.txt
+pytest>=8,<10
