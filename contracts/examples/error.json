@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "RUN_STATE_CONFLICT",
+    "message": "Завершённый запуск нельзя повторить.",
+    "details": {},
+    "request_id": "6b92798c-743a-5c20-9779-c0131fd48e83"
+  }
+}

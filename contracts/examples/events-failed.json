@@ -1,0 +1,54 @@
+{
+  "items": [
+    {
+      "run_id": "5c061508-3730-5728-abb0-f37f01dca23c",
+      "seq": 41,
+      "event_type": "stage.status_changed",
+      "timestamp": "2026-10-30T10:03:00Z",
+      "data": {
+        "schema_version": "1.0",
+        "attempt_no": 1,
+        "contract_version": "1",
+        "from": "running",
+        "to": "failed",
+        "reason_code": "LLM_TIMEOUT"
+      },
+      "stage_id": "architecture"
+    },
+    {
+      "run_id": "5c061508-3730-5728-abb0-f37f01dca23c",
+      "seq": 42,
+      "event_type": "run.status_changed",
+      "timestamp": "2026-10-30T10:03:00Z",
+      "data": {
+        "schema_version": "1.0",
+        "from": "running",
+        "to": "failed",
+        "reason_code": "LLM_TIMEOUT"
+      }
+    },
+    {
+      "run_id": "5c061508-3730-5728-abb0-f37f01dca23c",
+      "seq": 43,
+      "event_type": "metrics.updated",
+      "timestamp": "2026-10-30T10:03:00Z",
+      "data": {
+        "schema_version": "1.0",
+        "metrics": {
+          "tokens_in": 2300,
+          "tokens_out": 870,
+          "model_calls": 2,
+          "attempts": 2,
+          "manual_clarifications": 0,
+          "duration_ms": 180000
+        },
+        "tokens_complete": {
+          "tokens_in": true,
+          "tokens_out": false
+        }
+      }
+    }
+  ],
+  "next_after_seq": 43,
+  "has_more": false
+}

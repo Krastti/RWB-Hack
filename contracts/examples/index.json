@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "contracts": {
+    "platform": "2.1.0",
+    "lifecycle": "1.0",
+    "source_commit": "f030c71e01d8aade0a9c11e0da9708db0ec94cf0"
+  },
+  "examples": [
+    {
+      "file": "project-empty.json",
+      "screen": "/projects/:id — проект без запусков",
+      "request": "GET /api/v1/projects/8f596881-0a46-5df0-b381-f1ffae16e9c3",
+      "http_status": 200,
+      "schema": "Project"
+    },
+    {
+      "file": "runs-empty.json",
+      "screen": "/projects/:id — пустая история запусков",
+      "request": "GET /api/v1/projects/8f596881-0a46-5df0-b381-f1ffae16e9c3/runs",
+      "http_status": 200,
+      "schema": "RunPage"
+    },
+    {
+      "file": "run-running.json",
+      "screen": "/runs/:id — running",
+      "request": "GET /api/v1/runs/84711dee-74b4-5650-ad91-552028ae3ce8",
+      "http_status": 200,
+      "schema": "Run"
+    },
+    {
+      "file": "events-running.json",
+      "screen": "/runs/:id — лента running",
+      "request": "GET /api/v1/runs/84711dee-74b4-5650-ad91-552028ae3ce8/events?after_seq=40&limit=100",
+      "http_status": 200,
+      "schema": "EventPage"
+    },
+    {
+      "file": "run-waiting-for-input.json",
+      "screen": "/runs/:id — waiting_for_input",
+      "request": "GET /api/v1/runs/6d414525-d828-5713-97f8-c4395ccd8a5d",
+      "http_status": 200,
+      "schema": "Run"
+    },
+    {
+      "file": "events-waiting-for-input.json",
+      "screen": "/runs/:id — лента waiting_for_input",
+      "request": "GET /api/v1/runs/6d414525-d828-5713-97f8-c4395ccd8a5d/events?after_seq=40&limit=100",
+      "http_status": 200,
+      "schema": "EventPage"
+    },
+    {
+      "file": "run-failed.json",
+      "screen": "/runs/:id — failed",
+      "request": "GET /api/v1/runs/5c061508-3730-5728-abb0-f37f01dca23c",
+      "http_status": 200,
+      "schema": "Run"
+    },
+    {
+      "file": "events-failed.json",
+      "screen": "/runs/:id — лента failed",
+      "request": "GET /api/v1/runs/5c061508-3730-5728-abb0-f37f01dca23c/events?after_seq=40&limit=100",
+      "http_status": 200,
+      "schema": "EventPage"
+    },
+    {
+      "file": "run-completed.json",
+      "screen": "/runs/:id — completed",
+      "request": "GET /api/v1/runs/a0d6a63f-4735-5590-844b-f4d52d31c492",
+      "http_status": 200,
+      "schema": "Run"
+    },
+    {
+      "file": "events-completed.json",
+      "screen": "/runs/:id — лента completed",
+      "request": "GET /api/v1/runs/a0d6a63f-4735-5590-844b-f4d52d31c492/events?after_seq=40&limit=100",
+      "http_status": 200,
+      "schema": "EventPage"
+    },
+    {
+      "file": "error.json",
+      "screen": "/runs/:id — ошибка команды",
+      "request": "POST /api/v1/runs/a0d6a63f-4735-5590-844b-f4d52d31c492/retry",
+      "http_status": 409,
+      "schema": "Error"
+    }
+  ]
+}

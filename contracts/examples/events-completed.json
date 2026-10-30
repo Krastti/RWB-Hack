@@ -1,0 +1,108 @@
+{
+  "items": [
+    {
+      "run_id": "a0d6a63f-4735-5590-844b-f4d52d31c492",
+      "seq": 41,
+      "event_type": "stage.status_changed",
+      "timestamp": "2026-10-30T10:05:00Z",
+      "data": {
+        "schema_version": "1.0",
+        "attempt_no": 1,
+        "contract_version": "1",
+        "from": "running",
+        "to": "succeeded",
+        "reason_code": "RESULT_ACCEPTED"
+      },
+      "stage_id": "assembly"
+    },
+    {
+      "run_id": "a0d6a63f-4735-5590-844b-f4d52d31c492",
+      "seq": 42,
+      "event_type": "snapshot.prepared",
+      "timestamp": "2026-10-30T10:05:00Z",
+      "data": {
+        "schema_version": "1.0",
+        "snapshot_id": "cde50958-6c3e-5769-85f4-855bcec749cf",
+        "readiness": "prepared",
+        "artifact_ids": [
+          "7b80377d-5718-5ee1-bb9c-69c67c74c308",
+          "4e801a6e-7725-5654-9ca2-127df49bbc29",
+          "cd81477c-2459-55ad-93ad-1450af64e688",
+          "d8043ae3-9266-540f-9be3-221ef35af14a",
+          "58057896-ada4-5f95-854d-9bcb3502528b",
+          "be3f39fe-6bdb-5278-9e18-4742bdd57650",
+          "71250247-00f2-5acd-afd2-b9dcf4745dca",
+          "7ca7cb8a-a17e-5893-8d92-3a2a2eb8740e",
+          "76b406bf-94c0-59f1-a796-ede3c01e9e0c",
+          "d795fbee-0d8b-5b48-840a-e428f55b3af0",
+          "ae11d3e3-62f7-54c5-86af-687fabaa7288",
+          "dc7fdf18-55cd-5a19-84d5-051a5c5595a8",
+          "c65f380f-6c00-5f9f-8878-8ba2a4455756",
+          "9fa0f59b-e33e-526e-b629-4482fb1177ad",
+          "73f6a674-2a73-57b6-b95e-55e1689f802d",
+          "0eaadf62-4834-508e-90a8-88e0aee4c21d",
+          "516268e0-542d-5d19-8ae6-a8c058485cac",
+          "326bf397-5f98-52cd-b1e6-9b4119e9e678",
+          "c8919f4e-47d0-51c5-94f6-4366b43cb192",
+          "8227f551-9567-5f48-a769-8127729f7a89",
+          "83a57f76-fab7-5499-ace4-45b3f3ce7f37",
+          "539c3864-b985-58d5-b218-d50b78045f0e",
+          "44b2eb91-49a2-5c12-a017-501499f6b222",
+          "73a2bc25-0747-5848-a2dd-84ca48628f65",
+          "491ed4b6-d7c2-5ea4-91fc-54d69cc828a3",
+          "fb06f3bc-77aa-59c3-8e54-eb9ec5bd8431",
+          "4bfc0935-d69f-5438-8553-09214bcd5737",
+          "3176e937-bdbf-57b1-8c63-b1bb69b386f5",
+          "aafb7a96-5e3f-550b-9d25-73dde828f6f6",
+          "ff292572-3e69-58e1-9c75-624feeac4950",
+          "5c02140f-dd59-5d7e-aca8-06a85f01b38f",
+          "628b3881-e5b3-5aa5-8e85-605ca9abecb5",
+          "2e54a036-0f53-5317-b136-54e185ab0cf2",
+          "a8b74366-1d3f-5637-b2a9-f86bea476ee4",
+          "de2dd7c7-4f32-56b5-abd1-958aacbb40cd",
+          "92bc8b69-801f-5bb3-8265-de84ce55f663",
+          "2dd2b29c-b1c3-5738-9dca-fc5f48d358e4",
+          "71e0231f-5b2c-5930-984a-7167694d4e4f",
+          "4961a4ab-b77d-58d1-add3-370acd215d25",
+          "7d78bb55-b013-587d-a5b6-ea96a02ad0fd",
+          "cee61057-7560-5347-afdf-0d6bd3196a49"
+        ]
+      }
+    },
+    {
+      "run_id": "a0d6a63f-4735-5590-844b-f4d52d31c492",
+      "seq": 43,
+      "event_type": "run.status_changed",
+      "timestamp": "2026-10-30T10:05:00Z",
+      "data": {
+        "schema_version": "1.0",
+        "from": "running",
+        "to": "completed",
+        "reason_code": "SNAPSHOT_PREPARED"
+      }
+    },
+    {
+      "run_id": "a0d6a63f-4735-5590-844b-f4d52d31c492",
+      "seq": 44,
+      "event_type": "metrics.updated",
+      "timestamp": "2026-10-30T10:05:00Z",
+      "data": {
+        "schema_version": "1.0",
+        "metrics": {
+          "tokens_in": 12000,
+          "tokens_out": 18500,
+          "model_calls": 5,
+          "attempts": 6,
+          "manual_clarifications": 0,
+          "duration_ms": 300000
+        },
+        "tokens_complete": {
+          "tokens_in": true,
+          "tokens_out": true
+        }
+      }
+    }
+  ],
+  "next_after_seq": 44,
+  "has_more": false
+}
