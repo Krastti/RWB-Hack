@@ -2,5 +2,6 @@
 -r app/agents/llm/requirements.txt
 -r app/agents/prompts/analysis/requirements.txt
 -r app/agents/graph/requirements.txt
+-r app/agents/graph/architecture/requirements.txt
 -r app/agents/requirements_analyst/requirements.txt
 celery[redis]>=5.6,<5.7
