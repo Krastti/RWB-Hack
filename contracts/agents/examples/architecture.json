@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "contract_version": "1",
-  "profile_id": "web-fastapi-react",
+  "profile_id": "web-fastapi-angular",
   "requirements_artifact_id": "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99",
   "purpose": "Прототип обработки заявок на ремонт.",
   "in_scope": [
@@ -108,8 +108,8 @@
       "version": 1,
       "schema_version": "1.0",
       "author_agent": "architecture",
-      "checksum": "2a830141dbcb2ca4098b7978794ff0b4f76161b21a199409d00df6923557882b",
-      "size_bytes": 255,
+      "checksum": "950ef89667daf8c0528e87a8f447c06aa3d485b5bb71aee75498192af19acf78",
+      "size_bytes": 261,
       "related_fr_ids": [
         "FR-001",
         "FR-002",
@@ -126,8 +126,8 @@
       "version": 1,
       "schema_version": "1.0",
       "author_agent": "architecture",
-      "checksum": "97191832b62d89fee46f74dc2c7d8117d3cf5b5802eac4b8f3fa5da0a1333251",
-      "size_bytes": 1107,
+      "checksum": "1b16ee8a3d03cb4fc4986c9a67a6b91ef5bc4fafb2096a122de3389ae8c900cb",
+      "size_bytes": 1109,
       "related_fr_ids": [
         "FR-001",
         "FR-002",

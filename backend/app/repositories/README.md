@@ -1,6 +1,6 @@
 # PostgreSQL-подключение B-04 (#59)
 
-Контракт: `contracts/platform.openapi.yaml`, C-01 / API 1.0.0.
+Контракт: `contracts/platform.openapi.yaml`, C-01 / API 2.0.0.
 Единственный пакет репозиториев — `app.repositories` (имя согласовано
 с пользователем). Старый `app.repository` переименован, импорты потребителей
 обновлены; совместимого дубликата нет. Пустой `app.controller` удалён.

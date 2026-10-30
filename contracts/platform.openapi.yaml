@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: RWB-Hack Platform API
-  version: 1.0.0
+  version: 2.0.0
   description: Контракт C-01. completed означает подготовленные артефакты, без утверждения
     о тестировании или деплое. Все вложенные ресурсы проверяются по владельцу; чужие
     и отсутствующие ресурсы возвращают одинаковый 404. Даты UTC. Необязательные поля
@@ -667,8 +667,8 @@ components:
         profile_id:
           type: string
           enum:
-          - web-fastapi-react
-          default: web-fastapi-react
+          - web-fastapi-angular
+          default: web-fastapi-angular
       required:
       - requirements_text
     RunStatus:
@@ -772,7 +772,7 @@ components:
         profile_id:
           type: string
           enum:
-          - web-fastapi-react
+          - web-fastapi-angular
         status:
           $ref: '#/components/schemas/RunStatus'
         current_stage:

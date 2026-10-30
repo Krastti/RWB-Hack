@@ -1,4 +1,4 @@
-"""Immutable project DTOs for platform contract C-01 v1.0.0."""
+"""Immutable project DTOs for platform contract C-01 v2.0.0."""
 
 from dataclasses import dataclass
 from datetime import datetime

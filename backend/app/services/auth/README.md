@@ -1,6 +1,6 @@
 # Авторизация B-02 (#57)
 
-Контракт C-01: `contracts/platform.openapi.yaml`, API 1.0.0.
+Контракт C-01: `contracts/platform.openapi.yaml`, API 2.0.0.
 `POST /api/v1/auth/token` принимает JSON `{login, password}` и возвращает
 `{access_token, token_type: "bearer", expires_in}`. OAuth2 form не используется.
 

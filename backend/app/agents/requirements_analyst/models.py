@@ -145,7 +145,7 @@ class AgentInput(Model):
     attempt: Annotated[int, Field(ge=1)] = 1
     input_artifact_ids: list[UUID] = Field(default_factory=list)
     contract_version: Literal["requirements-analyst/0.1"] = "requirements-analyst/0.1"
-    profile_id: Text = "web-fastapi-react"
+    profile_id: Text = "web-fastapi-angular"
     requirements_text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100000)]
     answers: list[Answer] = Field(default_factory=list)
     previous_analysis: Analysis | None = None

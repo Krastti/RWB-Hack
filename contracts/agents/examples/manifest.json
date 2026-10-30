@@ -3,7 +3,7 @@
   "snapshot_id": "14957aa6-478f-52cd-9b3c-1cff968e1b93",
   "run_id": "a42e19f4-80a9-5f04-941c-6d3ae4437744",
   "contract_version": "1",
-  "profile_id": "web-fastapi-react",
+  "profile_id": "web-fastapi-angular",
   "created_at": "2026-10-30T12:00:00Z",
   "readiness": "partial",
   "artifacts": [
@@ -70,8 +70,8 @@
       "version": 1,
       "schema_version": "1.0",
       "author_agent": "architecture",
-      "checksum": "b902e87c20e40a04e8e64b49f211eba7b4f7d641ea9a9da214cc13b04541823c",
-      "size_bytes": 3834,
+      "checksum": "e67c957e028023600319b4fff648b16563cd6989082ce6e03a8005bbcaafc95f",
+      "size_bytes": 3836,
       "related_fr_ids": [
         "FR-001",
         "FR-002",
@@ -124,8 +124,8 @@
       "version": 1,
       "schema_version": "1.0",
       "author_agent": "architecture",
-      "checksum": "2a830141dbcb2ca4098b7978794ff0b4f76161b21a199409d00df6923557882b",
-      "size_bytes": 255,
+      "checksum": "950ef89667daf8c0528e87a8f447c06aa3d485b5bb71aee75498192af19acf78",
+      "size_bytes": 261,
       "related_fr_ids": [
         "FR-001",
         "FR-002",
@@ -142,8 +142,8 @@
       "version": 1,
       "schema_version": "1.0",
       "author_agent": "architecture",
-      "checksum": "97191832b62d89fee46f74dc2c7d8117d3cf5b5802eac4b8f3fa5da0a1333251",
-      "size_bytes": 1107,
+      "checksum": "1b16ee8a3d03cb4fc4986c9a67a6b91ef5bc4fafb2096a122de3389ae8c900cb",
+      "size_bytes": 1109,
       "related_fr_ids": [
         "FR-001",
         "FR-002",

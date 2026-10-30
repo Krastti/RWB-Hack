@@ -1,4 +1,4 @@
-"""Persistence models for platform contract C-01 v1.0.0."""
+"""Persistence models for platform contract C-01 v2.0.0."""
 
 from importlib import import_module
 from typing import TYPE_CHECKING
