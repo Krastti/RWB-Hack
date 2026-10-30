@@ -451,7 +451,9 @@ owner_token/expires_at и next_delivery_at. Для текущего runtime ну
 миграции без согласованного out-of-order решения.
 Production запуск worker здесь не считается проверенным и не предлагается с
 готовым module path. Интегратор должен создать engine/sessionmaker и вызвать
-create_worker_app с реальными orchestrator/recovery. Синтаксис будущего запуска
+create_worker_app с реальными orchestrator/recovery. При использовании compose_worker
+предметный orchestrator обязателен, а технический RuntimeRecovery встроен и может
+быть заменён специализированным обработчиком. Синтаксис будущего запуска
 из backend (это схема команды, а не исполняемая команда поставляемого модуля):
 
 ```text

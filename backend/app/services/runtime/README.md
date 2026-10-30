@@ -23,8 +23,9 @@ repository, states, queue, control, intake. SQLite/in-memory stores здесь �
 4. Worker claim использует тот же runtime queue store: queued → running и
    pending → running выполняются существующим lifecycle service и видны через GET
    Run/events. Повтор доставки не создаёт attempts/events/usage.
-5. Orchestrator/recovery обязаны сохранять реальные результаты через
-   `execution.transaction()`; никакого встроенного mock-аналитика нет.
+5. Orchestrator сохраняет реальные результаты через `execution.transaction()`.
+   Встроенный `RuntimeRecovery` обрабатывает потерянные исполнения; можно передать
+   специализированный recovery. Встроенного mock-аналитика нет.
 
 `AttemptState.input_state.schema_version = runtime-intake/1` обозначает private
 снимок требований/профиля/contracts/limits. Это **не AgentInput C-02** и не
@@ -43,15 +44,17 @@ import os
 from backend.app.main import create_app
 from backend.app.services.runtime import compose_worker
 
-def build_worker(orchestrator, recovery):
+def build_worker(orchestrator, recovery=None):
     api = create_app()  # DATABASE_URL, JWT_SECRET_KEY; production PostgreSQL
     runtime = api.state.run_runtime
     return compose_worker(runtime, broker_url=os.environ["BROKER_URL"],
                           orchestrator=orchestrator, recovery=recovery)
 ```
 
-Функции `(StageCommand, ExecutionContext) -> None` предоставляет интеграция AG.
-Без них factory worker не вызывается. Запускайте worker для `rwb.stages`, отдельный
+Предметный orchestrator `(StageCommand, ExecutionContext) -> None` обязателен
+и предоставляется интеграцией AG. Если `recovery` не передан, `compose_worker`
+использует встроенный `RuntimeRecovery` для технического восстановления; при необходимости
+интеграция может передать специализированный обработчик. Запускайте worker для `rwb.stages`, отдельный
 control worker для `rwb.control` и beat по инструкции [backend](../../../../docs/backend.md).
 HTTP-процесс не запускает beat/worker автоматически. Только запущенные dispatch и
 worker переводят durable 202 в исполнение. Настройки queue/lease едины в runtime;
