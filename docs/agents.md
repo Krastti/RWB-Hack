@@ -1,6 +1,6 @@
 # Агенты, контракты и профиль
 
-Здесь описаны существующие A-01/A-02/A-04/A-07, legacy analyst и правила будущих
+Здесь описаны существующие A-01/A-02/A-04/A-05/A-07/A-08, legacy analyst и правила будущих
 потребителей. Наличие интерфейса или схемы не означает готового multi-agent runtime.
 Нормативные источники: [C-02 JSON Schema Draft 2020-12](../contracts/agents/v1/),
 [C-03 lifecycle](../contracts/lifecycle.md), [C-01 HTTP](../contracts/platform.openapi.yaml),
@@ -21,7 +21,8 @@ owner, путь на сервере, следующий узел или Run.stat
 | A-02 Prompt | C-02 context + resolved analysis-input → проверенный draft/Markdown | Есть, не AgentResult node |
 | A-03 Analyst | A-01/A-02 → requirements/questions/system-analysis artifacts | Legacy ядро 0.1 не заменяет bridge C-02 |
 | A-04 LangGraph | AnalysisNode/ArtifactStore/checkpointer → анализ/ожидание/resume | Есть внутренний граф без общего worker/HTTP persistence |
-| A-05–A-09 Architecture | Анализ → architecture, OpenAPI, data-model, ui-spec, generation-plan единой версии | Есть генератор data-model; общий архитектурный этап ещё не подключён |
+| A-05 Architecture core | Принятый анализ + pinned профиль → компоненты, границы, дерево и предварительный generation-plan | Есть проверяемое предложение; кодогенерация заблокирована до A-09 |
+| A-06–A-09 Architecture | Core → OpenAPI, data-model, ui-spec и принятая architecture единой версии | Есть генераторы data-model и UI spec; общий архитектурный этап ещё не подключён |
 | A-10–A-18 Coding | Frozen API/data/UI/plan → предметные frontend/backend/models/migrations/adapters/docs и fan-out/join | Правила профиля, не готовые агенты |
 | A-19 Assembly | Принятые bytes/metadata → manifest/traceability/snapshot | Правила проверки; не замена build/test |
 | A-20 Budget | Общие резервы/usage → допуск и причины остановки | Полный ledger/admission требует интеграции |
@@ -337,6 +338,93 @@ idempotency/outbox/public events. Parallel calls одного Run без вне�
 [StageWorker и queue adapter](backend.md#очередь-и-worker-adapter) принимают
 orchestrator/recovery callable, но автоматически не оборачивают ArtifactStore.accept
 и checkpoint графа в execution.transaction; этот bridge ещё нужен.
+
+## A-05: архитектурное предложение
+
+[ArchitectureNode](../backend/app/agents/nodes/architecture/node.py) принимает
+C-02 AgentInput и разрешённый worker артефакт requirements с точными bytes.
+Обязательные required-вопросы должны быть отвечены. Поддерживается C-05
+`web-fastapi-angular` 1.0.0; профиль передаётся как frozen bytes/checksum,
+правила — как разрешённый loader текст/checksum. A-05 не загружает профиль
+по пользовательскому пути и не заменяет A-29: allowlist, авторизация артефактов,
+разрешение rules_document и pinning snapshot остаются на стороне вызывающего.
+Checksum должен браться из доверенного Run context, а не из HTTP body клиента.
+
+```python
+from backend.app.agents.nodes.architecture import ArchitectureNode
+
+
+async def propose(config, context, requirements_artifact, frozen_profile):
+    node = ArchitectureNode(config)
+    return await node.generate(
+        context, requirements_artifact=requirements_artifact,
+        profile_bytes=frozen_profile["bytes"],
+        profile_checksum=frozen_profile["checksum"],
+        rules_text=frozen_profile["rules_text"],
+        rules_checksum=frozen_profile["rules_checksum"],
+    )
+```
+
+`config` — серверный A-01 LLMConfig, context — C-02 с stage_id=architecture,
+requirements_artifact — inline Artifact с kind=requirements и author=analysis;
+storage_ref предварительно разрешается доверенным storage adapter. Поля frozen_profile
+в примере — аргументы bridge, не новый публичный DTO или реализация loader.
+Для локальной подготовки правила разрешаются `load_profile_rules(profile)` из
+contracts/agents/validate.py, включая сохранённый указатель на этот документ.
+
+Узел делает ровно один A-01 вызов без retry; max_tokens/timeout реально ограничены
+минимумом конфигурации транспорта, выделенных AgentInput limits и C-05 policy.
+Пустой бюджет/неотвеченный вопрос/плохой checksum отклоняются до сети. Ошибки
+провайдера и неизвестные токены сохраняются как в A-01; отклонённый design
+не стирает usage, CancelledError распространяется наружу. Общий Run budget и
+атомарное резервирование по-прежнему обеспечиваются вызывающим accounting.
+
+LLM предлагает только компоненты, технические решения и интеграции. Нормативные
+purpose/in_scope/out_of_scope берутся из принятого анализа. Проверяются схема,
+уникальность ID, DAG компонентов, известные FR и покрытие каждого FR компонентом.
+План задач строится детерминированно по C-05 grants, проверяется C-02 и
+validate_profile_grants: backend не получает migrations/integrations, task/stage ID
+уникальны, владельцы не выбираются моделью. Указанные в tasks FR — область работы,
+не доказательство реализации. Дерево содержит планируемые обязательные файлы
+профиля и каталоги компонентов, а не созданные файлы или права на запись.
+Grants владельцев всех required_artifacts проверяются до обращения к LLM,
+включая условные файлы. Проверяются выход за grants, file/directory и case
+conflicts, max_files и max_path_length из профиля. Integrations owner
+и условные каталоги добавляются только при непустом предложении интеграций.
+
+Успешный LLMResult.data — **внутреннее предложение `a05/1.0`**, не AgentResult:
+architecture_core (C-02 design-поля без contracts и ещё не привязанных integration
+references), generation_plan (форма C-02), project_tree, provenance checksum/версий,
+ready_for_generation=false и requires_contracts=[openapi,data_model,ui_spec].
+Дерево и план не сохраняются автоматически и не передаются исполнителям.
+В плане используются только реальные входные UUID requirements, без выдуманных
+references будущих артефактов. Порядок depends_on не подменяет component.depends_on.
+
+A-09 обязан получить настоящие A-06/A-07/A-08, проверить их версии и references,
+добавить входы API/data/UI потребителям, привязать contracts/integrations и
+generation_plan reference, после чего проверить **полную** C-02 architecture,
+назначить immutable metadata и сохранить новую принятую версию перед dispatch.
+
+Предварительные задачи A-05 создаются по владельцам и получают весь набор FR.
+В A-09 перед dispatch требуется уточнить область каждой задачи по
+`components.related_fr_ids`, каталогам в grants владельца и зависимостям
+компонентов; задачи frontend и migrations не должны автоматически получать
+одинаковый набор требований. Итоговый план должен сохранять покрытие FR и
+проверяться на grants после уточнения.
+
+Успех A-05 не означает frozen architecture или завершённый Run. Ни JSON Schema,
+ни проверка FR links не доказывают смысловую полноту ответа реальной модели.
+
+Установка и локальные проверки из корня:
+
+```sh
+python -m pip install -r backend/app/agents/nodes/architecture/requirements.txt
+python -m unittest discover -s backend/app/agents/nodes/architecture -p 'test_*.py' -v
+```
+
+Тесты используют реальные A-01/schema/grants validators, существующие C-02 fixtures
+и локальный HTTP transport. Они не вызывают предоставленную модель, не создают
+артефакты проекта и не доказывают готовность worker/полного архитектурного этапа.
 
 ## Генератор модели данных
 
