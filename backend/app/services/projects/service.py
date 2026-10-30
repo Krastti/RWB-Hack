@@ -6,7 +6,8 @@ from uuid import UUID, uuid4
 
 from ...errors import InvalidProjectInput, ProjectNotFound
 from ...models.dto import Project, ProjectPage, RequirementRevision
-from ...repository import ProjectRepository
+from ...repositories import ProjectRepository
+
 
 class ProjectService:
     def __init__(self, repository: ProjectRepository) -> None:
