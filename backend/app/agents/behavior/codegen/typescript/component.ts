@@ -1,5 +1,5 @@
 // A-11 supplies the accepted API gateway and places this component at UI_BINDINGS.
-import { Component, Input, OnChanges } from '@angular/core';
+import { ChangeDetectorRef, Component, Input, OnChanges, OnDestroy, SimpleChanges, inject } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Actor, Values, Scalar, decide, explanation, parametersFor, fieldValid } from './policy';
 export interface DomainGateway {
@@ -28,7 +28,7 @@ export interface DomainGateway {
       @if (error) { <p class="alert alert-warning" role="alert">{{ error }}</p> }
     </form>`
 })
-export class DomainActionComponent implements OnChanges {
+export class DomainActionComponent implements OnChanges, OnDestroy {
   @Input({required:true}) operationId='';
   @Input({required:true}) recordId='';
   @Input({required:true}) record:Values={};
@@ -40,14 +40,23 @@ export class DomainActionComponent implements OnChanges {
   error='';
   private preparedOperation='';
   private fresh=true;
+  private generation=0;
+  private destroyed=false;
+  private readonly changeDetector=inject(ChangeDetectorRef);
   get fields() { return parametersFor(this.operationId); }
   get decision() {
     const decision=decide(this.operationId,this.record,this.actor,this.form.getRawValue());
     return this.fresh?decision:{...decision,status:'unknown' as const,reason:'REFRESH_REQUIRED'};
   }
   get reason() { return explanation(this.decision); }
-  ngOnChanges():void {
-    this.fresh=true;
+  ngOnChanges(changes:SimpleChanges):void {
+    const contextChanged=['operationId','recordId','gateway','actor'].some(key=>key in changes);
+    const recordChanged='record' in changes && changes['record'].previousValue!==changes['record'].currentValue;
+    if(contextChanged || recordChanged) {
+      this.generation++;
+      this.busy=false;this.error='';
+      this.fresh=recordChanged;
+    }
     if(this.preparedOperation!==this.operationId) {
       const controls:Record<string,FormControl<Scalar|null>>={};
       for(const field of this.fields) controls[field.id]=new FormControl<Scalar|null>(null,
@@ -56,19 +65,30 @@ export class DomainActionComponent implements OnChanges {
     }
   }
   async submit():Promise<void> {
-    if(this.busy || this.form.invalid || this.decision.status!=='allowed') return;
+    if(this.destroyed || this.busy || this.form.invalid || this.decision.status!=='allowed') return;
     this.busy=true;this.error='';
-    const recordId=this.recordId, operationId=this.operationId;
+    this.changeDetector.markForCheck();
+    const recordId=this.recordId, operationId=this.operationId, gateway=this.gateway;
+    const generation=++this.generation;
+    const current=()=>!this.destroyed && this.generation===generation && this.recordId===recordId
+      && this.operationId===operationId && this.gateway===gateway;
     try {
-      await this.gateway.submit(operationId,recordId,this.form.getRawValue());
+      await gateway.submit(operationId,recordId,this.form.getRawValue());
     } catch {
-      if(this.recordId===recordId) this.error='Сервер отклонил действие или данные устарели. Обновите данные и проверьте доступность.';
+      if(current()) {
+        this.error='Сервер отклонил действие или данные устарели. Обновите данные и проверьте доступность.';
+        this.changeDetector.markForCheck();
+      }
+    }
+    if(!current()) return;
+    try {
+      const record=await gateway.refresh(recordId);
+      if(current()) { this.record=record;this.fresh=true; }
+    } catch {
+      if(current()) { this.fresh=false;this.error='Не удалось обновить данные. Повторите загрузку.'; }
     } finally {
-      try {
-        const record=await this.gateway.refresh(recordId);
-        if(this.recordId===recordId) { this.record=record;this.fresh=true; }
-      } catch { if(this.recordId===recordId) { this.fresh=false;this.error='Не удалось обновить данные. Повторите загрузку.'; } }
-      this.busy=false;
+      if(current()) { this.busy=false;this.changeDetector.markForCheck(); }
     }
   }
+  ngOnDestroy():void { this.destroyed=true;this.generation++; }
 }

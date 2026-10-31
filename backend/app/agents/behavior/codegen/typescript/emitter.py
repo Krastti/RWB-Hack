@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from ...model import bind, blockers, canonical, checksum, require, validate_model
 
-COMPILER_VERSION='typescript-1.0.0'
+COMPILER_VERSION='typescript-1.0.1'
 ROOT=Path(__file__).parent
 POLICY='frontend/src/app/domain/policy.ts'
 COMPONENT='frontend/src/app/domain/domain-action.ts'

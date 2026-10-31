@@ -25,8 +25,16 @@ DomainActionComponent calls `decide` on every evaluation, so changed actor, reco
 or form values recompute access. Reactive Form validators call the same emitted
 field constraints. Action submission rechecks access, uses the supplied accepted
 API gateway, displays denial/unknown explanations with rule IDs, and refreshes
-after success or failure. Failed refresh blocks further submission. Late responses
-do not replace a different record selected while the request was pending. The
+after success or failure. Async state updates notify zoneless Angular with
+`markForCheck()`. Failed refresh blocks further submission; label changes do not
+remove that block. A replacement `record` input must contain freshly loaded server
+data. Changing operation, record ID, gateway or actor without replacing that input
+keeps submission blocked until fresh data arrives.
+
+Each request captures its gateway, operation, record ID and generation. Changing
+context or replacing the input record invalidates pending callbacks, including
+A→B→A navigation. Old responses cannot change record, freshness, error or the busy
+state of a newer request. Destroyed components ignore pending responses. The
 server still authorizes every request; disabling a button is not authorization.
 
 A-11 must place the component at the accepted screen/element in UI_BINDINGS,
@@ -36,14 +44,26 @@ A-22 acceptance. Unknown identity parameter widgets are explicitly unsupported;
 no arbitrary text identity control or new framework is introduced.
 
 Validation: eight TS/interpreter cases run in Node's native TypeScript support;
-missing hidden owner remains unknown. Emitted policy also passes TypeScript 5.9.3
-`tsc --noEmit --strict --target ES2022`. This checks the policy module only, not
-Angular application compatibility. The earlier type-check failure on provenance
-metadata was corrected by explicitly allowing metadata in the internal model types.
+missing hidden owner remains unknown. The saved component regressions compile
+the actual emitted files with Angular 22.2.4 / TypeScript 6.0.2 and the repository's
+strict settings, then exercise zoneless TestBed with JSDOM and controlled Promises.
+They check DOM updates without manual change detection, failed refresh recovery,
+same-ID context switches, A→B→A races and component destruction.
 
-Outstanding: actual A-10/A-11 template/generator and accepted A-09/ui-spec adapters
-are absent from main. The Angular consumer is executable source but has not been
-installed in a real generated screen or built with that application's Angular
-compiler. Those integration/build checks remain required before #114 closes.
+With the dependencies above present and `npm ci` completed in `frontend`:
+
+```sh
+python -m backend.app.agents.behavior.codegen.typescript.tests.run
+```
+
+`NODE_BINARY` selects Node; `ANGULAR_NODE_MODULES` can point to an existing install
+of the repository's frontend dependencies. The runner uses temporary emitted files,
+does not install packages and only adjusts the compiled policy import extension
+for Node ESM. Compiler/source-map version is `typescript-1.0.1`.
+
+Outstanding: the component has not been installed in a real A-11 generated screen
+with accepted A-09/ui-spec bindings and an actual API gateway. The standalone
+Angular compile/runtime checks do not replace that integration or application build.
+Those checks remain required before #114 closes.
 The draft module is opt-in; default frontend generation and dependencies are unchanged.
 Rollback is to omit this compiler/consumer from A-11.
