@@ -9,13 +9,13 @@ from contracts.agents.validate import Contracts
 from ...models import Run, Project
 from ...agents.profiles import ProfileLoader
 from ...agents.context import ContextBuilder
-from ...agents.graph import AnalysisGraph
+from ...agents.graph import AnalysisGraph, GraphError
 from ...agents.graph.architecture import ArchitectureStage, RuntimeNodes, prepare_architecture
 from ...agents.graph.architecture.models import NODES, OUTPUTS
 from ..artifacts import PostgreSQLArtifactStore
-from ..artifacts.budget import PostgreSQLBudgetLedger
-from ..artifacts.models import ModelCall
-from ..run_control.models import AttemptState, now
+from ..artifacts.budget import PostgreSQLBudgetLedger, token_cost
+from ..artifacts.models import ModelCall, ExecutionReceipt
+from ..run_control.models import AttemptState, Limits, now
 from ..lifecycle.models import LifecycleError
 from backend.app.services.pipeline.accounting import AccountedCalls, active_accounting
 from .analysis import AnalysisNode, make_artifact, canonical
@@ -63,27 +63,21 @@ class PipelineOrchestrator:
         ledger = PostgreSQLBudgetLedger(store)
         limits = profile.data['limits']['agent']
         for key in ('max_calls', 'max_output_tokens'):
-            limits[key] = min(limits[key], frozen['limits'][key])
+            limits[key] = min(limits[key], getattr(record.run.limits, key))
         calls = AccountedCalls(ledger, str(command.run_id), str(command.attempt_id), limits)
         token = active_accounting.set(calls)
         try:
             if command.stage_id == 'analysis':
                 graph = AnalysisGraph(AnalysisNode(store, self.config, transport=self.transports.get('analysis')),
                                       store, PostgreSQLCheckpoints(store))
-                if command.attempt_no > 1 and (source.input_state.get('schema_version') != 'clarification-input/1'
-                        or graph.snapshot(str(command.run_id))['stage_status'] == 'failed'):
+                try:
                     old = graph.snapshot(str(command.run_id))
-                    # A pre-result crash may leave LangGraph running after C-03 has
-                    # durably failed that attempt. Only that terminal lifecycle
-                    # record authorizes replacing its pending graph task.
-                    previous_failed = any(a.stage_id == 'analysis' and a.status == 'failed'
-                        and a.attempt_no == old['request']['attempt'] for a in record.run.stages)
-                    state = graph.retry(str(command.run_id), attempt_id=str(command.attempt_id),
-                                        attempt_no=command.attempt_no, previous_attempt_failed=previous_failed)
-                elif source.input_state.get('schema_version') == 'clarification-input/1':
-                    state = graph.resume(str(command.run_id), questions_revision=source.input_state['questions_revision'],
-                        answers=source.input_state['answers'], attempt_id=str(command.attempt_id))
-                else:
+                except GraphError as error:
+                    if str(error) != 'RESUME_STATE_UNAVAILABLE':
+                        raise
+                    old = None
+                if old is None:
+                    history = self.bootstrap_history(command, execution, record, source)
                     business = dict(schema_version='1.0', requirements_text=frozen['requirements_text'],
                         questions_revision=0, answers=[], previous_requirements_artifact_id=None,
                         analysis_rules_artifact_id=None)
@@ -91,7 +85,22 @@ class PipelineOrchestrator:
                                              canonical(business), 'orchestrator', command.attempt_no)
                     store.put(str(command.run_id), artifact)
                     request = self.request(command, profile, limits, [artifact['artifact_id']])
-                    state = graph.start(request, attempt_id=str(command.attempt_id))
+                    state = graph.start(request, attempt_id=str(command.attempt_id), prior_attempts=history)
+                elif command.attempt_no > 1 and (source.input_state.get('schema_version') != 'clarification-input/1'
+                        or old['stage_status'] == 'failed'):
+                    # A pre-result crash may leave LangGraph running after C-03 has
+                    # durably failed that attempt. Only that terminal lifecycle
+                    # record authorizes replacing its pending graph task.
+                    previous_failed = any(a.stage_id == 'analysis' and a.status == 'failed'
+                        and a.attempt_no == old['request']['attempt'] for a in record.run.stages)
+                    state = graph.retry(str(command.run_id), attempt_id=str(command.attempt_id),
+                                        attempt_no=command.attempt_no, previous_attempt_failed=previous_failed,
+                                        limits=limits)
+                elif source.input_state.get('schema_version') == 'clarification-input/1':
+                    state = graph.resume(str(command.run_id), questions_revision=source.input_state['questions_revision'],
+                        answers=source.input_state['answers'], attempt_id=str(command.attempt_id))
+                else:
+                    state = graph.recover(str(command.run_id))
                 result = store.result(str(command.run_id), str(command.attempt_id))
                 if result is None:
                     raise RuntimeError('ANALYSIS_RESULT_NOT_ACCEPTED')
@@ -135,6 +144,12 @@ class PipelineOrchestrator:
                             profile_bytes=profile._raw, profile_checksum=profile.checksum,
                             rules_text=profile.rules_text, rules_checksum=profile.metadata['rules_checksum'],
                             api_policy=policies['api_policy'], naming_policy=policies['naming_policy'])
+                        # Normalize a Run cap too small to admit A-09 before its
+                        # generic standalone BUDGET_EXCEEDED preflight result.
+                        for key, reason in [('max_calls', 'MAX_CALLS'), ('max_output_tokens', 'MAX_OUTPUT_TOKENS')]:
+                            if limits[key] < len(NODES):
+                                scope = '' if profile.data['limits']['agent'][key] >= len(NODES) else 'AGENT_'
+                                raise ValueError('BUDGET_' + scope + reason)
                         reservation = deepcopy(inputs['reservation'])
                         if reservation['attempt_id'] != str(command.attempt_id):
                             reservation['attempt_id'] = str(command.attempt_id)
@@ -183,6 +198,17 @@ class PipelineOrchestrator:
                                       if d['code'].startswith('BUDGET_')), None)
                 if budget_reason:
                     record.run.stop_reason = budget_reason
+                record.required_limits = None
+                if budget_reason in {'MAX_CALLS', 'MAX_OUTPUT_TOKENS'}:
+                    # A-09 restarts its ephemeral four-node attempt; analysis
+                    # needs one admitted call. Unknown reservations still cost.
+                    count = len(NODES) if command.stage_id == 'architecture' else 1
+                    output_budget = profile.data['limits']['agent']['max_output_tokens']
+                    quota, extra = divmod(output_budget, count)
+                    retry_output = sum(min(self.config.max_output_tokens, quota + (i < extra)) for i in range(count))
+                    record.required_limits = Limits(
+                        max_calls=max(record.run.limits.max_calls, len(rows) + count),
+                        max_output_tokens=max(record.run.limits.max_output_tokens, token_cost(rows, 'output') + retry_output))
                 if command.stage_id == 'analysis':
                     from ..run_control.models import Question
                     record.run.questions = [Question.model_validate(q) for q in result['questions']]
@@ -193,7 +219,7 @@ class PipelineOrchestrator:
             control.finish_attempt(owner_id=owner, run_id=run.id, stage_id=command.stage_id,
                 attempt_id=command.attempt_id, accepted_result=result, save_boundary=boundary)
             with self.runtime.states.transaction(s, run) as tx:
-                if tx.snapshot.status == 'cancelling':
+                if tx.snapshot.status != 'running':
                     return
                 if result['status'] in {'failed', 'cancelled'}:
                     budget_reason = next((d['code'][7:] for d in result['diagnostics']
@@ -204,6 +230,29 @@ class PipelineOrchestrator:
                     tx.transition_run(expected='running', target='waiting_for_input', reason_code='ANALYSIS_QUESTIONS_REQUIRED')
             if command.stage_id == 'analysis' and result['status'] == 'succeeded' and run.status == 'running':
                 self.register_architecture(s, run, result)
+
+    @staticmethod
+    def bootstrap_history(command, execution, record, source):
+        """Only bootstrap an initial input with proven no-call/no-result history."""
+        if source.input_state.get('schema_version') != 'runtime-intake/1':
+            raise GraphError('RESUME_STATE_UNAVAILABLE')
+        previous = sorted((a for a in record.attempts if a.stage_id == 'analysis'
+                           and a.attempt_no < command.attempt_no), key=lambda a: a.attempt_no)
+        public = {a.attempt_no: a for a in record.run.stages if a.stage_id == 'analysis'}
+        if ([a.attempt_no for a in previous] != list(range(1, command.attempt_no))
+                or any(public[a.attempt_no].status != 'failed' or a.accepted_result is not None for a in previous)):
+            raise GraphError('RESUME_STATE_UNAVAILABLE')
+        ids = [a.attempt_id for a in previous] + [command.attempt_id]
+        with execution.transaction() as session:
+            if (session.scalar(select(ModelCall.call_id).where(ModelCall.attempt_id.in_(ids)).limit(1)) is not None
+                    or session.scalar(select(ExecutionReceipt.attempt_id).where(
+                        ExecutionReceipt.attempt_id.in_(ids), ExecutionReceipt.key.in_(['result', 'checkpoint'])).limit(1)) is not None):
+                raise GraphError('RESUME_STATE_UNAVAILABLE')
+        return [dict(attempt_id=str(a.attempt_id), attempt_no=a.attempt_no, input_hash=a.input_hash,
+                     status='failed', artifacts=[], usage=None,
+                     started_at=public[a.attempt_no].started_at.isoformat() if public[a.attempt_no].started_at else None,
+                     finished_at=public[a.attempt_no].finished_at.isoformat() if public[a.attempt_no].finished_at else None,
+                     diagnostics=[{'code': 'PRE_CHECKPOINT_FAILURE', 'severity': 'error'}]) for a in previous]
 
     @staticmethod
     def request(command, profile, limits, ids):

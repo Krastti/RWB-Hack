@@ -137,8 +137,12 @@ class AnalysisGraph:
                  and state.get("stage_id") == self.stage_id, "INCOMPATIBLE_CHECKPOINT")
         return deepcopy(state)
 
-    def start(self, request: dict, *, attempt_id: str) -> AnalysisState:
-        """Start once, or recover the same initial command on repeated delivery."""
+    def start(self, request: dict, *, attempt_id: str, prior_attempts: list[dict] | None = None) -> AnalysisState:
+        """Start once or recover delivery; worker may supply proven no-call failures.
+
+        prior_attempts is trusted durable history, never model input. The worker
+        must rule out existing call/result receipts before bootstrapping it.
+        """
         request = deepcopy(request)
         self._validate("agent-input", request)
         _uuid(attempt_id)
@@ -151,7 +155,14 @@ class AnalysisGraph:
                      and state["initial_attempt_id"] == attempt_id, "RUN_STATE_CONFLICT")
             return self.recover(request["run_id"])
         source, digest = self._inputs(request)
-        _require(request["attempt"] == 1 and not source["answers"] and source["questions_revision"] == 0
+        history = deepcopy(prior_attempts or [])
+        _require((request["attempt"] == 1 and not history) or
+                 (bool(history) and all(a['status'] == 'failed' for a in history)
+                  and [a['attempt_no'] for a in history] == list(range(1, request['attempt']))
+                  and len({a['attempt_id'] for a in history}) == len(history)
+                  and attempt_id not in {a['attempt_id'] for a in history}),
+                 "INITIAL_ANALYSIS_INPUT_REQUIRED")
+        _require(not source["answers"] and source["questions_revision"] == 0
                  and source["previous_requirements_artifact_id"] is None,
                  "INITIAL_ANALYSIS_INPUT_REQUIRED")
         state: AnalysisState = {
@@ -163,13 +174,14 @@ class AnalysisGraph:
             "input_hash_algorithm": "substantive-v2",
             "attempt_started_at": None,
             "status": "running", "stage_status": "pending",
-            "questions_revision": 0, "questions": [], "attempts": [],
+            "questions_revision": 0, "questions": [], "attempts": history,
             "artifact_refs": [], "resume_command": None,
         }
         self._graph.invoke(state, config, durability="sync")
         return self.snapshot(request["run_id"])
 
-    def retry(self, run_id: str, *, attempt_id: str, attempt_no: int, previous_attempt_failed: bool = False) -> AnalysisState:
+    def retry(self, run_id: str, *, attempt_id: str, attempt_no: int, previous_attempt_failed: bool = False,
+              limits: dict | None = None) -> AnalysisState:
         """Execute an already registered retry, preserving checkpoint history and inputs."""
         _uuid(attempt_id)
         state = self.snapshot(run_id)
@@ -184,6 +196,9 @@ class AnalysisGraph:
         self._verified_inputs(state)
         request = deepcopy(state["request"])
         request["attempt"] = attempt_no
+        if limits is not None:
+            request['limits'] = deepcopy(limits)
+        self._validate('agent-input', request)
         _, digest = self._inputs(request)
         self._graph.update_state(self._config(run_id), {
             "request": request, "attempt_id": attempt_id, "input_hash": digest,

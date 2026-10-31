@@ -51,6 +51,9 @@ class AccountedCalls:
             # Admission denied: no physical call and no fabricated usage row.
             return LLMResult(usage=LLMUsage(), error=LLMError('BUDGET_' + error.reason,
                 'Model call was not sent because the durable budget is exhausted.'))
+        except module.CallAdmissionStopped as error:
+            return LLMResult(usage=LLMUsage(), error=LLMError(error.code,
+                'Model call was not sent because the Run no longer admits new work.'))
         try:
             result = await adapter._generate(system=system, prompt=prompt, schema=schema)
         except BaseException:

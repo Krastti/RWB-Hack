@@ -587,3 +587,66 @@ The operator-supplied tickets policy is domain-specific. Arbitrary-input policy
 generation remains unimplemented; no universal live-input success is claimed.
 No public DTO, grants or database schema changed in this follow-up. No issues,
 commits, pushes, PR edits or merges were performed by this verification.
+
+## Review fixes: cancellation, budget retry and checkpoint bootstrap (2026-10-31)
+
+Checked state: local commit `2cab2f78669faa412cee42b52819e1ea81b884e8` plus
+uncommitted fixes in the original working directory. PR remote head remains
+`6d8960f0bd2d06757a6fc11556f9e05efce51731`; main base remains
+`0337844f0f47c5eba6600beec87e833a2f63738a`. No branch switches, commits or pushes.
+
+All four review reproductions previously failed. The fixes are:
+
+- Physical-call reservation now checks Run status and terminal intent while
+  holding the existing Run lock. New analyst repair/A-09 calls stop after cancel;
+  already dispatched calls still settle their known/unknown usage normally.
+- After finish_attempt reaches cancelled or another final state, orchestration
+  does not attempt a second running-to-failed/wait transition. Cancel concurrent
+  with a provider error completes without recovery_pending.
+- MAX_CALLS/MAX_OUTPUT_TOKENS results now persist required total limits from
+  unique ledger rows and remaining retry work, including unknown reservations.
+  A fresh A-09 attempt needs four node calls/output allocations. Insufficient
+  increases return 409 with no state changes; sufficient authorized increases
+  execute and replay idempotently. Worker request caps follow accepted current
+  limits without modifying frozen business inputs. A cap too small to start
+  A-09 gets a specific Run/agent budget cause rather than generic EXCEEDED.
+- Before the first checkpoint exists, a registered retry can bootstrap only
+  runtime-intake/1 with contiguous durable failed history and no recorded
+  ModelCall/result/checkpoint receipt. Graph history retains those attempts.
+  Existing model facts or clarification inputs prohibit bootstrap. An existing
+  checkpoint continues through the original recover/retry/resume paths.
+
+New PostgreSQL tests cover the original four scenarios, call/output budget
+increases and denials, retry replay, cancellation between A-09 nodes, terminal
+intent, preservation of dispatched usage and refusal to bootstrap over a recorded
+call after checkpoint loss. Nine regression cases are included in the full suite.
+
+Final commands, from repository root with Python 3.12.15 and a disposable
+PostgreSQL 16 instance:
+
+```sh
+RWB_TEST_DATABASE_URL=<disposable PostgreSQL URL> PYTHONPATH=backend:backend/tests:. /tmp/rwb152-venv/bin/python -m pytest -q backend/tests --tb=short
+# 167 passed, 15 subtests passed; 194.57s
+
+PYTHONPATH=backend:backend/app/agents:. /tmp/rwb152-venv/bin/python -m unittest backend.app.agents.graph.test_graph backend.app.agents.graph.test_cross_version backend.app.agents.nodes.architecture.test_node backend.app.agents.generators.ui_spec.test_ui_spec backend.app.agents.requirements_analyst.tests.test_agent backend.app.agents.generation.tests.test_executor -q
+# 144 tests OK; 53.770s
+
+/tmp/rwb152-venv/bin/python -m contracts.agents.validate --check
+# 11 schemas, 22 examples, 4 linked bundles, 1 snapshot; offline OK
+
+git diff --check
+# PASS
+```
+
+The architecture cancellation injection initially targeted the analysis import
+alias; the test was corrected to patch RuntimeNodes' canonical adapter class.
+An exploratory collect-only command omitted PYTHONPATH and failed import;
+the documented command collected all nine cases and the final full suite passed.
+These failures are not counted as passing checks.
+
+No .env or real provider was used. SQL test fixtures applied migrations directly;
+Flyway CLI, external broker/worker subprocesses, frontend/browser and CI were not
+rerun for these backend changes. No schema/DTO/grant/migration change is needed.
+Rollback reverts these fixes while retaining all existing call/receipt/checkpoint
+data. Live A-09 acceptance and arbitrary-input domain policy generation remain
+unresolved acceptance items; this is not a claim of full pipeline readiness.

@@ -10,6 +10,7 @@ from ...agents.generation import GenerationError
 from ...agents.llm.adapter import request_payload
 from ...agents.llm import LLMConfig
 from ...models import Run
+from ..runtime.models import RunRuntimeState
 from .models import ModelCall
 
 
@@ -32,6 +33,16 @@ class BudgetAdmissionError(GenerationError):
         self.reason = reason
 
 
+class CallAdmissionStopped(GenerationError):
+    """New work is forbidden; already admitted responses can still settle."""
+
+
+def token_cost(rows, key):
+    return sum(r.payload['usage'][key + '_tokens'] if r.payload.get('usage') and
+               r.payload['usage'][key + '_tokens'] is not None else r.payload['reservation'][key]
+               for r in rows)
+
+
 class PostgreSQLBudgetLedger:
     def __init__(self, artifacts):
         self.artifacts = artifacts
@@ -49,6 +60,11 @@ class PostgreSQLBudgetLedger:
         with self.artifacts.execution.transaction() as session:
             self.artifacts._writing(session, run_id, attempt_id)
             run = session.get(Run, UUID(str(run_id)))  # lease transaction already holds Run lock
+            state = session.get(RunRuntimeState, run.id)
+            if run.status != 'running':
+                raise CallAdmissionStopped('RUN_CANCELLED' if run.status in {'cancelling', 'cancelled'} else 'RUN_NOT_RUNNING')
+            if state and state.payload.get('saved_state', {}).get('terminal_intent'):
+                raise CallAdmissionStopped('RUN_STOPPING')
             if minimum_interval_seconds and rate_scope:
                 session.execute(text('SELECT pg_advisory_xact_lock(hashtext(:scope))'), {'scope': rate_scope})
                 latest = session.scalar(select(ModelCall).where(ModelCall.payload['rate_scope'].astext == rate_scope)
@@ -62,17 +78,13 @@ class PostgreSQLBudgetLedger:
                 raise GenerationError('MODEL_CALL_ALREADY_RESERVED')
             rows = list(session.scalars(select(ModelCall).where(ModelCall.run_id == run.id)))
             per_attempt = [r for r in rows if r.attempt_id == UUID(str(attempt_id))]
-            def cost(items, key):
-                return sum(r.payload['usage'][key + '_tokens'] if r.payload.get('usage') and
-                           r.payload['usage'][key + '_tokens'] is not None else r.payload['reservation'][key]
-                           for r in items)
             limits = self.artifacts.profile.data['limits']['run']
             checks = [
                 (len(rows) >= min(run.limits['max_calls'], limits['max_calls']), 'MAX_CALLS'),
                 (len(per_attempt) >= agent_limits['max_calls'], 'AGENT_MAX_CALLS'),
-                (cost(rows, 'input') + reservation['input'] > limits['max_input_tokens'], 'MAX_INPUT_TOKENS'),
-                (cost(rows, 'output') + max_output_tokens > min(run.limits['max_output_tokens'], limits['max_output_tokens']), 'MAX_OUTPUT_TOKENS'),
-                (cost(per_attempt, 'output') + max_output_tokens > agent_limits['max_output_tokens'], 'AGENT_MAX_OUTPUT_TOKENS'),
+                (token_cost(rows, 'input') + reservation['input'] > limits['max_input_tokens'], 'MAX_INPUT_TOKENS'),
+                (token_cost(rows, 'output') + max_output_tokens > min(run.limits['max_output_tokens'], limits['max_output_tokens']), 'MAX_OUTPUT_TOKENS'),
+                (token_cost(per_attempt, 'output') + max_output_tokens > agent_limits['max_output_tokens'], 'AGENT_MAX_OUTPUT_TOKENS'),
             ]
             for exceeded, reason in checks:
                 if exceeded:
