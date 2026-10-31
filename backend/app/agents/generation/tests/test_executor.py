@@ -74,7 +74,7 @@ class GenerationRecoveryTests(unittest.TestCase):
         self.assertEqual(observed, [set(s.path for s in args['files'])] * 2)
 
     def test_corrupt_receipt_and_missing_accounting_rejected(self):
-        for corruption in ('content', 'call_id', 'missing_call'):
+        for corruption in ('content', 'call_id', 'missing_call_id', 'missing_ledger_entry'):
             with self.subTest(corruption=corruption):
                 executor, args, store, ledger, seen = fixture()
                 self.run_async(executor, args)
@@ -83,8 +83,10 @@ class GenerationRecoveryTests(unittest.TestCase):
                     receipt['artifacts'][0]['content'] += 'corrupt'
                 elif corruption == 'call_id':
                     receipt['call_id'] = str(uuid4())
-                else:
+                elif corruption == 'missing_call_id':
                     receipt.pop('call_id')
+                else:
+                    ledger.calls[(args['request']['run_id'], args['attempt_id'])].pop(receipt['call_id'])
                 result = self.run_async(executor, args)
                 self.assertEqual(result.result['diagnostics'][0]['code'], 'GENERATION_RECEIPT_CONFLICT')
                 self.assertEqual(len(seen), 2)

@@ -6,7 +6,7 @@
 
 `BatchExecutor(config, store, ledger, max_files_per_batch, max_request_bytes,
 validate_file).run(request, owner_id, attempt_id, task_id, plan, profile, context,
-files) -> GenerationOutcome`. Все аргументы run — keyword-only.
+files, model_configuration) -> GenerationOutcome`. Все аргументы run — keyword-only.
 
 `FileSpec` задаёт path/kind/media_type/version и output_token_budget одного
 полного файла. Предметный генератор заранее материализует конечный список файлов
@@ -24,7 +24,18 @@ A-01 возвращает OUTPUT_TRUNCATED вместо приёмки обре�
 точный подсчёт/резерв input tokens в общем ledger.
 
 Для каждого пакета используется настоящий A-01 с ограниченными timeout/output.
-Точная model configuration (без api_key) должна совпадать с зафиксированной A-30.
+`model_configuration` — обязательные исходные bytes конфигурации модели без api_key,
+переданные в `ContextBuilder.prepare(execution_inputs=...)`. Их checksum сверяется
+с manifest A-30, а содержимое — с конфигурацией исполнителя. Например:
+
+```python
+outcome = await executor.run(
+    request=request, owner_id=owner_id, attempt_id=attempt_id, task_id=task_id,
+    plan=plan, profile=profile, context=context, files=files,
+    model_configuration=execution_inputs["model_configuration"],
+)
+```
+
 Worker передаёт prompt/template/compiler configuration, которые фактически
 использует генератор. complete=true — только транспортный признак, не доказательство
 предметной корректности: обязательный validate_file должен проверить синтаксис,
