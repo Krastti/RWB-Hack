@@ -25,6 +25,7 @@ class LeasedExecution:
         self._stop = Event()
         self._lost = Event()
         self._thread = Thread(target=self._renew, name="stage-lease-heartbeat", daemon=True)
+        self.activity_clock = None
 
     def __enter__(self) -> "LeasedExecution":
         self._thread.start()
@@ -42,6 +43,9 @@ class LeasedExecution:
         self.ensure_current()
         try:
             self.store.heartbeat(self.lease)
+            clock = self.activity_clock
+            if clock is not None:
+                clock.heartbeat()
         except LeaseLost:
             self._lost.set()
             raise

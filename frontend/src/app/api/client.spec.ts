@@ -47,6 +47,17 @@ describe('REST client and session boundary', () => {
     expect(req.request.body.profile_id).toBe(PROFILE_ID);
     expect(req.request.headers.get('Idempotency-Key')).toBe('same-key');
   });
+  it('pins ZIP to the requested snapshot and decodes JSON errors returned as Blob', async () => {
+    const pending=firstValueFrom(api.archive('run','snapshot')).catch(error=>error);
+    const request=http.expectOne('/api/v1/runs/run/archive?snapshot_id=snapshot');
+    expect(request.request.responseType).toBe('blob');
+    const body=JSON.stringify({error:{code:'MANIFEST_NOT_READY',message:'Pending',request_id:'zip-error'}});
+    const blob=new Blob([body],{type:'application/json'});
+    if (typeof blob.text !== 'function') Object.defineProperty(blob,'text',{value:()=>Promise.resolve(body)});
+    request.flush(blob,{status:409,statusText:'Conflict'});
+    const error=await pending;
+    expect(error).toBeInstanceOf(ApiError);expect(error.code).toBe('MANIFEST_NOT_READY');expect(error.requestId).toBe('zip-error');
+  });
   it('expires a session, clears storage and signals cancellation', () => {
     vi.useFakeTimers();
     const ended = vi.fn(); session.ended.subscribe(ended);

@@ -8,7 +8,7 @@ import httpx
 from backend.app.agents.generation.example import (example, fixture_inputs, LLMConfig, ProfileLoader, ContextBuilder, FixtureResolver, OWNER, FileSpec, GenerationError, ExampleStore, ExampleLedger, BatchExecutor)
 
 
-def fixture(batch_size=1, validator=None):
+def fixture(batch_size=1, validator=None, conditions=None):
     fixtures = fixture_inputs()
     artifacts = [fixtures[k] for k in ('requirements', 'openapi', 'data_model')]
     config = LLMConfig(base_url='https://example.invalid/v1', model='manual-fixture', api_key='example-only',
@@ -23,7 +23,7 @@ def fixture(batch_size=1, validator=None):
                  'compiler_configuration': b'{"language":"python"}'}
     context = ContextBuilder(FixtureResolver(artifacts), max_context_bytes=262144).prepare(
         request, owner_id=OWNER, owner_agent='backend', profile=profile,
-        references={a.metadata['artifact_id']: a.metadata for a in artifacts}, execution_inputs=execution)
+        references={a.metadata['artifact_id']: a.metadata for a in artifacts}, execution_inputs=execution, conditions=conditions)
     sources = {'backend/app/services/ownership.py': 'def is_owner(actor_id, owner_id):\n    return actor_id == owner_id\n',
                'backend/app/services/description.py': 'def has_description(value):\n    return isinstance(value, str) and bool(value.strip())\n'}
     files = tuple(FileSpec(path, 'source', 'text/x-python', 1, 512) for path in sources)
@@ -49,10 +49,45 @@ def fixture(batch_size=1, validator=None):
                              max_request_bytes=262144, validate_file=validator or validate, transport=httpx.MockTransport(handler))
     args = dict(request=request, owner_id=OWNER, attempt_id=str(uuid4()), task_id='services',
                 plan=plan, profile=profile, context=context, files=files,
-                model_configuration=execution["model_configuration"])
+                model_configuration=execution["model_configuration"], conditions=conditions)
     return executor, args, store, ledger, seen
 
 class GenerationRecoveryTests(unittest.TestCase):
+    def test_plan_with_conditional_integration_is_admitted_only_when_enabled(self):
+        for enabled in (True, False):
+            executor, args, store, ledger, seen = fixture(2, conditions={'has_integrations': enabled})
+            args['plan']['tasks'].append(dict(task_id='integration',stage_id='integration',owner_agent='integrations',
+                depends_on=[],input_artifact_ids=args['request']['input_artifact_ids'],output_paths=['integrations/README.md'],
+                output_directories=[],related_fr_ids=['FR-001']))
+            if enabled:
+                self.assertEqual(self.run_async(executor,args).result['status'],'succeeded')
+            else:
+                with self.assertRaises(GenerationError):
+                    self.run_async(executor,args)
+                self.assertFalse(seen)
+
+    def test_outer_accounting_is_disabled_for_owned_physical_calls(self):
+        from backend.app.agents.llm.accounting import active_accounting
+        class RejectDuplicate:
+            async def generate(self, *args):
+                raise AssertionError('duplicate physical accounting')
+        executor, args, store, ledger, seen = fixture(2)
+        token = active_accounting.set(RejectDuplicate())
+        try:
+            result = self.run_async(executor, args)
+            self.assertEqual(result.result['status'], 'succeeded')
+            self.assertEqual(result.result['usage']['calls'], len(seen))
+            self.assertIsNotNone(active_accounting.get())
+        finally:
+            active_accounting.reset(token)
+
+    def test_conditions_cannot_drift_from_prepared_context(self):
+        executor, args, store, ledger, seen = fixture()
+        args['conditions'] = {'has_integrations': True}
+        with self.assertRaisesRegex(GenerationError, 'GENERATION_CONDITIONS_MISMATCH'):
+            self.run_async(executor, args)
+        self.assertFalse(seen)
+
     def run_async(self, executor, args):
         return asyncio.run(executor.run(**args))
 

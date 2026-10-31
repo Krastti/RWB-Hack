@@ -42,4 +42,5 @@ export class ApiClient {
   acceptedArtifacts(id: string) { return this.http.get<DTO['AcceptedArtifacts']>(this.path(`/runs/${this.id(id)}/accepted-artifacts`)); }
   artifacts(id: string, cursor?: string) { return this.http.get<DTO['ManifestPage']>(this.path(`/runs/${this.id(id)}/artifacts`), { params: this.page(cursor) }); }
   artifact(id: string, artifact: string) { return this.http.get(this.path(`/runs/${this.id(id)}/artifacts/${this.id(artifact)}`), { responseType: 'text' }); }
+  archive(id: string, snapshotId: string) { return this.http.get(this.path(`/runs/${this.id(id)}/archive`), { params: { snapshot_id: snapshotId }, responseType: 'blob' }); }
 }

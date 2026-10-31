@@ -18,14 +18,14 @@ owner, путь на сервере, следующий узел или Run.stat
 | ID / узел | Вход и ожидаемый результат | Фактическая граница |
 |---|---|---|
 | A-01 LLM Adapter | Prompt/schema → structured result/usage/error | Есть transport; не retry/ledger |
-| A-02 Prompt | C-02 context + resolved analysis-input → проверенный draft/Markdown | Есть, не AgentResult node |
-| A-03 Analyst | A-01/A-02 → requirements/questions/system-analysis artifacts | Legacy ядро 0.1 не заменяет bridge C-02 |
-| A-04 LangGraph | AnalysisNode/ArtifactStore/checkpointer → анализ/ожидание/resume | Есть внутренний граф без общего worker/HTTP persistence |
+| A-02 Prompt | C-02 context + resolved analysis-input → проверенный draft/Markdown | Используется production AnalysisNode |
+| A-03 Analyst | A-01/A-02 → requirements/questions/system-analysis artifacts | C-02 bridge в services/pipeline/analysis.py; legacy 0.1 отдельно |
+| A-04 LangGraph | AnalysisNode/ArtifactStore/checkpointer → анализ/ожидание/resume | Production worker с PostgreSQL artifacts/checkpoints и HTTP answers→resume |
 | A-05 Architecture core | Принятый анализ + pinned профиль → компоненты, границы, дерево и предварительный generation-plan | Есть проверяемое предложение; кодогенерация заблокирована до A-09 |
 | A-06–A-09 Architecture | Core → OpenAPI, data-model, ui-spec и принятая architecture единой версии | Есть генераторы и композиция A-09 с freeze |
-| A-10–A-18 Coding | Frozen API/data/UI/plan → предметные frontend/backend/models/migrations/adapters/docs и fan-out/join | Правила профиля, не готовые агенты |
-| A-19 Assembly | Принятые bytes/metadata → manifest/traceability/snapshot | Правила проверки; не замена build/test |
-| A-20 Budget | Общие резервы/usage → допуск и причины остановки | Полный ledger/admission требует интеграции |
+| A-10–A-18 Coding | Frozen API/data/UI/plan → предметные frontend/backend/models/migrations/adapters/docs и fan-out/join | Web MVP: versioned templates, SQLAlchemy/Alembic, bounded Python/Angular генерация и последовательный DAG |
+| A-19 Assembly | Принятые bytes/metadata → manifest/traceability/snapshot | Production manifest/traceability/prepared snapshot; не замена build/test |
+| A-20 Budget | Общие резервы/usage → допуск и причины остановки | Единый PostgreSQL ledger и durable active-time admission; V14 |
 
 A-06 владеет предметным OpenAPI, A-07 — data schema, A-08 — UI spec; A-09
 фиксирует их совместную contract_version до запуска потребителей. A-10/A-12
@@ -60,7 +60,7 @@ A-01, проверяет draft/FR/roles/references и формирует `contra
 
 | Идентичность | Назначение |
 |---|---|
-| C-01 2.1.0, HTTP `/api/v1` | Версия API платформы; номер HTTP-префикса не менялся |
+| C-01 2.3.0, HTTP `/api/v1` | Версия API платформы; номер HTTP-префикса не менялся |
 | C-02 schema_version=1.0 | Wire-формат agent payloads, не предметный контракт |
 | C-03/event data schema_version=1.0 | Состояния, события, метрики |
 | profile_id=web-fastapi-angular | Активный стек, не версия профиля |
@@ -298,9 +298,8 @@ Unknown usage — null, известный usage сохраняется и пр�
 snapshots с маркировкой 0.1. Нельзя объявлять их 1.0 без преобразования в новый
 snapshot. Отображение Q→UUID постоянно для Question/Answer/Evidence (например,
 сохранённая таблица или UUIDv5 с Run namespace); это проектное решение, не готовый
-bridge. Нужно согласовать C-02/профиль/A-01/A-02, реализовать упаковку в A-03,
-проверить реальный выход/уточнение и только затем подключать A-04/worker
-([#130](https://github.com/Krastti/RWB-Hack/issues/130)).
+bridge для legacy 0.1. Текущий production путь использует C-02 A-02 напрямую
+через `services/pipeline/analysis.py` и не зависит от конверсии legacy DTO.
 
 CLI с `PYTHONPATH=backend/app/agents`: `requirements_analyst validate` проверяет
 сохранённые input/analysis без сети; analyze обращается к LLM и печатает JSON.
@@ -375,8 +374,9 @@ atomic accepted answers/pending attempts,
 idempotency/outbox/public events. Parallel calls одного Run без внешнего lease
 запрещены. Граф не реализует автоматический repair или общий budget ledger. Существующие
 [StageWorker и queue adapter](backend.md#очередь-и-worker-adapter) принимают
-orchestrator/recovery callable, но автоматически не оборачивают ArtifactStore.accept
-и checkpoint графа в execution.transaction; этот bridge ещё нужен.
+orchestrator/recovery callable. Production bridge в services/pipeline оборачивает
+ArtifactStore.accept и PostgreSQL checkpoints в execution.transaction.
+Генерация и сборка описаны в [web MVP](web-mvp.md).
 
 ## A-05: архитектурное предложение
 
@@ -648,7 +648,7 @@ elapsed и request timeout. Общий accounting producer — #129.
 
 ## Проверки и примеры
 
-Из корня, Python 3.11+, один совместный resolver (API + A-01/A-02/C-02/A-04/legacy):
+Из корня, Python 3.12, один совместный resolver (API + A-01/A-02/C-02/A-04/legacy):
 
 ```sh
 python -m venv .venv

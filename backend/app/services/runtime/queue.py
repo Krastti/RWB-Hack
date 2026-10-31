@@ -9,6 +9,19 @@ class RuntimeQueueStore(PostgreSQLQueueStore):
         self.states = None  # Set once by compose_runtime, before any work.
         self.replay_captured_results = False
 
+    @staticmethod
+    def _pipeline_stage(session, run, attempt):
+        if attempt.stage_id in {'analysis','architecture'}:
+            return True
+        from .models import RunRuntimeState
+        state = session.get(RunRuntimeState, run.id)
+        source = next((a for a in (state.payload.get('attempts', []) if state else [])
+                       if a['attempt_id'] == str(attempt.id)), None)
+        inputs = source.get('input_state', {}) if source else {}
+        task = inputs.get('task', {})
+        return (inputs.get('schema_version') == 'generation-task/1' and task.get('stage_id') == attempt.stage_id
+                and task in inputs.get('plan', {}).get('tasks', []))
+
     def _start_attempt(self, session, run, attempt):
         with self.states.transaction(session, run) as tx:
             if tx.snapshot.status == "queued":
@@ -32,7 +45,7 @@ class RuntimeQueueStore(PostgreSQLQueueStore):
         accepted = session.get(ExecutionReceipt, (attempt.id, 'result')) if self.replay_captured_results else None
         captured = (session.scalar(select(ModelCall.call_id).where(ModelCall.attempt_id == attempt.id,
             ModelCall.payload['response'].is_not(None))) if self.replay_captured_results else None)
-        if (self.replay_captured_results and attempt.stage_id in {'analysis', 'architecture'} and attempt.status == 'running'
+        if (self.replay_captured_results and self._pipeline_stage(session, run, attempt) and attempt.status == 'running'
                 and run.status == 'running' and (accepted is not None or captured is not None)):
             row.reason = reason
             self._clear_lease(row, 'lost')
@@ -51,7 +64,7 @@ class RuntimeQueueStore(PostgreSQLQueueStore):
 
     @staticmethod
     def _assert_recovery_outcome(session, run, attempt):
-        if attempt.status in {'succeeded', 'waiting_for_input'} and attempt.stage_id in {'analysis', 'architecture'}:
+        if attempt.status in {'succeeded', 'waiting_for_input'} and RuntimeQueueStore._pipeline_stage(session, run, attempt):
             from ..artifacts.models import ExecutionReceipt
             from hashlib import sha256
             import json

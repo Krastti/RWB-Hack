@@ -2,7 +2,7 @@
 
 FastAPI/Pydantic/SQLAlchemy/PostgreSQL. Это API и БД **платформы**, а не backend
 генерируемого приложения. У последнего собственный OpenAPI, база и Alembic.
-HTTP-источник истины — [C-01 OpenAPI 2.1.0](../contracts/platform.openapi.yaml),
+HTTP-источник истины — [C-01 OpenAPI 2.3.0](../contracts/platform.openapi.yaml),
 правила состояний — [C-03 1.0](../contracts/lifecycle.md).
 
 ## Структура и подключение
@@ -23,13 +23,13 @@ HTTP-источник истины — [C-01 OpenAPI 2.1.0](../contracts/platfor
 Штатная factory монтирует auth/projects, POST создания Run, три Run GET-маршрута
 и cancel/retry к одной PostgreSQL через общий sessionmaker и
 [runtime composition B-11](../backend/app/services/runtime/README.md) и answers B-12. In-memory fallback нет.
-artifact/archive/export endpoints и предметный AG/worker bridge остаются отдельными
-потребителями [#127](https://github.com/Krastti/RWB-Hack/issues/127)/
-[#128](https://github.com/Krastti/RWB-Hack/issues/128).
+Artifact/accepted-artifacts/archive endpoints также подключены. Предметный worker
+`app.workers.pipeline` использует те же SQL stores; путь до ZIP описан в
+[web MVP](web-mvp.md). GitLab export остаётся отдельной дальнейшей задачей.
 
 ## Установка и запуск
 
-Из корня репозитория, Python 3.11+. Для API достаточно `backend/requirements.txt`;
+Из корня репозитория, Python 3.12. Для API достаточно `backend/requirements.txt`;
 для API и агентных модулей вместе используйте `backend/requirements-worker.txt`:
 
 ```sh
@@ -53,7 +53,7 @@ flyway -configFiles=backend/flyway.conf migrate
 PYTHONPATH=backend .venv/bin/uvicorn app.main:create_app --factory
 ```
 
-Для штатного API/runtime нужны V1–V9; миграции применяются по порядку без пропусков.
+Для штатного API/runtime нужны V1–V14; миграции применяются по порядку без пропусков.
 V6 сохраняет private execution/control state, V7 добавляет учёт ошибок recovery
 в WorkerCommand, V8 — состояние и повторы доставки RunQueueJob, V9 — Clarification,
 immutable inputs и replay пакетов ответов; [интерфейс answers](../backend/app/api/answers/README.md)
@@ -422,9 +422,9 @@ project UUID, answerQuestions/retryRun/createExport — Run UUID; keys/hashes н
 ## Очередь и worker adapter
 
 Существуют `app.adapters.queue.celery.create_worker_app` и `app.workers.StageWorker`.
-Это готовые transport/lease seams, не полный orchestrator и не подключённый
-HTTP→graph pipeline. Нужны PostgreSQL, Redis/RabbitMQ, callable Orchestrator и
-RecoveryHandler; фабрика не выбирает бизнес-функцию из model/message payload.
+Standalone adapter предоставляет transport/lease seams. Production orchestrator
+подключён в app.workers.pipeline; полный web-сценарий описан в [web MVP](web-mvp.md).
+Нужны PostgreSQL и Redis/RabbitMQ; фабрика не выбирает бизнес-функцию из model/message payload.
 Установка — общий requirements-worker с Celery Redis extra. Celery result backend
 не используется: результаты хранятся в БД/artifact store.
 
@@ -517,10 +517,9 @@ command_id и для worker Run/attempt/generation/recovery. Это служеб
 Standalone queue store пишет ORM state/events напрямую, а local lifecycle/control
 имеют собственные store seams. Штатный B-11 runtime использует RuntimeQueueStore и
 PostgreSQLRuntimeRepository: claim/lost transitions проходят через lifecycle service
-под общим Run lock, control использует те же SQL rows/events. AnalysisGraph ArtifactStore
-и checkpoint также должны принимать результаты через этот fenced context (#130),
-иначе старый worker обходит защиту. Эту отсутствующую связку документация не
-объявляет реализованной.
+под общим Run lock, control использует те же SQL rows/events. Production AnalysisGraph ArtifactStore
+и PostgreSQL checkpointer принимают результаты через этот же fenced context.
+Generation/assembly также используют execution.transaction; описание — [web MVP](web-mvp.md).
 
 `StageWorker.execute(command_id)` возвращает already_handled/completed/recovered/
 fenced; Celery task при LeaseBusy возвращает lease_busy, при временной ошибке БД —
@@ -563,8 +562,8 @@ Event allocator проверяет порядок и уникальность п
 истории; cursor не сохраняется и не переносится между транзакциями. Исключение
 откатывает события и состояние вместе. Общая сериализация локального агрегата
 по-прежнему зависит от размера истории. Штатная композиция уже использует
-`PostgreSQLRuntimeRepository`; предметный C-02/LangGraph bridge остаётся отдельной
-интеграцией (#128, #130).
+`PostgreSQLRuntimeRepository`; production C-02/LangGraph bridge находится в
+`services/pipeline` и использует PostgreSQL checkpoints и immutable receipts.
 При completed checkpoint checker получает один отделённый снимок для всех
 успешных этапов. Checker должен только читать снимок: изменение отклоняется до
 перехода статуса и фиксации событий.

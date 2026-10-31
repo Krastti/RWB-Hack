@@ -6,6 +6,20 @@ import { Questions } from './questions';
 import { makeRun } from '../testing/fixtures';
 
 afterEach(() => TestBed.resetTestingModule());
+it('keeps confirmed answers disabled and excludes them from the next payload',()=>{
+  const response=new Subject<Run>(); const api={answers:vi.fn((_id:string,_body:DTO['Answers'],_key:string)=>response)};
+  TestBed.configureTestingModule({imports:[Questions],providers:[{provide:ApiClient,useValue:api}]});
+  const fixture=TestBed.createComponent(Questions);
+  fixture.componentRef.setInput('run',makeRun({status:'waiting_for_input',questions_revision:2,questions:[
+    {question_id:'old',question:'Old?',reason:'Reason',related_fr_ids:[],required:true,answer:'Confirmed'},
+    {question_id:'new',question:'New?',reason:'Reason',related_fr_ids:[],required:true}]}));
+  fixture.detectChanges();
+  expect(fixture.componentInstance.form.controls['old'].disabled).toBe(true);
+  fixture.componentInstance.form.controls['old'].setValue('Tampered');
+  fixture.componentInstance.form.controls['new'].setValue('New answer');
+  fixture.componentInstance.submit();
+  expect(api.answers.mock.calls[0][1]).toEqual({questions_revision:2,answers:[{question_id:'new',value:'New answer'}]});
+});
 describe('clarification request scope', () => {
   it.each(['run', 'revision'])('cancels pending answers when the %s changes', scope => {
     const requests: Subject<Run>[] = [];

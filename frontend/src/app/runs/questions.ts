@@ -54,12 +54,13 @@ export class Questions {
       this.scopedRunId = run.run_id;
       this.key = ''; this.submitted = '';
       for (const key of Object.keys(this.form.controls)) this.form.removeControl(key);
-      for (const question of run.questions) this.form.addControl(question.question_id, new FormControl(question.answer ?? '', { nonNullable: true, validators: [Validators.maxLength(10000), ...(question.required ? [Validators.required, meaningfulText] : [(control: AbstractControl) => control.value ? meaningfulText(control) : null])] }));
+      for (const question of run.questions) this.form.addControl(question.question_id, new FormControl({value: question.answer ?? '', disabled: question.answer !== undefined}, { nonNullable: true, validators: [Validators.maxLength(10000), ...(question.required ? [Validators.required, meaningfulText] : [(control: AbstractControl) => control.value ? meaningfulText(control) : null])] }));
     });
   }
   submit() {
     if (!supportsRunCommands(this.run()) || this.pending() || this.form.invalid || this.run().status !== 'waiting_for_input') return;
-    const body = { questions_revision: this.run().questions_revision, answers: Object.entries(this.form.getRawValue()).filter(([,value]) => !!value).map(([question_id,value]) => ({ question_id,value })) };
+    const unanswered = new Set(this.run().questions.filter(q => q.answer === undefined).map(q => q.question_id));
+    const body = { questions_revision: this.run().questions_revision, answers: Object.entries(this.form.getRawValue()).filter(([id,value]) => unanswered.has(id) && !!value).map(([question_id,value]) => ({ question_id,value })) };
     if (!body.answers.length) return;
     const content = JSON.stringify(body);
     if (content !== this.submitted) { this.submitted = content; this.key = crypto.randomUUID(); }

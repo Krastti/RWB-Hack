@@ -11,10 +11,11 @@ import { RunMonitor } from './monitor';
 import { Timeline } from './timeline';
 import { Questions } from './questions';
 import { Analysis } from './analysis';
+import { Files } from './files';
 import { retryLimitError, supportsBudgetRetry, requiresInternalRecovery } from './retry-limits';
 
 @Component({
-  selector: 'rwb-run-detail', imports: [RouterLink, ReactiveFormsModule, ErrorBanner, Timeline, Questions, Analysis], providers: [RunMonitor],
+  selector: 'rwb-run-detail', imports: [RouterLink, ReactiveFormsModule, ErrorBanner, Timeline, Questions, Analysis, Files], providers: [RunMonitor],
   template: `<rwb-error [error]="error()" />
     @if (!run() && !error()) { <p role="status">Загрузка запуска…</p> }
     @if (run(); as r) {
@@ -40,6 +41,7 @@ import { retryLimitError, supportsBudgetRetry, requiresInternalRecovery } from '
       <rwb-timeline [run]="r" [events]="events()" />
       @if (supportsRunCommands(r)) { <rwb-questions [run]="r" (updated)="update($event)" (stale)="monitor.refresh.next()" /> }
       <rwb-analysis [runId]="r.run_id" [refreshKey]="analysisRefreshKey(r)" />
+      <rwb-files [runId]="r.run_id" [refreshKey]="analysisRefreshKey(r)" [completed]="r.status === 'completed'" />
     }`,
 })
 export class RunDetail {
@@ -88,7 +90,7 @@ export class RunDetail {
   update(run: Run) { this.run.set(run); this.generation.update(value => value + 1); }
   analysisRefreshKey(run: Run) {
     const artifacts = this.events().filter(event => event.event_type === 'artifact.accepted' || event.event_type === 'snapshot.prepared');
-    return `${run.status}:${run.questions_revision}:${artifacts.at(-1)?.seq ?? 0}`;
+    return `${run.status}:${run.questions_revision}:${artifacts.at(-1)?.seq ?? 0}:${run.stages.map(s => `${s.stage_id}/${s.attempt_no}/${s.status}`).join(',')}`;
   }
   metrics(run: Run) {
     return [{ name: 'Токены вход / выход', value: `${run.metrics.tokens_in} / ${run.metrics.tokens_out}`, note: 'Известный расход · полнота неизвестна' }, { name: 'Вызовы модели', value: run.metrics.model_calls, note: '' }, { name: 'Попытки', value: run.metrics.attempts, note: '' }, { name: 'Время, сек', value: Math.round(run.metrics.duration_ms / 1000), note: '' }];
