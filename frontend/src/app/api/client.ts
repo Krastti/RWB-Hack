@@ -39,6 +39,7 @@ export class ApiClient {
   cancel(id: string) { return this.http.post<Run>(this.path(`/runs/${this.id(id)}/cancel`), {}); }
   retry(id: string, body: DTO['Retry'], key: string) { return this.http.post<Run>(this.path(`/runs/${this.id(id)}/retry`), body, this.keyed(key)); }
   answers(id: string, body: DTO['Answers'], key: string) { return this.http.post<Run>(this.path(`/runs/${this.id(id)}/answers`), body, this.keyed(key)); }
+  acceptedArtifacts(id: string) { return this.http.get<DTO['AcceptedArtifacts']>(this.path(`/runs/${this.id(id)}/accepted-artifacts`)); }
   artifacts(id: string, cursor?: string) { return this.http.get<DTO['ManifestPage']>(this.path(`/runs/${this.id(id)}/artifacts`), { params: this.page(cursor) }); }
   artifact(id: string, artifact: string) { return this.http.get(this.path(`/runs/${this.id(id)}/artifacts/${this.id(artifact)}`), { responseType: 'text' }); }
 }

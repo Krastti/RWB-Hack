@@ -1,0 +1,126 @@
+{
+  "schema_version": "openapi-policy/1.0",
+  "requirements_checksum": "ef6b05718fe83b9695445e360699ae9c99452748d9ac2064be7abba9d76d9514",
+  "operations": [
+    {
+      "operation_id": "createTicket",
+      "path": "/tickets",
+      "method": "post",
+      "related_fr_ids": [
+        "FR-001"
+      ],
+      "authentication": "bearer",
+      "authorization_rules": [
+        "Создавать заявки может сотрудник; owner_id берётся из доверенного пользователя."
+      ],
+      "grants": [
+        {
+          "role_id": "ROLE-001",
+          "permission_indices": [
+            0
+          ]
+        }
+      ],
+      "security_requirement_indices": []
+    },
+    {
+      "operation_id": "listOwnTickets",
+      "path": "/tickets",
+      "method": "get",
+      "related_fr_ids": [
+        "FR-002"
+      ],
+      "authentication": "bearer",
+      "authorization_rules": [
+        "Выборка на сервере ограничена owner_id текущего сотрудника.",
+        "Сотрудник просматривает только собственные заявки."
+      ],
+      "grants": [
+        {
+          "role_id": "ROLE-001",
+          "permission_indices": [
+            1
+          ]
+        }
+      ],
+      "security_requirement_indices": [
+        0
+      ]
+    },
+    {
+      "operation_id": "listTickets",
+      "path": "/dispatch/tickets",
+      "method": "get",
+      "related_fr_ids": [
+        "FR-003"
+      ],
+      "authentication": "bearer",
+      "authorization_rules": [
+        "Просмотр всех заявок доступен только диспетчеру."
+      ],
+      "grants": [
+        {
+          "role_id": "ROLE-002",
+          "permission_indices": [
+            0
+          ]
+        }
+      ],
+      "security_requirement_indices": []
+    },
+    {
+      "operation_id": "changeTicketStatus",
+      "path": "/tickets/{id}/status",
+      "method": "patch",
+      "related_fr_ids": [
+        "FR-003"
+      ],
+      "authentication": "bearer",
+      "authorization_rules": [
+        "Изменение статуса доступно только диспетчеру; заявка должна существовать."
+      ],
+      "grants": [
+        {
+          "role_id": "ROLE-002",
+          "permission_indices": [
+            1
+          ]
+        }
+      ],
+      "security_requirement_indices": []
+    }
+  ],
+  "coverage": [
+    {
+      "fr_id": "FR-001",
+      "kind": "operation",
+      "operation_ids": [
+        "createTicket"
+      ],
+      "reason": "Подача заявки с описанием."
+    },
+    {
+      "fr_id": "FR-002",
+      "kind": "operation",
+      "operation_ids": [
+        "listOwnTickets"
+      ],
+      "reason": "Чтение собственных заявок с серверным фильтром владельца."
+    },
+    {
+      "fr_id": "FR-003",
+      "kind": "operation",
+      "operation_ids": [
+        "listTickets",
+        "changeTicketStatus"
+      ],
+      "reason": "Просмотр и изменение статуса диспетчером."
+    },
+    {
+      "fr_id": "FR-004",
+      "kind": "constraint",
+      "operation_ids": [],
+      "reason": "Удаление запрещено всем ролям; DELETE endpoint не создаётся. Backend должен отклонять неподдержанное удаление."
+    }
+  ]
+}

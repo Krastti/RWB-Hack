@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[5]
 TEMPLATES = ROOT / "templates" / "analysis"
 PROFILE = ROOT / "templates" / "profiles" / "web-fastapi-angular"
-PROMPT_VERSION = "1.0.0"
+PROMPT_VERSION = "1.0.1"
 
 
 class StructuredLLM(Protocol):
@@ -86,14 +86,14 @@ def build_analysis_prompt(
     *,
     previous_requirements: dict[str, Any] | None = None,
     analysis_rules: str | None = None,
+    frozen_profile: dict | None = None,
 ) -> AnalysisPrompt:
     """Inputs are already resolved/authorized by the worker. No writes or calls."""
     contracts = _contracts()
     contracts.validate("agent-input", context)
     contracts.validate("analysis-input", business_input)
-    profile = load(PROFILE / "profile.json")
-    require(profile["profile_id"] == "web-fastapi-angular" and profile["profile_version"] == "1.0.0",
-            "ANALYSIS_UNSUPPORTED_PROFILE_VERSION")
+    from ...profiles.loader import validate_profile_data
+    profile = validate_profile_data(frozen_profile) if frozen_profile is not None else load(PROFILE / "profile.json")
     require(context["stage_id"] == "analysis" and context["profile_id"] == profile["profile_id"],
             "ANALYSIS_UNSUPPORTED_CONTEXT")
     require(context["limits"]["max_calls"] > 0, "ANALYSIS_CALL_BUDGET_EXHAUSTED")
@@ -165,9 +165,25 @@ async def generate_analysis(llm: StructuredLLM, prepared: AnalysisPrompt) -> LLM
         return result
     try:
         validate_draft(result.data, prepared)
-    except ContractError:
+    except ContractError as error:
+        feedback = [str(error)]
+        if str(error) == 'ANALYSIS_UNSUPPORTED_EVIDENCE':
+            confirmed = {a['question_id']: a['value'] for a in prepared.business_input['answers']}
+            confirmed.update({q['question_id']: q['answer'] for q in (prepared.previous_requirements or {}).get('questions', []) if 'answer' in q})
+            def check(value, path=''):
+                if isinstance(value, dict):
+                    if value.get('source') in {'requirements', 'answer'} and 'quote' in value:
+                        source = prepared.business_input['requirements_text'] if value['source'] == 'requirements' else confirmed.get(value.get('question_id'), '')
+                        if value['quote'] not in source:
+                            feedback.append(path + '/quote: replace with an exact substring of the original source; do not prepend IDs or paraphrase')
+                    for key, child in value.items():
+                        check(child, path + '/' + str(key))
+                elif isinstance(value, list):
+                    for index, child in enumerate(value):
+                        check(child, path + '/' + str(index))
+            check(result.data)
         return LLMResult(
-            usage=result.usage,
+            usage=result.usage, candidate=result.data, validation_feedback=tuple(feedback),
             error=LLMError(
                 code="ANALYSIS_INVALID_DRAFT",
                 message="The model response failed analysis validation.",

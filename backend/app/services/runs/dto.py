@@ -9,7 +9,7 @@ class RunCreate(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     requirements_text: str = Field(min_length=1, max_length=100000)
-    profile_id: Literal["web-fastapi-angular"] = "web-fastapi-angular"
+    profile_id: Literal["web-fastapi-angular", "russtech-fullstack"] = "web-fastapi-angular"
 
     @field_validator("requirements_text")
     @classmethod

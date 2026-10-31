@@ -2,3 +2,5 @@
 httpx==0.28.1
 # Shared DTO package imports Pydantic models.
 pydantic>=2.9,<3
+# Importing config.llm initializes the shared .env configuration.
+python-dotenv>=1.0,<2

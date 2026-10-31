@@ -1,0 +1,635 @@
+{
+  "flows": [
+    {
+      "id": "FLOW-001",
+      "name": "Подать и просмотреть заявку",
+      "goal": "Сотрудник сохраняет неисправность и видит результат.",
+      "access": {
+        "mode": "roles",
+        "role_ids": [
+          "ROLE-001"
+        ],
+        "rule": "Сотрудник работает только со своими заявками; сервер проверяет владельца."
+      },
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002"
+      ],
+      "entry_screen_id": "SCREEN-001",
+      "steps": [
+        {
+          "screen_id": "SCREEN-001",
+          "action_id": "ACT-001"
+        },
+        {
+          "screen_id": "SCREEN-001",
+          "action_id": "ACT-002"
+        }
+      ]
+    },
+    {
+      "id": "FLOW-002",
+      "name": "Обработать заявку",
+      "goal": "Диспетчер сохраняет новый статус.",
+      "access": {
+        "mode": "roles",
+        "role_ids": [
+          "ROLE-002"
+        ],
+        "rule": "Диспетчер видит заявки и меняет статус; удаление запрещено."
+      },
+      "related_fr_ids": [
+        "FR-003",
+        "FR-004"
+      ],
+      "entry_screen_id": "SCREEN-002",
+      "steps": [
+        {
+          "screen_id": "SCREEN-002",
+          "action_id": "ACT-003"
+        },
+        {
+          "screen_id": "SCREEN-002",
+          "action_id": "ACT-004"
+        }
+      ]
+    }
+  ],
+  "screens": [
+    {
+      "id": "SCREEN-001",
+      "title": "Мои заявки",
+      "route": "/tickets",
+      "purpose": "Подать заявку и увидеть её актуальный статус.",
+      "access": {
+        "mode": "roles",
+        "role_ids": [
+          "ROLE-001"
+        ],
+        "rule": "Сотрудник работает только со своими заявками; сервер проверяет владельца."
+      },
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-004"
+      ],
+      "components": [
+        {
+          "id": "COMP-001",
+          "catalog_id": "table",
+          "label": "Мои заявки",
+          "purpose": "Описание и статус своих заявок; кнопки удаления нет.",
+          "related_fr_ids": [
+            "FR-002",
+            "FR-004"
+          ],
+          "accessibility": {
+            "accessible_name": "Мои заявки",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": [
+            "rows"
+          ]
+        },
+        {
+          "id": "COMP-002",
+          "catalog_id": "form",
+          "label": "Новая заявка",
+          "purpose": "Форма с обязательным описанием неисправности и связанными сообщениями ошибок.",
+          "related_fr_ids": [
+            "FR-001"
+          ],
+          "accessibility": {
+            "accessible_name": "Новая заявка",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": []
+        },
+        {
+          "id": "COMP-003",
+          "catalog_id": "textarea",
+          "label": "Описание неисправности",
+          "purpose": "Поле description тела createTicket; непустое значение.",
+          "related_fr_ids": [
+            "FR-001"
+          ],
+          "accessibility": {
+            "accessible_name": "Описание неисправности",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": [
+            "value"
+          ]
+        },
+        {
+          "id": "COMP-004",
+          "catalog_id": "button",
+          "label": "Подать заявку",
+          "purpose": "Отправляет createTicket; блокируется на время отправки.",
+          "related_fr_ids": [
+            "FR-001"
+          ],
+          "accessibility": {
+            "accessible_name": "Подать заявку",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": []
+        },
+        {
+          "id": "COMP-005",
+          "catalog_id": "spinner",
+          "label": "Загрузка заявок",
+          "purpose": "Индикатор listOwnTickets.",
+          "related_fr_ids": [
+            "FR-002"
+          ],
+          "accessibility": {
+            "accessible_name": "Загрузка заявок",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": []
+        },
+        {
+          "id": "COMP-006",
+          "catalog_id": "alert",
+          "label": "Результат запроса",
+          "purpose": "Сообщение об ошибке, ограничении прав или успехе.",
+          "related_fr_ids": [
+            "FR-001",
+            "FR-002"
+          ],
+          "accessibility": {
+            "accessible_name": "Результат запроса",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": [
+            "created_ticket"
+          ]
+        },
+        {
+          "id": "COMP-007",
+          "catalog_id": "card",
+          "label": "Заявок пока нет",
+          "purpose": "Предложить сотруднику заполнить форму новой заявки.",
+          "related_fr_ids": [
+            "FR-002"
+          ],
+          "accessibility": {
+            "accessible_name": "Заявок пока нет",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": []
+        }
+      ],
+      "actions": [
+        {
+          "id": "ACT-001",
+          "label": "Подать заявку",
+          "kind": "api",
+          "trigger": "submit",
+          "component_id": "COMP-002",
+          "operation_id": "createTicket",
+          "target_screen_id": null,
+          "access": {
+            "mode": "roles",
+            "role_ids": [
+              "ROLE-001"
+            ],
+            "rule": "Сотрудник работает только со своими заявками; сервер проверяет владельца."
+          },
+          "related_fr_ids": [
+            "FR-001"
+          ],
+          "success_effect": "После ответа 201 очистить форму и обновить listOwnTickets.",
+          "security": [
+            {
+              "schemes": [
+                {
+                  "scheme_id": "session",
+                  "scopes": []
+                }
+              ]
+            }
+          ],
+          "request_bindings": [
+            {
+              "component_id": "COMP-003",
+              "component_field": "value",
+              "location": "body",
+              "parameter_name": null,
+              "media_type": "application/json",
+              "field_path": [
+                "description"
+              ]
+            }
+          ],
+          "response_bindings": [
+            {
+              "component_id": "COMP-006",
+              "component_field": "created_ticket",
+              "status_code": "201",
+              "media_type": "application/json",
+              "field_path": []
+            }
+          ]
+        },
+        {
+          "id": "ACT-002",
+          "label": "Загрузить свои заявки",
+          "kind": "api",
+          "trigger": "on_enter",
+          "component_id": null,
+          "operation_id": "listOwnTickets",
+          "target_screen_id": null,
+          "access": {
+            "mode": "roles",
+            "role_ids": [
+              "ROLE-001"
+            ],
+            "rule": "Сотрудник работает только со своими заявками; сервер проверяет владельца."
+          },
+          "related_fr_ids": [
+            "FR-002"
+          ],
+          "success_effect": "Показать список или empty state.",
+          "security": [
+            {
+              "schemes": [
+                {
+                  "scheme_id": "session",
+                  "scopes": []
+                }
+              ]
+            }
+          ],
+          "request_bindings": [],
+          "response_bindings": [
+            {
+              "component_id": "COMP-001",
+              "component_field": "rows",
+              "status_code": "200",
+              "media_type": "application/json",
+              "field_path": []
+            }
+          ]
+        }
+      ],
+      "states": {
+        "loading": {
+          "description": "Загрузка с текстовым статусом; повторная отправка недоступна.",
+          "component_ids": [
+            "COMP-005"
+          ],
+          "action_ids": []
+        },
+        "empty": {
+          "description": "Пока нет заявок. Объяснить следующий доступный шаг без фиктивных данных.",
+          "component_ids": [
+            "COMP-007"
+          ],
+          "action_ids": []
+        },
+        "error": {
+          "description": "Показать безопасное сообщение и возможность повторить чтение; сохранить введённые значения.",
+          "component_ids": [
+            "COMP-006"
+          ],
+          "action_ids": [
+            "ACT-002"
+          ]
+        },
+        "forbidden": {
+          "description": "Объяснить отсутствие прав; не отображать чужие данные и недоступные действия.",
+          "component_ids": [
+            "COMP-006"
+          ],
+          "action_ids": []
+        },
+        "success": {
+          "description": "Показать актуальные записи и подтверждение выполненного сервером действия.",
+          "component_ids": [
+            "COMP-001"
+          ],
+          "action_ids": []
+        }
+      },
+      "responsive": [
+        {
+          "width_px": 360,
+          "layout": "Одна колонка, форма на всю ширину; прокрутка только внутри таблицы.",
+          "navigation": "Один заголовок и подписанные действия в порядке чтения.",
+          "overflow": "table_scroll"
+        },
+        {
+          "width_px": 768,
+          "layout": "Форма над таблицей, группировка полей по две колонки при достаточной ширине.",
+          "navigation": "Один заголовок и подписанные действия в порядке чтения.",
+          "overflow": "table_scroll"
+        },
+        {
+          "width_px": 1280,
+          "layout": "Форма в боковой колонке, таблица в основной; страница не прокручивается горизонтально.",
+          "navigation": "Один заголовок и подписанные действия в порядке чтения.",
+          "overflow": "table_scroll"
+        }
+      ]
+    },
+    {
+      "id": "SCREEN-002",
+      "title": "Диспетчерская",
+      "route": "/dispatch",
+      "purpose": "Просмотреть заявки и изменить статус выбранной заявки.",
+      "access": {
+        "mode": "roles",
+        "role_ids": [
+          "ROLE-002"
+        ],
+        "rule": "Диспетчер видит заявки и меняет статус; удаление запрещено."
+      },
+      "related_fr_ids": [
+        "FR-003",
+        "FR-004"
+      ],
+      "components": [
+        {
+          "id": "COMP-011",
+          "catalog_id": "table",
+          "label": "Все заявки",
+          "purpose": "Список заявок; удаление недоступно.",
+          "related_fr_ids": [
+            "FR-003",
+            "FR-004"
+          ],
+          "accessibility": {
+            "accessible_name": "Все заявки",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": [
+            "rows",
+            "selected_ticket_id",
+            "updated_ticket"
+          ]
+        },
+        {
+          "id": "COMP-012",
+          "catalog_id": "select",
+          "label": "Новый статус",
+          "purpose": "Выбор status из enum OpenAPI для выбранного ticket id.",
+          "related_fr_ids": [
+            "FR-003"
+          ],
+          "accessibility": {
+            "accessible_name": "Новый статус",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": [
+            "value"
+          ]
+        },
+        {
+          "id": "COMP-013",
+          "catalog_id": "button",
+          "label": "Сохранить статус",
+          "purpose": "Отправляет PATCH для выбранного id; блокируется до ответа.",
+          "related_fr_ids": [
+            "FR-003"
+          ],
+          "accessibility": {
+            "accessible_name": "Сохранить статус",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": []
+        },
+        {
+          "id": "COMP-014",
+          "catalog_id": "spinner",
+          "label": "Загрузка очереди",
+          "purpose": "Индикатор чтения заявок диспетчера.",
+          "related_fr_ids": [
+            "FR-003"
+          ],
+          "accessibility": {
+            "accessible_name": "Загрузка очереди",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": []
+        },
+        {
+          "id": "COMP-015",
+          "catalog_id": "alert",
+          "label": "Результат операции",
+          "purpose": "Безопасная ошибка, запрет доступа или подтверждение смены статуса.",
+          "related_fr_ids": [
+            "FR-003"
+          ],
+          "accessibility": {
+            "accessible_name": "Результат операции",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": []
+        },
+        {
+          "id": "COMP-016",
+          "catalog_id": "card",
+          "label": "Очередь пуста",
+          "purpose": "Нет заявок для обработки.",
+          "related_fr_ids": [
+            "FR-003"
+          ],
+          "accessibility": {
+            "accessible_name": "Очередь пуста",
+            "keyboard": "Tab перемещает фокус; нативные элементы активируются Enter/Space.",
+            "focus": "Видимый focus-ring; после ошибки фокус на первом неверном поле, после навигации на заголовке.",
+            "announcements": "Статус загрузки и успех объявляется через polite live region, ошибка через role=alert."
+          },
+          "data_fields": []
+        }
+      ],
+      "actions": [
+        {
+          "id": "ACT-003",
+          "label": "Загрузить заявки",
+          "kind": "api",
+          "trigger": "on_enter",
+          "component_id": null,
+          "operation_id": "listTickets",
+          "target_screen_id": null,
+          "access": {
+            "mode": "roles",
+            "role_ids": [
+              "ROLE-002"
+            ],
+            "rule": "Диспетчер видит заявки и меняет статус; удаление запрещено."
+          },
+          "related_fr_ids": [
+            "FR-003"
+          ],
+          "success_effect": "Показать список всех доступных заявок.",
+          "security": [
+            {
+              "schemes": [
+                {
+                  "scheme_id": "session",
+                  "scopes": []
+                }
+              ]
+            }
+          ],
+          "request_bindings": [],
+          "response_bindings": [
+            {
+              "component_id": "COMP-011",
+              "component_field": "rows",
+              "status_code": "200",
+              "media_type": "application/json",
+              "field_path": []
+            }
+          ]
+        },
+        {
+          "id": "ACT-004",
+          "label": "Сохранить статус",
+          "kind": "api",
+          "trigger": "click",
+          "component_id": "COMP-013",
+          "operation_id": "changeTicketStatus",
+          "target_screen_id": null,
+          "access": {
+            "mode": "roles",
+            "role_ids": [
+              "ROLE-002"
+            ],
+            "rule": "Диспетчер видит заявки и меняет статус; удаление запрещено."
+          },
+          "related_fr_ids": [
+            "FR-003"
+          ],
+          "success_effect": "После 200 заменить статус данными ответа; при ошибке сохранить прежний.",
+          "security": [
+            {
+              "schemes": [
+                {
+                  "scheme_id": "session",
+                  "scopes": []
+                }
+              ]
+            }
+          ],
+          "request_bindings": [
+            {
+              "component_id": "COMP-011",
+              "component_field": "selected_ticket_id",
+              "location": "path",
+              "parameter_name": "id",
+              "media_type": null,
+              "field_path": []
+            },
+            {
+              "component_id": "COMP-012",
+              "component_field": "value",
+              "location": "body",
+              "parameter_name": null,
+              "media_type": "application/json",
+              "field_path": [
+                "status"
+              ]
+            }
+          ],
+          "response_bindings": [
+            {
+              "component_id": "COMP-011",
+              "component_field": "updated_ticket",
+              "status_code": "200",
+              "media_type": "application/json",
+              "field_path": []
+            }
+          ]
+        }
+      ],
+      "states": {
+        "loading": {
+          "description": "Загрузка с текстовым статусом; повторная отправка недоступна.",
+          "component_ids": [
+            "COMP-014"
+          ],
+          "action_ids": []
+        },
+        "empty": {
+          "description": "Пока нет заявок. Объяснить следующий доступный шаг без фиктивных данных.",
+          "component_ids": [
+            "COMP-016"
+          ],
+          "action_ids": []
+        },
+        "error": {
+          "description": "Показать безопасное сообщение и возможность повторить чтение; сохранить введённые значения.",
+          "component_ids": [
+            "COMP-015"
+          ],
+          "action_ids": [
+            "ACT-003"
+          ]
+        },
+        "forbidden": {
+          "description": "Объяснить отсутствие прав; не отображать чужие данные и недоступные действия.",
+          "component_ids": [
+            "COMP-015"
+          ],
+          "action_ids": []
+        },
+        "success": {
+          "description": "Показать актуальные записи и подтверждение выполненного сервером действия.",
+          "component_ids": [
+            "COMP-011"
+          ],
+          "action_ids": []
+        }
+      },
+      "responsive": [
+        {
+          "width_px": 360,
+          "layout": "Одна колонка, форма на всю ширину; прокрутка только внутри таблицы.",
+          "navigation": "Один заголовок и подписанные действия в порядке чтения.",
+          "overflow": "table_scroll"
+        },
+        {
+          "width_px": 768,
+          "layout": "Форма над таблицей, группировка полей по две колонки при достаточной ширине.",
+          "navigation": "Один заголовок и подписанные действия в порядке чтения.",
+          "overflow": "table_scroll"
+        },
+        {
+          "width_px": 1280,
+          "layout": "Форма в боковой колонке, таблица в основной; страница не прокручивается горизонтально.",
+          "navigation": "Один заголовок и подписанные действия в порядке чтения.",
+          "overflow": "table_scroll"
+        }
+      ]
+    }
+  ],
+  "non_ui_requirements": []
+}

@@ -1,0 +1,237 @@
+{
+  "schema_version": "data-model/1.0",
+  "contract_version": "1",
+  "profile_id": "web-fastapi-angular",
+  "database": "postgresql",
+  "requirements_artifact_id": "80633e4d-e8a8-5eb3-ae69-1e7b7f29dc99",
+  "entities": [
+    {
+      "name": "employees",
+      "description": "Участники, которым принадлежат заявки.",
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002"
+      ],
+      "source_refs": [
+        {
+          "section": "roles",
+          "text": "Сотрудник"
+        }
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "description": "Идентификатор сотрудника.",
+          "type": "uuid",
+          "nullable": false,
+          "max_length": null,
+          "precision": null,
+          "scale": null,
+          "default": {
+            "kind": "application_uuid4",
+            "value": null
+          },
+          "related_fr_ids": [
+            "FR-001",
+            "FR-002"
+          ]
+        }
+      ],
+      "primary_key": {
+        "name": "pk_employees",
+        "fields": [
+          "id"
+        ]
+      },
+      "unique_constraints": [],
+      "check_constraints": [],
+      "indexes": []
+    },
+    {
+      "name": "tickets",
+      "description": "Заявки на ремонт оборудования.",
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002",
+        "FR-003"
+      ],
+      "source_refs": [
+        {
+          "section": "entities",
+          "text": "Заявка: описание неисправности и статус."
+        }
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "description": "Идентификатор заявки.",
+          "type": "uuid",
+          "nullable": false,
+          "max_length": null,
+          "precision": null,
+          "scale": null,
+          "default": {
+            "kind": "application_uuid4",
+            "value": null
+          },
+          "related_fr_ids": [
+            "FR-001"
+          ]
+        },
+        {
+          "name": "owner_id",
+          "description": "Сотрудник, подавший заявку.",
+          "type": "uuid",
+          "nullable": false,
+          "max_length": null,
+          "precision": null,
+          "scale": null,
+          "default": {
+            "kind": "none",
+            "value": null
+          },
+          "related_fr_ids": [
+            "FR-001",
+            "FR-002"
+          ]
+        },
+        {
+          "name": "description",
+          "description": "Описание неисправности.",
+          "type": "text",
+          "nullable": false,
+          "max_length": null,
+          "precision": null,
+          "scale": null,
+          "default": {
+            "kind": "none",
+            "value": null
+          },
+          "related_fr_ids": [
+            "FR-001"
+          ]
+        },
+        {
+          "name": "status",
+          "description": "Текущий статус заявки.",
+          "type": "varchar",
+          "nullable": false,
+          "max_length": 32,
+          "precision": null,
+          "scale": null,
+          "default": {
+            "kind": "literal",
+            "value": "new"
+          },
+          "related_fr_ids": [
+            "FR-002",
+            "FR-003"
+          ]
+        }
+      ],
+      "primary_key": {
+        "name": "pk_tickets",
+        "fields": [
+          "id"
+        ]
+      },
+      "unique_constraints": [],
+      "check_constraints": [
+        {
+          "name": "ck_tickets_status",
+          "field": "status",
+          "operator": "in",
+          "value": [
+            "new",
+            "in_progress",
+            "done"
+          ]
+        }
+      ],
+      "indexes": [
+        {
+          "name": "ix_tickets_owner_id",
+          "fields": [
+            "owner_id"
+          ],
+          "unique": false,
+          "method": "btree"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "name": "fk_tickets_owner",
+      "source_entity": "tickets",
+      "source_fields": [
+        "owner_id"
+      ],
+      "target_entity": "employees",
+      "target_fields": [
+        "id"
+      ],
+      "cardinality": "many_to_one",
+      "on_delete": "restrict",
+      "match": "simple",
+      "description": "Заявка принадлежит подавшему её сотруднику.",
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002"
+      ]
+    }
+  ],
+  "assumptions": [
+    {
+      "text": "Для технических идентификаторов используются UUID, создаваемые приложением.",
+      "reason": "Формат идентификаторов не задан заказчиком.",
+      "related_fr_ids": [
+        "FR-001",
+        "FR-002"
+      ]
+    },
+    {
+      "text": "Статусы первого прототипа: new, in_progress, done; длина кода до 32 символов.",
+      "reason": "Заказчик требует изменение статуса, но не задаёт его словарь и длину.",
+      "related_fr_ids": [
+        "FR-002",
+        "FR-003"
+      ]
+    }
+  ],
+  "unresolved_items": [],
+  "fr_coverage": [
+    {
+      "fr_id": "FR-001",
+      "status": "modeled",
+      "entity_names": [
+        "tickets",
+        "employees"
+      ],
+      "reason": "Хранение заявки и её владельца."
+    },
+    {
+      "fr_id": "FR-002",
+      "status": "modeled",
+      "entity_names": [
+        "tickets",
+        "employees"
+      ],
+      "reason": "Владелец и статус доступны предметному сервису."
+    },
+    {
+      "fr_id": "FR-003",
+      "status": "modeled",
+      "entity_names": [
+        "tickets"
+      ],
+      "reason": "Хранение изменяемого статуса."
+    },
+    {
+      "fr_id": "FR-004",
+      "status": "not_applicable",
+      "entity_names": [],
+      "reason": "Запрет DELETE проверяет backend policy; SQL CHECK не обеспечивает запрет операции для всех ролей."
+    }
+  ]
+}
