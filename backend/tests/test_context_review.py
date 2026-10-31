@@ -52,7 +52,7 @@ def test_documentation_requires_authoritative_results():
                                     'compiler_configuration': b'{}'})
     with pytest.raises(ContextError, match='CONTEXT_RESULTS_REQUIRED'):
         builder.prepare(request, **kwargs)
-    with pytest.raises(ContextError, match='CONTEXT_RESULTS_INCOMPLETE'):
+    with pytest.raises(ContextError, match='CONTEXT_REFERENCE_INVALID'):
         builder.prepare(request, accepted_result_references={'missing': {}}, **kwargs)
 
 
@@ -88,3 +88,39 @@ def test_architecture_and_plan_reject_other_profile(monkeypatch):
                 references={a.metadata['artifact_id']: a.metadata for a in artifacts},
                 execution_inputs={'prompt': b'', 'template': b'', 'model_configuration': b'{}',
                                   'compiler_configuration': b'{}'})
+
+
+def test_documentation_inventory_is_metadata_only_and_configuration_has_separate_fingerprint():
+    from app.agents.context.example import fixture_inputs, FixtureResolver, OWNER
+    from app.agents.profiles import ProfileLoader
+    from uuid import uuid4
+    fixtures = fixture_inputs()
+    artifacts = list(fixtures.values())
+    references = {a.metadata['artifact_id']: a.metadata for a in artifacts}
+    inventory = {}
+    for path in ('backend/app/main.py', 'backend/app/api/routes.py'):
+        metadata = dict(fixtures['requirements'].metadata, artifact_id=str(uuid4()),
+                        path=path, kind='source_code', author_agent='backend',
+                        size_bytes=1000000, checksum='a' * 64)
+        inventory[metadata['artifact_id']] = metadata
+    request = {'schema_version': '1.0', 'run_id': artifacts[0].run_id, 'stage_id': 'documentation',
+               'attempt': 1, 'contract_version': artifacts[0].contract_version,
+               'profile_id': 'web-fastapi-angular', 'limits': {'max_calls': 1, 'max_output_tokens': 3000},
+               'input_artifact_ids': list(references)}
+    builder = ContextBuilder(FixtureResolver(artifacts), max_context_bytes=256 * 1024,
+                             max_execution_input_bytes=512 * 1024)
+    inputs = {'prompt': b'', 'template': b'', 'model_configuration': b'{}', 'compiler_configuration': b'{}'}
+    kwargs = dict(owner_id=OWNER, owner_agent='documentation',
+                  profile=ProfileLoader().load('web-fastapi-angular'), references=references,
+                  accepted_result_references=inventory)
+    first = builder.prepare(request, execution_inputs=inputs, **kwargs)
+    data = json.loads(first.data)
+    assert len(data['accepted_results']) == 2
+    assert not set(inventory) & {item['metadata']['artifact_id'] for item in data['artifacts']}
+    inputs['model_configuration'] = json.dumps({'padding': 'x' * 300000}).encode()
+    second = builder.prepare(request, execution_inputs=inputs, **kwargs)
+    assert first.checksum == second.checksum
+    assert first.execution_fingerprint != second.execution_fingerprint
+    with pytest.raises(ContextError, match='CONTEXT_EXECUTION_INPUT_SIZE_LIMIT'):
+        ContextBuilder(FixtureResolver(artifacts), max_context_bytes=256 * 1024,
+                       max_execution_input_bytes=100).prepare(request, execution_inputs=inputs, **kwargs)
