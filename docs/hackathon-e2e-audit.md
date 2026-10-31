@@ -1,4 +1,10 @@
-# Hackathon integration audit — partial delivery
+# Hackathon integration audit
+
+**Current scope:** HTTP → production worker → AnalysisGraph/PostgreSQL checkpoint
+→ A-09 is implemented and integration-tested on both profiles. See the final
+“Current iteration” section for current evidence. Earlier partial-delivery
+sections below are historical; the complete generation/verification hackathon
+pipeline remains outside this completed iteration.
 
 Base: `0337844f0f47c5eba6600beec87e833a2f63738a` (origin/main fetched 2026-10-31).
 Workspace: separate worktree; original dirty checkout was preserved.
@@ -202,3 +208,185 @@ tests are separate component tests with explicit upstream/snapshot fixtures.
 Live provider smoke, subprocess restart, analysis/clarification/architecture chain,
 contest product generation and full bounded recovery remain not_run. No Issues
 closed, no alternate Run lifecycle introduced, draft PR stays draft.
+
+## Current iteration: production HTTP → AnalysisGraph → A-09
+
+This section supersedes the earlier statement that no production domain
+orchestrator exists. Base for this iteration: `ad47cf8`. Work remains on PR #152
+and the same worktree/branch. The original user checkout remains untouched.
+
+### Executed path
+
+`create_app` HTTP createProject/createRun → immutable revision + RunInputSnapshot
+(profile JSON, rule bytes/checksums and server policy bundle) → PostgreSQL intake
+→ registered Celery task → existing StageWorker/LeasedExecution →
+PipelineOrchestrator → trusted private analysis-input artifact → A-30 validation
+→ C-02 AnalysisNode using A-02/A-01 → AnalysisGraph + PostgreSQL saver → durable
+accepted result → confirmed checkpoint → same lifecycle finish_attempt →
+atomic architecture attempt/WorkerCommand registration → A-30 → real A-09
+RuntimeNodes (proposal/OpenAPI/data model/UI spec) → atomic five-artifact receipt
+→ lifecycle acceptance and checkpoint confirmation receipt.
+
+The Run remains **running** after successful architecture: generation and assembly
+have not executed. No completed Run, generated product, build/test or deployment
+readiness is claimed. No new queue, Run lifecycle or duplicate StageAttempt was
+introduced. The production entrypoint calls existing compose_runtime and
+compose_worker. Pipeline-specific recovery replays captured responses/results
+within the same registered attempt under a new fenced command generation;
+RuntimeRecovery remains the fallback for uncaptured lost executions.
+
+### Contracts and compatibility
+
+C-01 is now **2.2.0**: additive `russtech-fullstack` profile identity in create/read
+Run DTOs and the normative OpenAPI. Existing fields and legacy requests remain
+unchanged; historical web-fastapi-react remains read-only. C-02 envelopes and
+C-03 lifecycle are unchanged. The data-model/UI content schemas admit the new
+profile identity; their PostgreSQL model/UI semantics remain unchanged. Schema
+and ownership validation still run against an allowlisted frozen profile version.
+No .NET profile is translated into FastAPI: prompts carry the actual .NET 10,
+C# 14, EF Core, Angular 20.1.6 profile. Legacy defaults are retained.
+
+The local requirements_analyst is requirements-analyst/0.1 with Q-NNN question
+IDs and incompatible DTOs. The production C-02 bridge therefore uses A-02's
+accepted strict draft/provenance validation and Markdown renderer, with A-01
+HTTP transport. AnalysisGraph preserves FR/role/question identities and verifies
+source evidence and confirmed answers before acceptance. No legacy 0.1 envelope
+is relabeled as C-02.
+
+A-09's trusted policy contracts are preserved. API/security and API↔data naming
+policies come from server configuration, not a model-generated policy or user
+request. They are frozen when the Run is created. Missing policy configuration
+produces a failed architecture result with `ARCHITECTURE_POLICIES_REQUIRED`
+without an architecture LLM call. A checksum may be supplied explicitly; a null
+requirements_checksum in a **server-approved** policy binds that policy to the
+accepted requirements bytes before validation. Operation/permission/name mappings
+are still validated by the existing policy validators. Arbitrary business domains
+need appropriate approved policies; there is no invented permissive default.
+Android and generation inventory dispatch remain outside this iteration.
+
+### Durable boundaries
+
+New migration: **V13__pipeline_checkpoints.sql** only. V1–V12 were not edited.
+PostgreSQLCheckpoints stores complete typed LangGraph checkpoints and pending
+writes, uses JSON+/msgpack with pickle disabled, and writes through the existing
+fenced execution transaction. It uses no local SQLite checkpoint file. Sync graph
+durability is confirmed before scheduling architecture. A-09 is intentionally an
+ephemeral graph: its accepted bundle and runtime checkpoint receipt form its
+persistent replay boundary.
+
+All physical calls now use the same PostgreSQLBudgetLedger, including every A-09
+child. The A-01 accounting context reserves before HTTP dispatch, settles actual
+provider usage and stores the raw structured response privately with settlement
+for deterministic replay after downstream storage/validation failure. This
+supersedes the previous iteration's statement that the ledger contains no raw
+responses. Keys, authorization headers and prompts are not stored there. Private
+response bytes contain business/model data and require the same access/retention
+policy as artifacts. Deterministic physical call UUIDs match accepted C-02 usage;
+replay checks the original request fingerprint. Unknown calls retain reservations
+and are marked in_doubt when their lease is revoked. No Run lock is held during
+LLM HTTP, and the integration transport checks this with a separate NOWAIT lock.
+
+Celery tasks now use shared=False: multiple application instances must not reuse
+a previous app's worker callable. This was exposed by the restart/service tests.
+The A-01 optional accounting ContextVar is dependency-free; standalone A-01 does
+not acquire a LangGraph/PostgreSQL dependency.
+
+### Launch / reproduction
+
+Install the existing worker requirements and apply Flyway V1–V13 to a disposable
+or deployment PostgreSQL database using the normal platform migration process.
+Package backend, contracts, templates and docs from the same checkout.
+
+```sh
+uv venv /tmp/rwb-e2e-venv --python 3.12
+uv pip install --python /tmp/rwb-e2e-venv/bin/python -r backend/requirements-worker.txt pytest
+
+# Set DATABASE_URL and JWT_SECRET_KEY using the existing platform setup.
+# Server-only JSON file with exactly api_policy and naming_policy:
+export PIPELINE_POLICY_FILE=/trusted/config/architecture-policies.json
+PYTHONPATH=backend:. /tmp/rwb-e2e-venv/bin/uvicorn app.main:create_app --factory
+
+# Worker additionally requires CELERY_BROKER_URL and LLM_BASE_URL, LLM_MODEL,
+# LLM_API_KEY. Optional LLM_MAX_OUTPUT_TOKENS, LLM_TIMEOUT_SECONDS,
+# LLM_RESPONSE_FORMAT=json_schema|json_object. Do not put secrets in artifacts.
+PYTHONPATH=backend:. /tmp/rwb-e2e-venv/bin/celery -A app.workers.pipeline:app worker -B --loglevel=INFO
+```
+
+Policy structures are documented by the existing OpenAPI policy schema and
+architecture naming_policy_schema; the checked-in agent examples illustrate
+those structures for their fixture only. They are not default production policy.
+Changing PIPELINE_POLICY_FILE affects new Runs only. Historical Runs lacking
+frozen rules/policies are not silently reconstructed from current server files.
+
+New executable evidence lives in `backend/tests/test_pipeline_execution.py`.
+These tests create project/revision/Run through real HTTP handlers, seed only an
+authenticated test User, and execute registered Celery tasks using Task.apply
+(in-process task delivery, memory broker configuration). They use the real
+StageWorker, PostgreSQL queue/lifecycle/stores/checkpointer, A-01 HTTP adapter,
+A-02, AnalysisGraph, ContextBuilder and all four real A-09 adapters. Only model
+HTTP responses are controlled fixtures. No accepted AgentResult, artifact,
+checkpoint or successful stage is manually inserted. Authentication is supplied
+by a dependency override; authentication regressions run separately.
+
+They prove both profiles; clarification + idempotent HTTP answers and a new
+worker instance; eight public artifact bytes and checksums (also via HTTP GET);
+physical ModelCall IDs/totals; event/attempt history; duplicate command delivery;
+fresh services; and three fault recoveries (acceptance outage, checkpoint outage,
+expired lease after acceptance) without another physical analysis call. The
+policy-absent case proves diagnostic failure rather than fallback architecture.
+
+Live-provider smoke and an external Celery broker/process crash are **not_run**.
+Fresh service instances and controlled fault injection are not represented as
+external broker delivery or a real model-quality evaluation. The runtime supports
+a real OpenAI-compatible provider through environment configuration.
+
+### Final verified results for Analysis → Architecture
+
+Implementation SHA: **a196f76**, with contract compatibility in **de09852** and
+preflight/diagnostic fixes in **0dd230b**. The following documentation commit does
+not change executable code. Environment: Python 3.12.9, Linux, disposable
+PostgreSQL 16 platform database, installed backend/requirements-worker.txt.
+
+```sh
+RWB_TEST_DATABASE_URL=<disposable PostgreSQL URL> PYTHONPATH=backend:backend/tests:. /tmp/rwb-e2e-venv/bin/python -m pytest -q backend/tests --tb=short
+# 122 passed, 15 subtests passed; 94.65s; exit 0
+
+RWB_TEST_DATABASE_URL=<disposable PostgreSQL URL> PYTHONPATH=backend:backend/tests:. /tmp/rwb-e2e-venv/bin/python -m pytest -q backend/tests/test_pipeline_execution.py --tb=short
+# 7 passed; 41.43s; exit 0 (also included in the full suite above)
+
+PYTHONPATH=backend:backend/app/agents:. /tmp/rwb-e2e-venv/bin/python -m unittest backend.app.agents.graph.test_graph backend.app.agents.graph.test_cross_version backend.app.agents.nodes.architecture.test_node backend.app.agents.generators.ui_spec.test_ui_spec backend.app.agents.requirements_analyst.tests.test_agent backend.app.agents.generation.tests.test_executor -q
+# 144 tests OK; 46.523s; exit 0 (includes the 11 A-22 tests)
+
+PYTHONPATH=backend:. /tmp/rwb-e2e-venv/bin/python -m contracts.agents.validate --check
+# 11 schemas, 22 examples, 4 linked bundles, 1 snapshot; offline OK
+```
+
+`celery -A app.workers.pipeline:app worker --help` with test environment values
+successfully loads the production entrypoint (exit 0); it does not start a worker
+or prove broker availability. `compileall` for pipeline/worker and `git diff
+--check` passed.
+
+During development the new HTTP test caught an ambiguous PostgreSQL NULL parameter
+in checkpoint reads, a Celery shared-task closure crossing service instances, and
+an inconsistent controlled OpenAPI assumption. These were fixed. The broader agent
+regression found changed error-code names and an obsolete expected physical call
+for an invalid frozen path; error codes were preserved and only that preflight
+case now expects zero physical calls. The final commands above all passed.
+
+For a successful no-question Run the measured fixture uses **5 physical calls**
+(1 analysis + 4 architecture), 500 provider-reported input tokens and 1000 output
+tokens. Clarification uses **6 calls**, two immutable analysis attempts and one
+architecture attempt. The controlled provider's token numbers verify accounting;
+they are not real-model efficiency measurements. For each replay/fault case, the
+transport call counter remains unchanged until the next genuinely new stage.
+
+Rollback: stop dispatch/workers before changing execution code. Retain V10–V13,
+artifacts, response receipts, call reservations and checkpoint data. Keep the
+C-01 2.2 read DTOs and registered profile versions while contest Runs exist; an
+unmodified pre-2.2 reader cannot decode that profile identity. Do not migrate
+historical missing snapshots by inventing current rules or policies.
+
+This iteration's requested Analysis → Architecture execution path is demonstrated.
+Remaining work belongs to the later generation/assembly/verification milestones;
+no full hackathon E2E, external broker/process-crash proof, live LLM quality,
+Android, product build, GitLab, deployment or UI completion is claimed here.
