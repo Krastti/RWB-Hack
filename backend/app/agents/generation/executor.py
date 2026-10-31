@@ -140,7 +140,10 @@ class BatchExecutor:
             _require(bool(files) and len(files) <= limits["artifacts"]["max_files"], "GENERATION_FILE_LIMIT")
             _require(len({file.path for file in files}) == len(files), "GENERATION_DUPLICATE_FILE")
             expected = {file.path for file in files}
-            _require(set(task["output_paths"]) <= expected, "GENERATION_REQUIRED_OUTPUT_MISSING")
+            # A directory grant authorizes paths but does not define a complete inventory.
+            # Require the accepted plan to enumerate every output before dispatch.
+            _require(bool(task["output_paths"]), "GENERATION_OUTPUT_INVENTORY_REQUIRED")
+            _require(set(task["output_paths"]) == expected, "GENERATION_OUTPUT_INVENTORY_MISMATCH")
             for spec in files:
                 _require(type(spec.version) is int and spec.version >= 1
                          and type(spec.output_token_budget) is int and spec.output_token_budget > 0,

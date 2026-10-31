@@ -155,3 +155,29 @@ class GenerationRecoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(GenerationError, 'GENERATION_MODEL_CONFIGURATION_CHANGED'):
             self.run_async(executor, args)
         self.assertFalse(seen)
+
+    def test_directory_only_inventory_is_rejected_before_dispatch(self):
+        executor, args, store, ledger, seen = fixture()
+        task = args['plan']['tasks'][0]
+        task['output_paths'] = []
+        task['output_directories'] = ['backend/app/services']
+        with self.assertRaisesRegex(GenerationError, 'GENERATION_OUTPUT_INVENTORY_REQUIRED'):
+            self.run_async(executor, args)
+        self.assertFalse(seen)
+        self.assertFalse(store.receipts)
+        self.assertFalse(ledger.calls)
+
+    def test_inventory_must_exactly_match_plan(self):
+        for extra in (False, True):
+            with self.subTest(extra=extra):
+                executor, args, store, ledger, seen = fixture()
+                task = args['plan']['tasks'][0]
+                if extra:
+                    task['output_paths'] = task['output_paths'][:1]
+                    task['output_directories'] = ['backend/app/services']
+                else:
+                    args['files'] = args['files'][:1]
+                with self.assertRaisesRegex(GenerationError, 'GENERATION_OUTPUT_INVENTORY_MISMATCH'):
+                    self.run_async(executor, args)
+                self.assertFalse(seen)
+                self.assertFalse(ledger.calls)
