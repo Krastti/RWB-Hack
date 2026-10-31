@@ -90,7 +90,7 @@ def create_worker_app(
         if engine is not None:
             engine.dispose(close=False)
 
-    @app.task(name=EXECUTE_TASK)
+    @app.task(name=EXECUTE_TASK, shared=False)
     def execute_stage(command_id: str):
         try:
             parsed_id = UUID(command_id)
@@ -107,7 +107,7 @@ def create_worker_app(
         except WorkerExecutionFailed:
             return "recovery_pending"
 
-    @app.task(name=DISPATCH_TASK)
+    @app.task(name=DISPATCH_TASK, shared=False)
     def dispatch_commands():
         intake = before_dispatch() if before_dispatch is not None else None
         result = adapter.publish_due()

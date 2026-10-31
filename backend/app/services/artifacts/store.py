@@ -60,14 +60,27 @@ class PostgreSQLArtifactStore:
         require(len(raw) == artifact['size_bytes'] and sha256(raw).hexdigest() == artifact['checksum'],
                 'ARTIFACT_CHECKSUM_MISMATCH')
         require(len(raw) <= limits['max_file_bytes'], 'ARTIFACT_SIZE_LIMIT')
-        require(self.profile.allows(artifact['author_agent'], artifact['path'], conditions=self.conditions),
+        private = artifact['author_agent'] == 'orchestrator' and artifact['kind'] == 'business_requirements' and artifact['path'] == 'inputs/analysis.json'
+        require(private or self.profile.allows(artifact['author_agent'], artifact['path'], conditions=self.conditions),
                 'ARTIFACT_GRANT_DENIED')
         return raw
 
     def _put(self, session, run_id, artifact):
         self._writing(session, run_id, artifact['attempt_id'])
         raw = self._validate(artifact)
-        require(artifact['author_agent'] == self.owner_agent, 'ARTIFACT_STAGE_OWNER_MISMATCH')
+        if artifact['author_agent'] == 'orchestrator':
+            import json
+            from ...models.run_creation import RunInputSnapshot
+            source = json.loads(artifact['content'])
+            run = session.get(Run, UUID(str(run_id)))
+            frozen = session.get(RunInputSnapshot, run.id).payload
+            require(self.owner_agent == 'analysis' and source['requirements_text'] == frozen['requirements_text'],
+                    'ARTIFACT_INPUT_SNAPSHOT_MISMATCH')
+            answers = {q['question_id']: q.get('answer') for q in run.questions}
+            require(all(answers.get(a['question_id']) == a['value'] for a in source['answers']),
+                    'ARTIFACT_UNCONFIRMED_ANSWER')
+        else:
+            require(artifact['author_agent'] == self.owner_agent, 'ARTIFACT_STAGE_OWNER_MISMATCH')
         identity = UUID(artifact['artifact_id'])
         old = session.get(ArtifactObject, identity)
         if old is not None:

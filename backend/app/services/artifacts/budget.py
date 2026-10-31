@@ -58,7 +58,7 @@ class PostgreSQLBudgetLedger:
                 payload={'model': model, 'reservation': reservation, 'fingerprint': sha256(encoded).hexdigest(),
                          'started_at': now(), 'finished_at': None, 'status': 'reserved', 'usage': None}))
 
-    def _settle(self, run_id, attempt_id, call_id, usage, status):
+    def _settle(self, run_id, attempt_id, call_id, usage, status, response=None):
         with self.artifacts.execution.transaction() as session:
             self.artifacts._writing(session, run_id, attempt_id)
             row = session.get(ModelCall, UUID(call_id))
@@ -70,6 +70,8 @@ class PostgreSQLBudgetLedger:
                     raise GenerationError('MODEL_CALL_SETTLEMENT_CONFLICT')
                 return
             value.update(status=status, usage=usage, finished_at=now())
+            if response is not None:
+                value["response"] = response
             row.payload = value
 
     def finish(self, *, run_id, attempt_id, call_id, result):
@@ -80,7 +82,7 @@ class PostgreSQLBudgetLedger:
         self._settle(run_id, attempt_id, call_id,
             {'input_tokens': usage.tokens_in, 'output_tokens': usage.tokens_out,
              'duration_seconds': usage.latency_ms / 1000},
-            'succeeded' if result.ok else 'failed')
+            'succeeded' if result.ok else 'failed', response=__import__('dataclasses').asdict(result))
 
     def abandon(self, *, run_id, attempt_id, call_id):
         self._settle(run_id, attempt_id, call_id, None, 'in_doubt')

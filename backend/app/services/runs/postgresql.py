@@ -20,9 +20,10 @@ ACTIVE_STATUSES = ("queued", "running", "waiting_for_input", "cancelling")
 
 
 class PostgreSQLRunCreationRepository:
-    def __init__(self, sessions: sessionmaker[Session], queue: RunQueue) -> None:
+    def __init__(self, sessions: sessionmaker[Session], queue: RunQueue, *, execution_policies=None) -> None:
         self._sessions = sessions
         self._queue = queue
+        self._execution_policies = execution_policies or {}
 
     def create(
         self, *, owner_id: UUID, project_id: UUID, key: str, request_hash: str,
@@ -44,10 +45,15 @@ class PostgreSQLRunCreationRepository:
             revision = self._create_revision(session, project_id, body.requirements_text)
             run = self._create_run(session, project_id, revision.id, body.profile_id, limits)
 
+            from ...agents.profiles.loader import FrozenProfile
+            from contracts.agents.validate import load_profile_rules
+            frozen_profile = FrozenProfile(json.dumps(profile, ensure_ascii=False).encode(),
+                load_profile_rules(profile).encode())
             session.add(RunInputSnapshot(run_id=run.id, payload={
+                "profile_snapshot": frozen_profile.snapshot(), "execution_policies": self._execution_policies,
                 "revision_id": str(revision.id), "requirements_text": revision.requirements_text,
                 "requirements_hash": revision.hash, "profile": profile,
-                "contracts": {"platform": "2.1.0", "lifecycle": "1.0",
+                "contracts": {"platform": "2.2.0", "lifecycle": "1.0",
                               "agents": profile["contracts"]["agent_schema_version"]},
                 "limits": limits.model_dump(mode="json"),
             }))

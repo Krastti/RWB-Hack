@@ -35,6 +35,7 @@ def create_app(
     *, database_url: str | None = None, auth_config: AuthConfig | None = None,
     run_config: RunCreationConfig | None = None,
     retry_limits: ControlLimits | None = None,
+    execution_policies: dict | None = None,
 ) -> FastAPI:
     database_url = database_url if database_url is not None else os.environ["DATABASE_URL"]
     auth_config = auth_config if auth_config is not None else AuthConfig(secret_key=os.environ["JWT_SECRET_KEY"])
@@ -45,6 +46,14 @@ def create_app(
         raise ValueError("DATABASE_URL must use PostgreSQL")
     engine = create_engine(url.set(drivername="postgresql+psycopg"), pool_pre_ping=True, hide_parameters=True)
     sessions = sessionmaker(engine)
+    if execution_policies is None:
+        import json
+        policy_path = os.environ.get('PIPELINE_POLICY_FILE')
+        if policy_path:
+            from pathlib import Path
+            execution_policies = json.loads(Path(policy_path).read_text(encoding='utf-8'))
+        else:
+            execution_policies = {}
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -53,7 +62,7 @@ def create_app(
         finally:
             engine.dispose()
 
-    app = FastAPI(title="RWB-Hack Platform API", version="2.1.0", lifespan=lifespan)
+    app = FastAPI(title="RWB-Hack Platform API", version="2.2.0", lifespan=lifespan)
     app.state.engine = engine
     app.state.run_runtime = compose_runtime(
         sessions, retry_limits=retry_limits or ControlLimits.model_validate(run_config.limits.model_dump()),
@@ -64,7 +73,7 @@ def create_app(
         PostgreSQLRunReadRepository(sessions), cursor_secret=auth_config.secret_key,
     ))
     configure_run_creation(app, RunCreationService(
-        PostgreSQLRunCreationRepository(sessions, PostgreSQLRunQueue()),
+        PostgreSQLRunCreationRepository(sessions, PostgreSQLRunQueue(), execution_policies=execution_policies),
         limits=run_config.limits, profile=run_profile,
     ))
     configure_run_control(app, app.state.run_runtime.control)

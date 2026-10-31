@@ -73,6 +73,13 @@ class LLMAdapter:
         self._transport = transport
 
     async def generate(self, *, system: str, prompt: str, schema: dict[str, Any]) -> LLMResult:
+        from backend.app.agents.llm.accounting import active_accounting
+        accounting = active_accounting.get()
+        if accounting is not None:
+            return await accounting.generate(self, system, prompt, schema)
+        return await self._generate(system=system, prompt=prompt, schema=schema)
+
+    async def _generate(self, *, system: str, prompt: str, schema: dict[str, Any]) -> LLMResult:
         start = time.monotonic()
         calls = 0
         counts: dict[str, int | None] = {}
