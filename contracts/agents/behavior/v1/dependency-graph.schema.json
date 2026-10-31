@@ -1,0 +1,152 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "project_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "snapshot_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "contract_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "profile_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "rules_checksum": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_version",
+        "checksum",
+        "rules_checksum"
+      ],
+      "additionalProperties": false
+    },
+    "nodes": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "checksum": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "schema_version": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "checksum",
+          "version",
+          "schema_version"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 100000
+    },
+    "tasks": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object"
+      }
+    },
+    "unknown": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      },
+      "maxItems": 100000
+    }
+  },
+  "required": [
+    "schema_version",
+    "project_id",
+    "snapshot_id",
+    "contract_version",
+    "profile",
+    "nodes",
+    "edges",
+    "tasks",
+    "unknown"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/contracts/agents/behavior/v1/dependency-graph.schema.json"
+}
