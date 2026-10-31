@@ -158,9 +158,10 @@ def validate_semantics(name, data):
 
 
 class Contracts:
-    def __init__(self):
+    def __init__(self, repository_root=None):
+        schema_root = Path(repository_root) / "contracts/agents" if repository_root is not None else ROOT
         self.schemas = {p.name.removesuffix(".schema.json"): load(p)
-                        for p in sorted((ROOT / "v1").glob("*.schema.json"))}
+                        for p in sorted((schema_root / "v1").glob("*.schema.json"))}
         require(bool(self.schemas), "No local schemas")
         ids = [schema["$id"] for schema in self.schemas.values()]
         require(len(ids) == len(set(ids)), "Duplicate schema $id")
@@ -232,6 +233,29 @@ def validate_profile_grants(plan, profile):
 
 
 
+def read_policy_bytes(repository_root, relative, limit=1024 * 1024):
+    """Bounded descriptor-relative read; never follow directory/file symlinks."""
+    import os
+    parts = Path(relative).parts
+    require(parts and not Path(relative).is_absolute() and all(p not in {".", ".."} for p in parts),
+            "Untrusted policy path")
+    directory = os.open(repository_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in parts[:-1]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(fd, "rb") as stream:
+            import stat
+            require(stat.S_ISREG(os.fstat(stream.fileno()).st_mode), "Untrusted policy file")
+            raw = stream.read(limit + 1)
+            require(len(raw) <= limit, "PROFILE_SIZE_LIMIT")
+            return raw
+    finally:
+        os.close(directory)
+
+
 def load_profile_rules(profile, repository_root=None):
     """Offline resolution contract, not production profile-loader integration.
 
@@ -246,8 +270,10 @@ def load_profile_rules(profile, repository_root=None):
     try:
         require(pointer.resolve(strict=True) == pointer and target.resolve(strict=True) == target,
                 "Profile rules must use trusted local files")
-        pointer_text = pointer.read_text(encoding="utf-8")
-        rules = target.read_text(encoding="utf-8")
+        def bounded(path):
+            return read_policy_bytes(root, path.relative_to(root)).decode("utf-8")
+        pointer_text = bounded(pointer)
+        rules = bounded(target)
     except (OSError, UnicodeError):
         raise ContractError("Profile rules document is unavailable") from None
     import re
