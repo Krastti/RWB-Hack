@@ -101,7 +101,12 @@ def _validate(model: dict, prepared: DataModelPrompt) -> str:
 
 async def generate_data_model(llm: StructuredLLM, prepared: DataModelPrompt) -> LLMResult:
     """Generate a validated model, preserving usage on failure."""
-    result = await llm.generate(system=prepared.system, prompt=prepared.prompt, schema=data_model_schema())
+    schema = data_model_schema()
+    source = schema['$defs']['entity']['properties']['source_refs']['items']
+    source['enum'] = [{'section': section, 'text': item['text']}
+                      for section in source['properties']['section']['enum']
+                      for item in prepared.requirements[section]]
+    result = await llm.generate(system=prepared.system, prompt=prepared.prompt, schema=schema)
     if not result.ok:
         return result
     try:
