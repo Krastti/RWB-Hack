@@ -443,3 +443,10 @@ Validation: PostgreSQL pipeline suite 9 passed (51.48s), additional pre-result
 crash/retry integration test 1 passed (7.82s), persistence suite 6 passed, and
 AnalysisGraph regression suite 26 passed. All model verification used controlled
 transport; no additional live provider call was made for this fix.
+
+After rebuilding Compose, the existing local Run
+`14cb554c-ee37-4b82-8568-81da61749651` was retried through authenticated HTTP
+(`202`). Registered attempt 6 reached `BUDGET_MAX_INPUT_TOKENS`, and Run reached
+`budget_exceeded / MAX_INPUT_TOKENS` without an orchestrator exception. The
+physical ledger stayed at two rows, confirming no additional model dispatch.
+The original five attempts and unknown-usage reservations were preserved.
