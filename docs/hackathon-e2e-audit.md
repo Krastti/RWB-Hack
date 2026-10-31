@@ -398,3 +398,24 @@ independently of the working directory. Copy `.env.example` to `.env` and set
 `LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY`. Existing process environment
 variables take precedence. `.env` is ignored by Git; only the empty template is
 committed. Database, broker and policy variables may also be placed in this file.
+
+### Compose runtime incident: rate limit, manual retry and manifest readiness
+
+The local provider returned `LLM_RATE_LIMITED` on the first analysis. Manual
+HTTP retries then called `AnalysisGraph.start` for new attempt IDs against the
+existing Run checkpoint, causing `RUN_STATE_CONFLICT`. Registered retries now
+continue from the failed checkpoint, preserve immutable business inputs and
+attempt history, and reuse the existing attempt on duplicate delivery. No new
+Run or second queue is created. The physical provider rate limit still requires
+provider capacity or a later retry.
+
+The panel also treated `409 MANIFEST_NOT_READY` from listArtifacts as an
+artifact failure. This expected response now shows pending analysis. Artifact
+listing still requires a published manifest; this change does not manufacture
+a snapshot or claim that assembly is implemented.
+
+Validation: production PostgreSQL worker integration suite: 8 passed (47.58s),
+including controlled model 429 → HTTP retry → accepted analysis and A-09 →
+duplicate delivery without another call. AnalysisGraph regression suite: 26
+tests passed. Angular analysis component: 3 tests passed. Controlled transport
+was used for verification; no additional live model call was issued.

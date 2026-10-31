@@ -1,6 +1,6 @@
 import { Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { JsonPipe } from '@angular/common';
-import { EMPTY, Subscription, expand, finalize, forkJoin, map, of, reduce, switchMap } from 'rxjs';
+import { EMPTY, Subscription, catchError, throwError, expand, finalize, forkJoin, map, of, reduce, switchMap } from 'rxjs';
 import { marked } from 'marked';
 import { ApiClient, DTO } from '../api/client';
 import { ApiError, normalizeError } from '../api/errors';
@@ -46,6 +46,12 @@ export class Analysis {
     }
     this.loading.set(true); this.error.set(null);
     this.request = this.api.artifacts(id).pipe(
+      catchError(error => {
+        const normalized = normalizeError(error);
+        return normalized.status === 409 && normalized.code === 'MANIFEST_NOT_READY'
+          ? EMPTY
+          : throwError(() => error);
+      }),
       expand(page => page.next_cursor ? this.api.artifacts(id, page.next_cursor) : EMPTY),
       reduce((items: DTO['Artifact'][], page) => [...items,...page.items], []),
       switchMap(items => {

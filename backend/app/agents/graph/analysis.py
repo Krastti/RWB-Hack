@@ -169,6 +169,27 @@ class AnalysisGraph:
         self._graph.invoke(state, config, durability="sync")
         return self.snapshot(request["run_id"])
 
+    def retry(self, run_id: str, *, attempt_id: str, attempt_no: int) -> AnalysisState:
+        """Execute an already registered retry, preserving checkpoint history and inputs."""
+        _uuid(attempt_id)
+        state = self.snapshot(run_id)
+        if state["attempt_id"] == attempt_id:
+            _require(state["request"]["attempt"] == attempt_no, "RUN_STATE_CONFLICT")
+            return self.recover(run_id)
+        _require(state["stage_status"] == "failed" and attempt_no > state["request"]["attempt"],
+                 "RUN_STATE_CONFLICT")
+        _require(attempt_id not in {a["attempt_id"] for a in state["attempts"]}, "ATTEMPT_ID_REUSED")
+        self._verified_inputs(state)
+        request = deepcopy(state["request"])
+        request["attempt"] = attempt_no
+        _, digest = self._inputs(request)
+        self._graph.update_state(self._config(run_id), {
+            "request": request, "attempt_id": attempt_id, "input_hash": digest,
+            "input_hash_algorithm": "substantive-v2", "status": "running", "stage_status": "running",
+            "attempt_started_at": datetime.now(timezone.utc).isoformat(),
+        }, as_node="begin_attempt")
+        return self.recover(run_id)
+
     def recover(self, run_id: str) -> AnalysisState:
         """Continue pending checkpoint work; waiting/completed nodes are not rerun."""
         state = self.snapshot(run_id)

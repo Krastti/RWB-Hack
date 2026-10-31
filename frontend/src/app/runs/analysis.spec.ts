@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { Subject, of } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { ApiClient, DTO } from '../api/client';
 import { Analysis } from './analysis';
+import { ApiError } from '../api/errors';
 
 afterEach(() => TestBed.resetTestingModule());
 const empty: DTO['ManifestPage'] = { snapshot_id: 'snapshot', items: [], next_cursor: null };
@@ -13,6 +14,13 @@ describe('analysis refresh', () => {
     fixture.componentRef.setInput('runId', 'run-a'); fixture.componentRef.setInput('refreshKey', 'running');
     return fixture;
   }
+  it('shows pending analysis when the manifest is not ready', () => {
+    const fixture = setup({ artifacts: () => throwError(() => new ApiError(409, 'MANIFEST_NOT_READY', 'pending', 'id')) });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.error()).toBeNull();
+    expect(fixture.componentInstance.loading()).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('Анализ ещё не подготовлен');
+  });
   it('reloads results when the same run completes', () => {
     const api = { artifacts: vi.fn().mockReturnValue(of(empty)), artifact: vi.fn().mockReturnValue(of('# Finished analysis')) };
     const fixture = setup(api); fixture.detectChanges();

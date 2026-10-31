@@ -31,7 +31,7 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
 
 
-def setup(db, *, waiting, profile, configured=True):
+def setup(db, *, waiting, profile, configured=True, fail_first=False):
     owner = uuid4()
     with db.begin() as s:
         s.add(User(id=owner, login=str(owner), password_hash='test'))
@@ -68,6 +68,8 @@ def setup(db, *, waiting, profile, configured=True):
             with db.begin() as unlocked:
                 unlocked.execute(select(Run).with_for_update(nowait=True)).all()
             calls.append((node, payload))
+            if fail_first and len(calls) == 1:
+                return httpx.Response(429, json={'error': {'message': 'controlled rate limit'}})
             if node == 'analysis':
                 draft = answered if payload['business_input']['answers'] or not waiting else original
             elif node == 'proposal':
@@ -267,3 +269,28 @@ def test_missing_trusted_policy_fails_without_architecture_model_call(db):
             attempt = s.scalar(select(StageAttempt).where(StageAttempt.run_id == run.id, StageAttempt.stage_id == 'architecture'))
             receipt = s.get(ExecutionReceipt, (attempt.id, 'result'))
             assert receipt.payload['diagnostics'][0]['code'] == 'ARCHITECTURE_POLICIES_REQUIRED'
+
+
+def test_http_retry_after_model_rate_limit(db):
+    app, factory, calls, requirements = setup(db, waiting=False, profile='russtech-fullstack', fail_first=True)
+    with TestClient(app) as client:
+        project = client.post('/api/v1/projects', json={'name': 'Retry', 'requirements_text': requirements}).json()
+        created = client.post(f'/api/v1/projects/{project["id"]}/runs',
+            headers={'Idempotency-Key': 'initial'}, json={'requirements_text': requirements, 'profile_id': 'russtech-fullstack'})
+        run_id = created.json()['run_id']
+        worker = factory()
+        worker.stage_worker.orchestrator.runtime.intake.dispatch()
+        first = execute_next(db, worker)
+        assert client.get(f'/api/v1/runs/{run_id}').json()['status'] == 'failed'
+        response = client.post(f'/api/v1/runs/{run_id}/retry', headers={'Idempotency-Key': 'retry'}, json={})
+        assert response.status_code == 202, response.text
+        fresh = factory()
+        second = execute_next(db, fresh)
+        execute_next(db, fresh)
+        with db() as s:
+            attempts = list(s.scalars(select(StageAttempt).where(StageAttempt.run_id == UUID(run_id))))
+            assert sorted((a.stage_id, a.attempt_no, a.status) for a in attempts) == [
+                ('analysis', 1, 'failed'), ('analysis', 2, 'succeeded'), ('architecture', 1, 'succeeded')]
+        assert len(calls) == 6
+        assert fresh.tasks['rwb.stage.execute.v1'].apply(args=[str(second)]).get() == 'already_handled'
+        assert len(calls) == 6

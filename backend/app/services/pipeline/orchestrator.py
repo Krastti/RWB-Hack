@@ -70,7 +70,11 @@ class PipelineOrchestrator:
             if command.stage_id == 'analysis':
                 graph = AnalysisGraph(AnalysisNode(store, self.config, transport=self.transports.get('analysis')),
                                       store, PostgreSQLCheckpoints(store))
-                if source.input_state.get('schema_version') == 'clarification-input/1':
+                if command.attempt_no > 1 and (source.input_state.get('schema_version') != 'clarification-input/1'
+                        or graph.snapshot(str(command.run_id))['stage_status'] == 'failed'):
+                    state = graph.retry(str(command.run_id), attempt_id=str(command.attempt_id),
+                                        attempt_no=command.attempt_no)
+                elif source.input_state.get('schema_version') == 'clarification-input/1':
                     state = graph.resume(str(command.run_id), questions_revision=source.input_state['questions_revision'],
                         answers=source.input_state['answers'], attempt_id=str(command.attempt_id))
                 else:
