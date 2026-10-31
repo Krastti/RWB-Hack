@@ -217,7 +217,8 @@ class ArchitectureNodeTests(unittest.IsolatedAsyncioTestCase):
             "owner": "frontend", "condition": "always",
         })
         self.freeze_profile()
-        self.assert_error(await self.generate(), "ARCHITECTURE_PATH_TOO_LONG", calls=1)
+        # Full frozen-profile policy validation now rejects the path before dispatch.
+        self.assert_error(await self.generate(), "ARCHITECTURE_PATH_TOO_LONG", calls=0)
 
     async def test_profile_path_limit_accepts_boundary(self):
         self.profile["limits"]["artifacts"]["max_path_length"] = 100

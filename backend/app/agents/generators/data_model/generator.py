@@ -52,13 +52,9 @@ def build_data_model_prompt(context: dict, requirements_artifact: dict, *, profi
             "DATA_MODEL_REQUIREMENTS_REQUIRED")
     require(requirements_artifact["artifact_id"] in context["input_artifact_ids"],
             "DATA_MODEL_INPUT_NOT_ALLOWED")
-    schema = load(PROFILE / "profile.schema.json")
-    registry = contracts.registry.with_resource(schema["$id"], Resource.from_contents(schema))
-    validator = Draft202012Validator(schema, registry=registry, format_checker=FormatChecker())
-    require(not any(validator.iter_errors(profile)), "DATA_MODEL_INVALID_PROFILE")
-    require(context["profile_id"] == profile["profile_id"] == "web-fastapi-angular" and
-            profile["profile_version"] == "1.0.0" and profile["stack"]["database"] == "PostgreSQL" and
-            profile["stack"]["migrations"] == "Alembic", "DATA_MODEL_UNSUPPORTED_PROFILE")
+    from backend.app.agents.profiles.loader import validate_profile_data
+    validate_profile_data(profile)
+    require(context["profile_id"] == profile["profile_id"], "DATA_MODEL_UNSUPPORTED_PROFILE")
     require("data-model.json" in profile["ownership"]["agents"]["architecture"]["paths"],
             "DATA_MODEL_OUTPUT_NOT_ALLOWED")
     defaults = profile["limits"]["agent"]
@@ -105,7 +101,12 @@ def _validate(model: dict, prepared: DataModelPrompt) -> str:
 
 async def generate_data_model(llm: StructuredLLM, prepared: DataModelPrompt) -> LLMResult:
     """Generate a validated model, preserving usage on failure."""
-    result = await llm.generate(system=prepared.system, prompt=prepared.prompt, schema=data_model_schema())
+    schema = data_model_schema()
+    source = schema['$defs']['entity']['properties']['source_refs']['items']
+    source['enum'] = [{'section': section, 'text': item['text']}
+                      for section in source['properties']['section']['enum']
+                      for item in prepared.requirements[section]]
+    result = await llm.generate(system=prepared.system, prompt=prepared.prompt, schema=schema)
     if not result.ok:
         return result
     try:

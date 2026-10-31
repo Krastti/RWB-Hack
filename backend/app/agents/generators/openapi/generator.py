@@ -61,12 +61,9 @@ def prepare_openapi(context: dict, requirements_artifact: dict, *, profile: dict
         json.dumps([context, artifact, profile], allow_nan=False)
         contracts.validate("agent-input", context)
         contracts.validate("artifact", artifact)
-        schema = load(PROFILE_SCHEMA)
-        registry = contracts.registry.with_resource(schema["$id"], Resource.from_contents(schema))
-        require(Draft202012Validator(schema, registry=registry, format_checker=FormatChecker()).is_valid(profile),
-                "OPENAPI_INVALID_PROFILE")
-        require(context["profile_id"] == profile["profile_id"] == "web-fastapi-angular"
-                and profile["contracts"]["openapi_version"] == "3.1.0", "OPENAPI_UNSUPPORTED_PROFILE")
+        from backend.app.agents.profiles.loader import validate_profile_data
+        validate_profile_data(profile)
+        require(context["profile_id"] == profile["profile_id"], "OPENAPI_UNSUPPORTED_PROFILE")
         require(artifact["artifact_id"] in context["input_artifact_ids"]
                 and artifact["kind"] == "requirements" and artifact["path"] == "requirements.json"
                 and "content" in artifact, "OPENAPI_REQUIREMENTS_NOT_ALLOWED")
@@ -84,9 +81,24 @@ def prepare_openapi(context: dict, requirements_artifact: dict, *, profile: dict
                       limits["agent"]["timeout_seconds"], limits["model_call"]["timeout_seconds"])
         payload = {"contract_version": context["contract_version"], "requirements": requirements, "api_policy": policy,
                    "profile": {key: profile[key] for key in ("profile_id", "profile_version", "stack")}}
+        schema = draft_schema(contracts)
+        if policy is not None:
+            # The model designs DTOs and responses. The approved surface/access
+            # fields are authoritative constants, not text to paraphrase.
+            variants = []
+            for operation in policy['operations']:
+                item = deepcopy(schema['properties']['operations']['items'])
+                fixed = {k: operation[k] for k in ('operation_id', 'path', 'method', 'related_fr_ids',
+                                                  'authentication', 'authorization_rules')}
+                fixed['role_ids'] = [g['role_id'] for g in operation['grants']]
+                for key, value in fixed.items():
+                    item['properties'][key] = {'const': deepcopy(value)}
+                variants.append(item)
+            schema['properties']['operations'].update(items={'oneOf': variants},
+                minItems=len(variants), maxItems=len(variants))
         return OpenAPIPrompt(
             system=Path(__file__).with_name("system.md").read_text(encoding="utf-8"),
-            prompt=json.dumps(payload, ensure_ascii=False, allow_nan=False), schema=draft_schema(contracts),
+            prompt=json.dumps(payload, ensure_ascii=False, allow_nan=False), schema=schema,
             context=context, requirements=requirements, api_policy=policy, requirements_artifact_id=artifact["artifact_id"],
             max_calls=min(context["limits"]["max_calls"], limits["agent"]["max_calls"]),
             max_output_tokens=tokens, timeout_seconds=timeout,

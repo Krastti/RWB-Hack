@@ -20,7 +20,7 @@ def test_copy_legacy_data_preserves_answers_and_runtime_defaults(db):
         source_schema=c.execute(text('SELECT current_schema()')).scalar_one()
         c.execute(text(f'CREATE SCHEMA "{legacy}"'))
         c.execute(text(f'CREATE SCHEMA "{migrated}"'))
-        paths=sorted((module_path.parents[1]/'migrations').glob('V*__*.sql'))
+        paths=sorted((module_path.parents[1]/'migrations').glob('V*__*.sql'), key=lambda p: int(p.name.split('__')[0][1:]))
         c.exec_driver_sql(f'SET LOCAL search_path TO "{legacy}"')
         for p in paths:
             if int(p.name.split('__')[0][1:]) in [1,2,3,4,5,6,9]:
@@ -31,7 +31,7 @@ def test_copy_legacy_data_preserves_answers_and_runtime_defaults(db):
         from sqlalchemy import MetaData
         metadata=MetaData();metadata.reflect(bind=c)
         for table in metadata.sorted_tables:
-            if table.name in ('flyway_schema_history',):continue
+            if table.name in ('flyway_schema_history', 'artifact_objects', 'execution_receipts', 'model_call_ledger', 'artifact_snapshots', 'pipeline_checkpoints', 'pipeline_checkpoint_writes'):continue
             columns=[col.name for col in table.columns if col.name not in ('recovery_failures','recovery_error','failures','next_attempt_at','failure_code') and not (table.name=='run_queue_jobs' and col.name=='state')]
             names=', '.join('"'+name+'"' for name in columns)
             c.exec_driver_sql(f'INSERT INTO "{legacy}"."{table.name}" ({names}) SELECT {names} FROM "{source_schema}"."{table.name}"')

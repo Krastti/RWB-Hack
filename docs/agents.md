@@ -158,6 +158,27 @@ CancelledError распространяется наружу. Schema — сам�
 refs допустимы, внешняя загрузка запрещена. Перед отправкой копируется/проверяется;
 ответ локально проверяется с FormatChecker. Duplicate JSON keys, NaN/Infinity,
 Markdown wrappers, неверная схема/finish reason/usage отклоняются.
+В pipeline проверка prompt и схемы выполняется до резервирования физического
+вызова. Локальный отказ возвращает `LLM_INVALID_INPUT`/`LLM_INVALID_SCHEMA` с
+`calls=0`: запись ModelCall и резерв бюджета не создаются, worker сохраняет
+обычный failed result вместо технического recovery.
+Production admission дополнительно проверяет `running` и отсутствие terminal
+intent под Run lock перед каждым новым физическим вызовом. Отмена запрещает
+следующий repair/архитектурный вызов; уже отправленный ответ всё равно учитывается.
+После `finish_attempt` оркестратор не выполняет новый переход, если Run уже
+достиг отмены или другого терминального состояния.
+
+Для retry после `MAX_CALLS`/`MAX_OUTPUT_TOKENS` producer сохраняет `required_limits`
+из всего ModelCall ledger, включая неизвестные резервы. Учитывается новая попытка
+этапа: для A-09 — четыре вызова с его output allocations, для анализа — один.
+HTTP сохраняет проверку достаточности и серверных полномочий повышения; worker
+использует разрешённые текущие лимиты без изменения frozen business inputs.
+
+Если первый сбой случился до checkpoint, зарегистрированная попытка анализа
+может стартовать из frozen input с историей прежних failed attempts. Перед этим
+worker проверяет отсутствие прежних ModelCall/result/checkpoint receipts и
+требует исходный `runtime-intake/1`. Для уточнений или уже учтённого вызова
+bootstrap запрещён: отсутствие checkpoint не разрешает повторный платный вызов.
 
 LLMConfig требует доверенные base_url/model/api_key; defaults: timeout_seconds=60,
 max_output_tokens=2048, response_format=json_schema. Strict json_schema и явно

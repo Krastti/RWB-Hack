@@ -10,3 +10,5 @@ uvicorn>=0.30,<1
 # Public Run retry validates frozen C-02 inputs without worker extras.
 jsonschema==4.25.1
 referencing==0.37.0
+
+python-dotenv>=1.0,<2

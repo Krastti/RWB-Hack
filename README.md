@@ -157,3 +157,43 @@ Web-админка не заменяет мобильный помощник.
 Правила веток, review, восстановления `main` и выпуска — в
 [CONTRIBUTING.md](CONTRIBUTING.md). Изменение контракта согласуется с потребителями;
 локальные тесты и закрытая Issue не заменяют независимое review.
+
+### Docker Compose
+
+Скопируйте `.env.example` в `.env`, заполните LLM-параметры,
+`POSTGRES_PASSWORD` и `JWT_SECRET_KEY` (минимум 32 байта).
+Запуск API, worker, PostgreSQL, Redis и миграций:
+
+```sh
+docker compose up --build -d
+docker compose logs -f api worker
+```
+
+API: http://localhost:8000. Данные PostgreSQL сохраняются в named volume.
+Для архитектурного этапа требуется server-approved `PIPELINE_POLICY_FILE`: путь
+внутри образа или файла, подключённого через volume. Пользователь для входа
+создаётся по инструкции backend. Настройки `.env` передаются API и worker;
+адреса PostgreSQL и Redis внутри Compose устанавливаются автоматически.
+
+Frontend также запускается через Compose: http://localhost:4200
+(порт задаётся `FRONTEND_PORT` в общем `.env`). Angular собирается в Docker,
+Nginx обслуживает SPA и проксирует `/api/` на сервис API.
+Ключ LLM остаётся в окружении backend/worker и не передаётся frontend.
+
+При первом запуске Compose создаёт пользователя панели из `PANEL_LOGIN` и
+`PANEL_PASSWORD` в `.env`. Существующий пользователь с таким логином не
+изменяется: смена этих переменных не сбрасывает его пароль.
+
+Для проверенного провайдера Qwen/vLLM в `.env` используются
+`LLM_RESPONSE_FORMAT=json_schema_compat`, `LLM_ENABLE_THINKING=false`,
+`LLM_MAX_OUTPUT_TOKENS=8000`, `LLM_TIMEOUT_SECONDS=120`. Режим compat передаёт
+провайдеру поддерживаемую структурную схему; полный исходный JSON Schema и
+предметные проверки остаются обязательными в backend. Явные HTTP отказы без
+usage освобождают резерв токенов; подтверждённый usage сохраняется, таймауты
+и ошибки сервера с неизвестным usage сохраняют резерв.
+
+Серверные политики архитектуры подключаются через каталог `config`: см.
+[инструкцию](config/README.md). Пример предназначен для предметной области
+ремонтных заявок. Принятые результаты доступны до assembly через
+`GET /api/v1/runs/{run_id}/accepted-artifacts` (C-01 2.3.0); существующие
+manifest/ZIP DTO сохранены.

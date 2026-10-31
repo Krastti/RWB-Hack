@@ -16,6 +16,11 @@ the latter in decisions with reasons and FR links. Do not invent business facts,
 user answers, accepted API/data/UI contracts, credentials or external availability.
 Use mock_adapter only for external dependencies, never for the main business logic.
 Component depends_on describes application design dependencies, not task scheduling.
+Every ID in mandatory_component_coverage MUST appear in components[].related_fr_ids,
+including prohibitions and constraints. Assign a prohibition to the component that
+must enforce it (typically the backend); absence of an API operation does not remove
+that FR from component coverage. depends_on may contain only existing CMP-NNN IDs,
+never INT-, FR-, ROLE- or task IDs.
 Return only components, decisions, integrations as JSON matching the given schema.
 Do not select task owners, executable tools, artifact IDs or scheduling transitions.
 """

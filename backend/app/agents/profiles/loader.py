@@ -156,8 +156,11 @@ class ProfileLoader:
         self._registry = dict(registry) if registry is not None else {
             ("web-fastapi-angular", "1.0.0"): ProfileSource(
                 "templates/profiles/web-fastapi-angular/profile.json",
-                "templates/profiles/web-fastapi-angular/profile.schema.json")}
-        self._defaults = dict(defaults) if defaults is not None else {"web-fastapi-angular": "1.0.0"}
+                "templates/profiles/web-fastapi-angular/profile.schema.json"),
+            ("russtech-fullstack", "1.0.0"): ProfileSource(
+                "templates/profiles/russtech-fullstack/profile.json",
+                "templates/profiles/russtech-fullstack/profile.schema.json")}
+        self._defaults = dict(defaults) if defaults is not None else {"web-fastapi-angular": "1.0.0", "russtech-fullstack": "1.0.0"}
 
     def _source(self, profile_id: str, version: str | None) -> tuple[str, ProfileSource]:
         _require(isinstance(profile_id, str) and (version is None or isinstance(version, str)),
@@ -269,3 +272,11 @@ def _validate_policy(profile: dict) -> None:
              and limits["agent"]["max_critical_questions"] <= limits["run"]["max_critical_questions_per_round"]
              and limits["artifacts"]["max_file_bytes"] <= limits["artifacts"]["max_total_bytes"],
              "PROFILE_LIMIT_CONFLICT")
+
+
+def validate_profile_data(profile: dict, *, repository_root=ROOT) -> dict:
+    """Validate saved profile JSON against its allowlisted version, not live defaults."""
+    loader = ProfileLoader(repository_root=repository_root)
+    version, source = loader._source(profile.get('profile_id'), profile.get('profile_version'))
+    raw = json.dumps(profile, ensure_ascii=False, allow_nan=False).encode()
+    return loader._validate(raw, profile['profile_id'], version, source)

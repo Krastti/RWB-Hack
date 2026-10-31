@@ -28,7 +28,7 @@ async function fixtures(page: Page) {
     if (path === `/runs/${runId}`) return json({ ...run, status: completed ? 'completed' : 'waiting_for_input' });
     if (path.endsWith('/events')) return json({ items: [], next_after_seq: 0, has_more: false });
     if (path.endsWith('/answers')) { calls.answers++; completed = true; expect(request.postDataJSON().questions_revision).toBe(1); return json({ ...run,status:'completed' },202); }
-    if (path.endsWith('/artifacts')) {
+    if (path.endsWith('/accepted-artifacts')) {
       calls.artifactLists++;
       return json({ snapshot_id: projectId, next_cursor: null, items: [{ artifact_id: 'md', path: 'docs/system-analysis.md' },{ artifact_id: 'json', path: 'requirements.json' }] });
     }
@@ -133,7 +133,7 @@ test('analysis refreshes automatically when an unchanged run id completes', asyn
     completed = ++polls > 1;
     return route.fulfill({ json:{ ...run,status:completed ? 'completed' : 'running' } });
   });
-  await page.route(`**/api/v1/runs/${runId}/artifacts`, route => route.fulfill({ json:{
+  await page.route(`**/api/v1/runs/${runId}/accepted-artifacts`, route => route.fulfill({ json:{
     snapshot_id:projectId,next_cursor:null,items:completed ? [{ artifact_id:'finished',path:'docs/system-analysis.md' }] : [],
   } }));
   await page.route(`**/api/v1/runs/${runId}/artifacts/finished`, route => route.fulfill({ contentType:'text/markdown',body:'# Финальный анализ' }));

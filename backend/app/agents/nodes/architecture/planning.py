@@ -5,7 +5,7 @@ from pathlib import PurePosixPath
 from contracts.agents.validate import ContractError, validate_profile_grants
 
 
-OWNERS = ("frontend", "backend", "migrations", "integrations", "documentation", "assembly")
+OWNERS = ("frontend", "backend", "migrations", "integrations", "documentation", "assembly", "verification", "android")
 
 
 def validate_required_artifacts(profile):
@@ -22,9 +22,10 @@ def validate_required_artifacts(profile):
 
 
 def make_plan(context, requirements_id, requirements, profile, design):
-    owners = [owner for owner in OWNERS if owner != "integrations" or design["integrations"]]
+    owners = [owner for owner in OWNERS if owner in profile["ownership"]["agents"]
+              and owner != "android" and (owner != "integrations" or design["integrations"])]
     dependencies = {
-        "frontend": [], "backend": [], "migrations": ["backend"],
+        "frontend": [], "backend": [], "migrations": ["backend"], "verification": ["backend", "frontend"],
         "integrations": ["backend"],
         "documentation": [o for o in owners if o not in {"documentation", "assembly"}],
         "assembly": [o for o in owners if o != "assembly"],
@@ -50,7 +51,7 @@ def make_tree(profile, design):
     has_integrations = bool(design["integrations"])
     files = {
         item["path"]: item["owner"] for item in profile["required_artifacts"]
-        if item["condition"] == "always" or has_integrations
+        if item["condition"] == "always" or item["condition"] == "has_integrations" and has_integrations
     }
     directories = set()
 
@@ -61,9 +62,10 @@ def make_tree(profile, design):
         add_parents(path)
     if has_integrations:
         for condition in profile["conditional_directories"]:
-            directories.update(condition["directories"])
+            if condition["condition"] == "has_integrations":
+                directories.update(condition["directories"])
     # Design directories include contracts; coding tasks keep their own grants.
-    grants = [directory for owner in ("architecture", *OWNERS) if owner != "integrations" or has_integrations
+    grants = [directory for owner in ("architecture", *OWNERS) if owner in profile["ownership"]["agents"] and owner != "android" and (owner != "integrations" or has_integrations)
               for directory in profile["ownership"]["agents"][owner].get("directories", [])]
     for component in design["components"]:
         for path in component["output_directories"]:

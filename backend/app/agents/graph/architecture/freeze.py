@@ -105,7 +105,7 @@ def validate_proposal(proposal, inputs):
     require(not any(str(parent) in file_paths for path in paths for parent in PurePosixPath(path).parents),
             "ARCHITECTURE_INVALID_PROJECT_TREE")
     required = {item["path"]: item["owner"] for item in inputs["profile"]["required_artifacts"]
-                if item["condition"] == "always" or bool(core["integrations"])}
+                if item["condition"] == "always" or item["condition"] == "has_integrations" and bool(core["integrations"])}
     require(all(files.get(path) == owner for path, owner in required.items()), "ARCHITECTURE_INVALID_PROJECT_TREE")
 
 

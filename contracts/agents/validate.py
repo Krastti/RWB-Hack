@@ -262,11 +262,14 @@ def load_profile_rules(profile, repository_root=None):
     No generic Markdown redirect following. Only this allowlisted local target
     is recognized, and neither pointer nor target may redirect through symlinks.
     """
-    require(profile.get("profile_id") == "web-fastapi-angular" and
-            profile.get("rules_document") == "README.md", "Unsupported profile rules reference")
+    targets = {"web-fastapi-angular": "docs/agents.md",
+               "russtech-fullstack": "docs/russtech-profile.md"}
+    profile_id = profile.get("profile_id")
+    require(profile_id in targets and profile.get("rules_document") == "README.md",
+            "Unsupported profile rules reference")
     root = (Path(repository_root) if repository_root is not None else ROOT.parent.parent).resolve()
-    pointer = root / "templates/profiles/web-fastapi-angular/README.md"
-    target = root / "docs/agents.md"
+    pointer = root / f"templates/profiles/{profile_id}/README.md"
+    target = root / targets[profile_id]
     try:
         require(pointer.resolve(strict=True) == pointer and target.resolve(strict=True) == target,
                 "Profile rules must use trusted local files")
@@ -278,7 +281,7 @@ def load_profile_rules(profile, repository_root=None):
         raise ContractError("Profile rules document is unavailable") from None
     import re
     markers = re.findall(r"<!-- rwb-profile-rules: (.*?) -->", pointer_text)
-    require(markers == ["docs/agents.md#профиль-c-05"], "Unresolved profile rules pointer")
+    require(markers == [targets[profile_id] + "#профиль-c-05"], "Unresolved profile rules pointer")
     for heading in ("## Профиль C-05", "### Ownership и generation plan",
                     "### Правила генерируемого приложения", "### Limits и остановки"):
         require(heading in rules.splitlines(), "Incomplete profile rules document")
