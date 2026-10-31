@@ -157,3 +157,20 @@ Web-админка не заменяет мобильный помощник.
 Правила веток, review, восстановления `main` и выпуска — в
 [CONTRIBUTING.md](CONTRIBUTING.md). Изменение контракта согласуется с потребителями;
 локальные тесты и закрытая Issue не заменяют независимое review.
+
+### Docker Compose
+
+Скопируйте `.env.example` в `.env`, заполните LLM-параметры,
+`POSTGRES_PASSWORD` и `JWT_SECRET_KEY` (минимум 32 байта).
+Запуск API, worker, PostgreSQL, Redis и миграций:
+
+```sh
+docker compose up --build -d
+docker compose logs -f api worker
+```
+
+API: http://localhost:8000. Данные PostgreSQL сохраняются в named volume.
+Для архитектурного этапа требуется server-approved `PIPELINE_POLICY_FILE`: путь
+внутри образа или файла, подключённого через volume. Пользователь для входа
+создаётся по инструкции backend. Настройки `.env` передаются API и worker;
+адреса PostgreSQL и Redis внутри Compose устанавливаются автоматически.

@@ -1,0 +1,54 @@
+name: rwb-hack
+x-runtime: &runtime
+  build: .
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+psycopg://rwb:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/rwb
+    CELERY_BROKER_URL: redis://redis:6379/0
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+    redis:
+      condition: service_healthy
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: rwb
+      POSTGRES_USER: rwb
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U rwb -d rwb']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  migrate:
+    image: flyway/flyway:11
+    command: migrate
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/rwb
+      FLYWAY_USER: rwb
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backend/migrations:/flyway/sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+  api:
+    <<: *runtime
+    ports:
+      - '127.0.0.1:${API_PORT:-8000}:8000'
+  worker:
+    <<: *runtime
+    command: celery -A app.workers.pipeline:app worker -B --loglevel=INFO
+volumes:
+  postgres-data:
