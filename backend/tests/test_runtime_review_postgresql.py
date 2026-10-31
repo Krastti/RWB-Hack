@@ -29,7 +29,7 @@ def db():
         conn.execute(text(f'CREATE SCHEMA "{schema}"'))
     engine = create_engine(url, connect_args={"options": f"-csearch_path={schema},public"})
     with engine.begin() as conn:
-        for path in sorted((Path(__file__).resolve().parents[1] / "migrations").glob("V*__*.sql")):
+        for path in sorted((Path(__file__).resolve().parents[1] / "migrations").glob("V*__*.sql"), key=lambda p: int(p.name.split("__")[0][1:])):
             conn.exec_driver_sql(path.read_text())
     yield sessionmaker(engine)
     engine.dispose()
