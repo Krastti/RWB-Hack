@@ -13,22 +13,29 @@ describe('analysis refresh', () => {
     fixture.componentRef.setInput('runId', 'run-a'); fixture.componentRef.setInput('refreshKey', 'running');
     return fixture;
   }
+  it('shows pending analysis when no stage result is accepted', () => {
+    const fixture = setup({ acceptedArtifacts: () => of({ items: [] }) });
+    fixture.detectChanges();
+    expect(fixture.componentInstance.error()).toBeNull();
+    expect(fixture.componentInstance.loading()).toBe(false);
+    expect(fixture.nativeElement.textContent).toContain('Анализ ещё не подготовлен');
+  });
   it('reloads results when the same run completes', () => {
-    const api = { artifacts: vi.fn().mockReturnValue(of(empty)), artifact: vi.fn().mockReturnValue(of('# Finished analysis')) };
+    const api = { acceptedArtifacts: vi.fn().mockReturnValue(of(empty)), artifact: vi.fn().mockReturnValue(of('# Finished analysis')) };
     const fixture = setup(api); fixture.detectChanges();
     expect(fixture.componentInstance.markdown()).toBe('');
-    api.artifacts.mockReturnValue(of({ ...empty, items: [{ artifact_id: 'md', path: 'docs/system-analysis.md' }] }));
+    api.acceptedArtifacts.mockReturnValue(of({ ...empty, items: [{ artifact_id: 'md', path: 'docs/system-analysis.md' }] }));
     fixture.componentRef.setInput('refreshKey', 'completed'); fixture.detectChanges();
-    expect(api.artifacts).toHaveBeenCalledTimes(2);
-    expect(api.artifacts).toHaveBeenLastCalledWith('run-a');
+    expect(api.acceptedArtifacts).toHaveBeenCalledTimes(2);
+    expect(api.acceptedArtifacts).toHaveBeenLastCalledWith('run-a');
     expect(fixture.componentInstance.markdown()).toContain('Finished analysis');
   });
   it('cancels an in-flight request and loads the new run immediately', () => {
     const first = new Subject<DTO['ManifestPage']>(); const second = new Subject<DTO['ManifestPage']>();
-    const api = { artifacts: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second), artifact: vi.fn().mockReturnValue(of('# New run')) };
+    const api = { acceptedArtifacts: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second), artifact: vi.fn().mockReturnValue(of('# New run')) };
     const fixture = setup(api); fixture.detectChanges(); expect(first.observed).toBe(true);
     fixture.componentRef.setInput('runId', 'run-b'); fixture.detectChanges();
-    expect(first.observed).toBe(false); expect(api.artifacts).toHaveBeenLastCalledWith('run-b');
+    expect(first.observed).toBe(false); expect(api.acceptedArtifacts).toHaveBeenLastCalledWith('run-b');
     second.next({ ...empty, items: [{ artifact_id: 'md', path: 'docs/system-analysis.md' }] } as DTO['ManifestPage']); second.complete();
     first.next(empty); first.complete();
     expect(fixture.componentInstance.markdown()).toContain('New run'); expect(fixture.componentInstance.loading()).toBe(false);

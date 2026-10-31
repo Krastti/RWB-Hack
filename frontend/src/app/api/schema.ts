@@ -159,6 +159,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run_id}/accepted-artifacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest accepted checkpoint-confirmed stage outputs before assembly */
+        get: operations["listAcceptedArtifacts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run_id}/artifacts": {
         parameters: {
             query?: never;
@@ -309,7 +326,7 @@ export interface components {
              * @default web-fastapi-angular
              * @enum {string}
              */
-            profile_id: "web-fastapi-angular";
+            profile_id: "web-fastapi-angular" | "russtech-fullstack";
         };
         /** @enum {string} */
         RunStatus: "queued" | "running" | "waiting_for_input" | "completed" | "cancelling" | "cancelled" | "failed" | "budget_exceeded";
@@ -357,7 +374,7 @@ export interface components {
             /** Format: uuid */
             revision_id: string;
             /** @enum {string} */
-            profile_id: "web-fastapi-angular" | "web-fastapi-react";
+            profile_id: "web-fastapi-angular" | "russtech-fullstack" | "web-fastapi-react";
             status: components["schemas"]["RunStatus"];
             current_stage?: string;
             limits: components["schemas"]["Limits"];
@@ -386,6 +403,7 @@ export interface components {
             questions_revision: number;
             answers: components["schemas"]["Answer"][];
         };
+        /** @description Only MAX_CALLS/MAX_OUTPUT_TOKENS exhaustion supports authorized public retry with a sufficient increase of the exhausted limit. MAX_INPUT_TOKENS, RUN_TIMEOUT and unknown causes return 409 RETRY_NOT_SUPPORTED without effects. Cumulative usage and frozen inputs/profile are preserved. If a failed Run has only accepted latest stage results, manual retry returns 409 RECOVERY_REQUIRED; internal checkpoint/assembly recovery uses those results without another agent attempt. */
         Retry: {
             limits?: components["schemas"]["Limits"];
         };
@@ -424,6 +442,9 @@ export interface components {
             checksum: string;
             size_bytes: number;
             related_fr_ids: string[];
+        };
+        AcceptedArtifacts: {
+            items: components["schemas"]["Artifact"][];
         };
         ManifestPage: {
             /** Format: uuid */
@@ -833,6 +854,32 @@ export interface operations {
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
             429: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    listAcceptedArtifacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty until stage acceptance; no project readiness claim */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptedArtifacts"];
+                };
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
             500: components["responses"]["Error"];
         };
     };

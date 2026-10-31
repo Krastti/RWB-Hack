@@ -5,7 +5,7 @@ from hashlib import sha256
 from pathlib import Path
 from ...model import bind, blockers, canonical, checksum, require, validate_model
 
-COMPILER_VERSION='python-1.0.0'
+COMPILER_VERSION='python-1.1.0'
 POLICY='backend/app/services/domain_policy.py'
 SERVICE='backend/app/services/domain_transitions.py'
 MAP='backend/app/services/domain_policy.map.json'
@@ -36,13 +36,29 @@ def decide(operation_id, record, actor, parameters):
                           {'id':actor.id,'role':actor.role}, {'id':action_id,'parameters':parameters})
 '''
 SERVICE_API='''
-from sqlalchemy import select
+from copy import deepcopy
+from uuid import UUID
+from sqlalchemy import Integer, String, Uuid, inspect, select
+from sqlalchemy.orm import undefer
 from .domain_policy import MODEL, TrustedActor, decide
 
 class DomainFailure(Exception):
     def __init__(self, reason, decision=None):
         self.reason, self.decision = reason, decision
         super().__init__(reason)
+
+
+def _record_id_type(spec, entity):
+    mapper = inspect(entity)
+    column = mapper.columns[spec['id_field']]
+    if len(mapper.primary_key) != 1 or column is not mapper.primary_key[0]:
+        raise TypeError('SINGLE_PRIMARY_KEY_REQUIRED')
+    expected, sql_type = {
+        'integer': (int, Integer), 'string': (str, String), 'uuid': (UUID, Uuid),
+    }[spec['id_type']]
+    if not isinstance(column.type, sql_type) or column.type.python_type is not expected:
+        raise TypeError('PRIMARY_KEY_TYPE_MISMATCH')
+    return expected
 
 
 async def transition(session, entity_models, operation_id, record_id, actor, parameters):
@@ -55,8 +71,11 @@ async def transition(session, entity_models, operation_id, record_id, actor, par
         raise TypeError('AUTH_CONTEXT_REQUIRED')
     spec = ROUTES[operation_id]
     entity = entity_models[spec['entity']]
+    if type(record_id) is not _record_id_type(spec, entity):
+        raise TypeError('RECORD_ID_TYPE_MISMATCH')
     async with session.begin():
-        statement = select(entity).where(getattr(entity,spec['id_field'])==record_id).with_for_update()
+        statement = (select(entity).options(undefer('*'))
+                     .where(getattr(entity,spec['id_field'])==record_id).with_for_update())
         row = (await session.execute(statement)).scalar_one_or_none()
         if row is None:
             raise DomainFailure('NOT_FOUND')
@@ -74,7 +93,11 @@ async def transition(session, entity_models, operation_id, record_id, actor, par
             field=effects[rid]['field']
             setattr(row,MODEL['bindings']['fields'][logical+'.'+field],decision['state']['values'][field])
         await session.flush()
-    return row
+        # Materialize before commit expires ORM state; never return a live row.
+        columns = list(inspect(row).mapper.column_attrs.keys())
+        await session.refresh(row, attribute_names=columns)
+        snapshot = deepcopy({name: getattr(row, name) for name in columns})
+    return snapshot
 
 
 def install_routes(router, *, session_dependency, actor_dependency, entity_models,
@@ -82,20 +105,24 @@ def install_routes(router, *, session_dependency, actor_dependency, entity_model
     """A-13 calls this with its actual auth/schema/response adapters.
 
     failure_response maps DomainFailure to accepted OpenAPI errors. There is no
-    guessed error DTO. The actor never comes from the request body.
+    guessed error DTO. success_response receives a detached column-value dict.
+    The actor never comes from the request body.
     """
     from fastapi import Body, Depends
-    def handler_for(operation_id):
-        async def handler(record_id: str, parameters: dict = Body(...),
+    def handler_for(operation_id, record_id_type):
+        async def handler(record_id: record_id_type, parameters: dict = Body(...),
                           session=Depends(session_dependency), actor=Depends(actor_dependency)):
             try:
-                row=await transition(session,entity_models,operation_id,record_id,actor,parameters)
+                snapshot=await transition(session,entity_models,operation_id,record_id,actor,parameters)
             except DomainFailure as error:
                 return failure_response(operation_id,error)
-            return success_response(operation_id,row)
+            return success_response(operation_id,snapshot)
         return handler
+    # Validate the entire registry before installing any route or mutating data.
+    key_types = {operation_id: _record_id_type(spec, entity_models[spec['entity']])
+                 for operation_id, spec in ROUTES.items()}
     for operation_id,spec in ROUTES.items():
-        router.add_api_route(spec['path'],handler_for(operation_id),methods=[spec['method']],
+        router.add_api_route(spec['path'],handler_for(operation_id,key_types[operation_id]),methods=[spec['method']],
                              operation_id=operation_id)
 '''
 
@@ -103,7 +130,7 @@ def install_routes(router, *, session_dependency, actor_dependency, entity_model
 def emit(model, *, catalog, routes, profile):
     """routes is an accepted A-13 integration descriptor, keyed by operationId.
 
-    Each {method, path, id_field}; catalog additionally supplies routes (identical)
+    Each {method, path, id_field, id_type}; catalog additionally supplies routes (identical)
     and entity field names. Actual A-09/A-13 adapters remain their owners' scope.
     """
     model=json.loads(canonical(model))
@@ -118,7 +145,7 @@ def emit(model, *, catalog, routes, profile):
         b=model['bindings']['actions'][a['id']]
         route=routes[b['operation_id']]
         physical=model['bindings']['entities'][a['entity']]
-        require(set(route)=={'method','path','id_field'} and route['method'] in {'POST','PUT','PATCH','DELETE'} and route['path'].startswith('/') and route['path'].count('{record_id}')==1 and route['path'].count('{')==1,'BEHAVIOR_ROUTE_UNSUPPORTED')
+        require(set(route)=={'method','path','id_field','id_type'} and route['id_type'] in ('integer','string','uuid') and route['method'] in {'POST','PUT','PATCH','DELETE'} and route['path'].startswith('/') and route['path'].count('{record_id}')==1 and route['path'].count('{')==1,'BEHAVIOR_ROUTE_UNSUPPORTED')
         require(route['id_field'] in catalog['entities'][physical],'BEHAVIOR_PRIMARY_KEY_UNBOUND')
         descriptors[b['operation_id']]=dict(route,entity=physical,logical_entity=a['entity'],action_id=a['id'])
     names=list(model['bindings']['entities'].values())+list(model['bindings']['fields'].values())+[r['id_field'] for r in routes.values()]
@@ -129,7 +156,7 @@ def emit(model, *, catalog, routes, profile):
            SERVICE:header+'ROUTES = '+repr(json.loads(canonical(descriptors)))+'\n'+SERVICE_API}
     mapping=dict(schema_version='1.0',compiler_version=COMPILER_VERSION,model_checksum=checksum(model),contract_version=model['contract_version'],owner_agent='backend',input_checksum=checksum({'model':model,'catalog':catalog,'routes':routes,'profile':profile.metadata}),
                  files={path:sha256(content.encode()).hexdigest() for path,content in sorted(files.items())},rules=[{'rule_id':r['id'],'fr_ids':r['fr_ids'],'path':POLICY,'symbol':'decide' if r['kind']!='invariant' else 'invariants','action_id':r['action']} for r in sorted(model['rules'],key=lambda x:x['id'])],
-                 invariants_enforced=False,limitations=['Invariants are independent simulation assertions, not authorization guards.','A-13 must install routes with accepted auth/response/database dependencies.'])
+                 invariants_enforced=False,limitations=['Invariants are independent simulation assertions, not authorization guards.','A-13 must install routes with accepted auth/response/database dependencies.','Single integer/string/UUID primary keys; success adapter consumes a column snapshot.'])
     files[MAP]=canonical(mapping)+'\n'
     require(all(profile.allows('backend',path) for path in files),'BEHAVIOR_CODEGEN_GRANT_MISSING')
     require(all(len(content.encode())<=profile.data['limits']['artifacts']['max_file_bytes'] for content in files.values()),'BEHAVIOR_CODEGEN_SIZE_LIMIT')

@@ -13,7 +13,7 @@ from .emitter import emit,POLICY,SERVICE
 
 def inputs():
     _,model=bound_example()
-    routes={'cancelTicket':{'method':'POST','path':'/tickets/{record_id}/cancel','id_field':'id'}}
+    routes={'cancelTicket':{'method':'POST','path':'/tickets/{record_id}/cancel','id_field':'id','id_type':'integer'}}
     catalog={'contract_version':'demo-v1','entities':{'Ticket':['id','owner_id','status','priority']},'operations':{'cancelTicket':'Ticket'},'screens':{'ticket_detail':{'cancel_button':'cancelTicket'}},'routes':routes}
     return model,catalog,routes
 

@@ -31,7 +31,7 @@ class ProjectSummaryTests(unittest.TestCase):
         })
         migrations = Path(__file__).resolve().parents[1] / "migrations"
         with self.engine.begin() as connection:
-            for path in sorted(migrations.glob("V*__*.sql")):
+            for path in sorted(migrations.glob("V*__*.sql"), key=lambda p: int(p.name.split("__")[0][1:])):
                 connection.exec_driver_sql(path.read_text())
         self.sessions = sessionmaker(self.engine)
         self.owner, self.other = uuid4(), uuid4()

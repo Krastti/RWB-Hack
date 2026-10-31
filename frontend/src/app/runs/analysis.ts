@@ -1,8 +1,8 @@
 import { Component, effect, inject, input, signal, untracked } from '@angular/core';
 import { JsonPipe } from '@angular/common';
-import { EMPTY, Subscription, expand, finalize, forkJoin, map, of, reduce, switchMap } from 'rxjs';
+import { Subscription, finalize, forkJoin, map, of, switchMap } from 'rxjs';
 import { marked } from 'marked';
-import { ApiClient, DTO } from '../api/client';
+import { ApiClient } from '../api/client';
 import { ApiError, normalizeError } from '../api/errors';
 import { ErrorBanner } from '../shared/error-banner';
 
@@ -45,9 +45,8 @@ export class Analysis {
       this.markdown.set(''); this.structured.set(null);
     }
     this.loading.set(true); this.error.set(null);
-    this.request = this.api.artifacts(id).pipe(
-      expand(page => page.next_cursor ? this.api.artifacts(id, page.next_cursor) : EMPTY),
-      reduce((items: DTO['Artifact'][], page) => [...items,...page.items], []),
+    this.request = this.api.acceptedArtifacts(id).pipe(
+      map(page => page.items),
       switchMap(items => {
         const markdown = items.find(item => item.path === 'docs/system-analysis.md');
         const requirements = items.find(item => item.path === 'requirements.json');
