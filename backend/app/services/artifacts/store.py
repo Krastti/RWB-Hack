@@ -12,7 +12,7 @@ from contracts.agents.validate import Contracts
 from ...models import Run, Project, StageAttempt
 from ...agents.context import ResolvedArtifact
 from ...agents.profiles import FrozenProfile
-from .models import ArtifactObject, ExecutionReceipt
+from .models import ArtifactObject, ExecutionReceipt, ModelCall
 
 
 class ArtifactError(ValueError):
@@ -29,16 +29,19 @@ def metadata(artifact):
 
 
 class PostgreSQLArtifactStore:
-    def __init__(self, sessions, *, owner_id, execution, profile: FrozenProfile, conditions=None):
+    def __init__(self, sessions, *, owner_id, execution, profile: FrozenProfile, conditions=None, owner_agent=None):
         self.sessions, self.owner_id = sessions, UUID(str(owner_id))
         self.execution, self.profile = execution, profile
         self.conditions = dict(conditions or {})
+        self.owner_agent = owner_agent or execution.lease.command.stage_id
+        profile.grant(self.owner_agent)
         self.contracts = Contracts()
 
     def _scope(self, session, run_id):
         run = session.scalar(select(Run).join(Project).where(
             Run.id == UUID(str(run_id)), Project.owner_id == self.owner_id))
         require(run is not None, 'ARTIFACT_NOT_FOUND')
+        require(run.profile_id == self.profile.profile_id, 'ARTIFACT_PROFILE_MISMATCH')
         return run
 
     def _writing(self, session, run_id, attempt_id):
@@ -64,6 +67,7 @@ class PostgreSQLArtifactStore:
     def _put(self, session, run_id, artifact):
         self._writing(session, run_id, artifact['attempt_id'])
         raw = self._validate(artifact)
+        require(artifact['author_agent'] == self.owner_agent, 'ARTIFACT_STAGE_OWNER_MISMATCH')
         identity = UUID(artifact['artifact_id'])
         old = session.get(ArtifactObject, identity)
         if old is not None:
@@ -126,6 +130,9 @@ class PostgreSQLArtifactStore:
         require(result['run_id'] == str(run_id), 'ARTIFACT_SCOPE_MISMATCH')
         with self.execution.transaction() as session:
             self._writing(session, run_id, attempt_id)
+            attempt = session.get(StageAttempt, UUID(str(attempt_id)))
+            require(result['stage_id'] == attempt.stage_id and result['attempt'] == attempt.attempt_no
+                    and result['contract_version'] == attempt.contract_version, 'ARTIFACT_RESULT_IDENTITY_MISMATCH')
             for artifact in result['output_artifacts']:
                 require(artifact['attempt_id'] == str(attempt_id), 'ARTIFACT_SCOPE_MISMATCH')
                 self._put(session, run_id, artifact)
@@ -154,6 +161,12 @@ class PostgreSQLBatchStore:
         with self.artifacts.execution.transaction() as session:
             require(self.artifacts._receipt(session, run_id, attempt_id, 'inventory') is not None,
                     'ARTIFACT_INVENTORY_REQUIRED')
+            require(set(receipt) == {'schema_version', 'fingerprint', 'call_id', 'artifacts'}
+                    and receipt['schema_version'] == '1.0', 'ARTIFACT_INVALID_RECEIPT')
+            call = session.get(ModelCall, UUID(receipt['call_id']))
+            require(call is not None and call.run_id == UUID(str(run_id)) and
+                    call.attempt_id == UUID(str(attempt_id)) and call.payload['status'] == 'succeeded',
+                    'ARTIFACT_CALL_PROVENANCE_REQUIRED')
             for artifact in receipt['artifacts']:
                 require(artifact['attempt_id'] == str(attempt_id), 'ARTIFACT_SCOPE_MISMATCH')
                 self.artifacts._put(session, run_id, artifact)

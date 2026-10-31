@@ -29,6 +29,7 @@ class PostgreSQLBudgetLedger:
                 max_output_tokens, timeout_seconds, agent_limits):
         # UTF-8 bytes bound the tokenizer input conservatively; includes A-01's
         # schema instruction and provider envelope, not only the subject prompt.
+        # json_schema is the larger envelope even for json_object callers.
         envelope = request_payload(LLMConfig(base_url='https://unused.invalid/v1', model=model,
             api_key='unused', max_output_tokens=max_output_tokens, timeout_seconds=timeout_seconds),
             system=system, prompt=prompt, schema=schema)

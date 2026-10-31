@@ -26,6 +26,7 @@ from .services.run_control.api import configure_run_control
 from .services.run_control.models import Limits as ControlLimits
 from .services.lifecycle.models import LifecycleError
 from .services.runtime import compose_runtime
+from .api.artifacts import configure_artifacts
 from .api.answers import configure_answers
 from .api.answers.service import AnswersService
 
@@ -68,6 +69,7 @@ def create_app(
     ))
     configure_run_control(app, app.state.run_runtime.control)
     configure_answers(app, AnswersService(app.state.run_runtime))
+    configure_artifacts(app, sessions)
 
     @app.exception_handler(LifecycleError)
     async def lifecycle_error_handler(request: Request, exc: LifecycleError):

@@ -28,3 +28,10 @@ class ModelCall(Base):
     run_id: Mapped[UUID] = mapped_column(ForeignKey('runs.id'))
     attempt_id: Mapped[UUID] = mapped_column(ForeignKey('stage_attempts.id'))
     payload: Mapped[dict] = mapped_column(JSONB)
+
+
+class ArtifactSnapshot(Base):
+    __tablename__ = 'artifact_snapshots'
+    snapshot_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    run_id: Mapped[UUID] = mapped_column(ForeignKey('runs.id'))
+    manifest: Mapped[dict] = mapped_column(JSONB)
