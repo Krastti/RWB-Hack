@@ -146,6 +146,8 @@ class ArchitectureStage:
                     values = [call[field] for call in calls]
                     require(reply.usage[field] == (None if None in values else sum(values)),
                             "ARCHITECTURE_INVALID_NODE_USAGE")
+                require(all(call["call_id"] == reservation["call_ids"][name] for call in calls),
+                        "ARCHITECTURE_INVALID_NODE_USAGE")
                 existing = {call["call_id"] for call in state["usage"]["model_calls"]}
                 require(not existing.intersection(call["call_id"] for call in reply.usage["model_calls"]),
                         "ARCHITECTURE_CALL_ID_REUSED")

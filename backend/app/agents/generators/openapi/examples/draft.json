@@ -1,0 +1,86 @@
+{
+  "schema_version": "openapi-draft/1.0",
+  "title": "Repair tickets API",
+  "description": "Контракт подачи и просмотра заявок, изменения статуса и запрета удаления.",
+  "schemas": {
+    "TicketCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description"],
+      "properties": {
+        "description": {"type": "string", "minLength": 1, "pattern": "\\S", "x-fr-ids": ["FR-001"]}
+      }
+    },
+    "Ticket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owner_id", "description", "status"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid", "readOnly": true, "x-assumption-ids": ["ASM-002"]},
+        "owner_id": {"type": "string", "format": "uuid", "readOnly": true, "x-fr-ids": ["FR-002"]},
+        "description": {"type": "string", "minLength": 1, "pattern": "\\S"},
+        "status": {"type": "string", "enum": ["new", "in_progress", "done"], "x-assumption-ids": ["ASM-002"]}
+      }
+    },
+    "TicketList": {"type": "array", "items": {"$ref": "#/components/schemas/Ticket"}},
+    "TicketStatusUpdate": {
+      "type": "object", "additionalProperties": false, "required": ["status"],
+      "properties": {"status": {"type": "string", "enum": ["new", "in_progress", "done"], "x-assumption-ids": ["ASM-002"]}}
+    }
+  },
+  "operations": [
+    {
+      "operation_id": "createTicket", "path": "/tickets", "method": "post",
+      "summary": "Подать заявку", "description": "Создать заявку с описанием; владелец определяется сервером из JWT.",
+      "related_fr_ids": ["FR-001"], "role_ids": ["ROLE-001"], "authentication": "bearer",
+      "authorization_rules": ["Создавать заявки может сотрудник; owner_id берётся из доверенного пользователя."],
+      "assumption_ids": ["ASM-002"], "integration_indices": [], "parameters": [],
+      "request_body": {"required": true, "description": "Описание неисправности", "schema": {"$ref": "#/components/schemas/TicketCreate"}},
+      "responses": [{"status": 201, "description": "Заявка сохранена", "schema": {"$ref": "#/components/schemas/Ticket"}}],
+      "errors": []
+    },
+    {
+      "operation_id": "listOwnTickets", "path": "/tickets", "method": "get",
+      "summary": "Просмотреть свои заявки", "description": "Сотрудник получает только собственные заявки и их статусы.",
+      "related_fr_ids": ["FR-002"], "role_ids": ["ROLE-001"], "authentication": "bearer",
+      "authorization_rules": ["Выборка на сервере ограничена owner_id текущего сотрудника.", "Сотрудник просматривает только собственные заявки."],
+      "assumption_ids": ["ASM-002"], "integration_indices": [], "parameters": [], "request_body": null,
+      "responses": [{"status": 200, "description": "Список собственных заявок", "schema": {"$ref": "#/components/schemas/TicketList"}}],
+      "errors": []
+    },
+    {
+      "operation_id": "listTickets", "path": "/dispatch/tickets", "method": "get",
+      "summary": "Просмотреть заявки диспетчером", "description": "Диспетчер видит заявки для обработки.",
+      "related_fr_ids": ["FR-003"], "role_ids": ["ROLE-002"], "authentication": "bearer",
+      "authorization_rules": ["Просмотр всех заявок доступен только диспетчеру."],
+      "assumption_ids": ["ASM-002"], "integration_indices": [], "parameters": [], "request_body": null,
+      "responses": [{"status": 200, "description": "Список заявок", "schema": {"$ref": "#/components/schemas/TicketList"}}],
+      "errors": []
+    },
+    {
+      "operation_id": "changeTicketStatus", "path": "/tickets/{id}/status", "method": "patch",
+      "summary": "Изменить статус", "description": "Диспетчер изменяет статус существующей заявки.",
+      "related_fr_ids": ["FR-003"], "role_ids": ["ROLE-002"], "authentication": "bearer",
+      "authorization_rules": ["Изменение статуса доступно только диспетчеру; заявка должна существовать."],
+      "assumption_ids": ["ASM-002"], "integration_indices": [],
+      "parameters": [{"name": "id", "in": "path", "required": true, "description": "Идентификатор заявки", "schema": {"type": "string", "format": "uuid"}}],
+      "request_body": {"required": true, "description": "Новый статус", "schema": {"$ref": "#/components/schemas/TicketStatusUpdate"}},
+      "responses": [{"status": 200, "description": "Новый статус сохранён", "schema": {"$ref": "#/components/schemas/Ticket"}}],
+      "errors": [{"status": 404, "code": "TICKET_NOT_FOUND", "description": "Заявка не найдена"}]
+    }
+  ],
+  "assumptions": [
+    {
+      "id": "ASM-002",
+      "text": "Первый контракт использует UUID заявок/пользователей и статусы new, in_progress, done. Выдача JWT согласуется отдельно; клиент не выбирает owner_id.",
+      "reason": "Требования задают роли, владение и изменение статуса, но не формат ID, перечень статусов или способ входа.",
+      "related_fr_ids": ["FR-001", "FR-002", "FR-003"]
+    }
+  ],
+  "coverage": [
+    {"fr_id": "FR-001", "kind": "operation", "operation_ids": ["createTicket"], "reason": "Подача заявки с описанием."},
+    {"fr_id": "FR-002", "kind": "operation", "operation_ids": ["listOwnTickets"], "reason": "Чтение собственных заявок с серверным фильтром владельца."},
+    {"fr_id": "FR-003", "kind": "operation", "operation_ids": ["listTickets", "changeTicketStatus"], "reason": "Просмотр и изменение статуса диспетчером."},
+    {"fr_id": "FR-004", "kind": "constraint", "operation_ids": [], "reason": "Удаление запрещено всем ролям; DELETE endpoint не создаётся. Backend должен отклонять неподдержанное удаление."}
+  ]
+}

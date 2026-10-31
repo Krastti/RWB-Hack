@@ -52,6 +52,13 @@ def validate_names(document, model, policy):
         "numeric": ("number", None), "date": ("string", "date"), "timestamptz": ("string", "date-time"),
         "jsonb": ("object", None),
     }
+    create_schemas = set()
+    for path in document.get("paths", {}).values():
+        operation = path.get("post", {})
+        for media in operation.get("requestBody", {}).get("content", {}).values():
+            ref = media.get("schema", {}).get("$ref", "")
+            if ref.startswith("#/components/schemas/"):
+                create_schemas.add(ref.removeprefix("#/components/schemas/"))
     for binding in policy["bindings"]:
         schema = schemas[binding["schema"]]
         require(schema.get("type") == "object" and not any(k in schema for k in ("$ref", "allOf", "anyOf", "oneOf")),
@@ -76,8 +83,10 @@ def validate_names(document, model, policy):
                     and (expected_format is None or api.get("format") == expected_format)
                     and ("null" not in api_types or field["nullable"]), "ARCHITECTURE_FIELD_TYPE_MISMATCH",
                     "Архитектор: несовместимые типы API/data для " + binding["schema"] + "." + api_name + ".")
-            if field["type"] == "varchar" and "maxLength" in api:
-                require(api["maxLength"] <= field["max_length"], "ARCHITECTURE_FIELD_CONSTRAINT_MISMATCH")
+            if binding["schema"] in create_schemas and not field["nullable"] and field["default"]["kind"] == "none":
+                require(api_name in schema.get("required", []), "ARCHITECTURE_FIELD_REQUIRED_MISMATCH")
+            if field["type"] == "varchar":
+                require("maxLength" in api and api["maxLength"] <= field["max_length"], "ARCHITECTURE_FIELD_CONSTRAINT_MISMATCH")
             for check in entity["check_constraints"]:
                 if check["field"] == data_name and check["operator"] == "in":
                     require("enum" in api and set(api["enum"]) == set(check["value"]),

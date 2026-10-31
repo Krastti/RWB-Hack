@@ -91,6 +91,16 @@ def validate_proposal(proposal, inputs):
             files[path] = owner
             tasks.setdefault(owner, {"owner_agent": owner, "output_paths": [], "output_directories": []})["output_paths"].append(path)
     validate_profile_grants({"profile_id": context["profile_id"], "tasks": list(tasks.values())}, inputs["profile"])
+    already_produced = {"requirements.json", "questions.json", "docs/system-analysis.md"}
+    already_produced.update(OUTPUTS.values())
+    for path, owner in files.items():
+        if (owner == "analysis" and path in already_produced) or (owner == "architecture" and path in OUTPUTS.values()):
+            continue
+        require(any(task["owner_agent"] == owner and
+                    (path in task["output_paths"] or any(
+                        path.startswith(directory.rstrip("/") + "/")
+                        for directory in task["output_directories"]))
+                    for task in plan["tasks"]), "ARCHITECTURE_TREE_PLAN_MISMATCH")
     file_paths = {p.casefold() for p in files}
     require(not any(str(parent) in file_paths for path in paths for parent in PurePosixPath(path).parents),
             "ARCHITECTURE_INVALID_PROJECT_TREE")

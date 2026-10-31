@@ -287,6 +287,8 @@ class RunControlService:
         """
         with self._transaction(owner_id, run_id) as record:
             self._profile(record)
+            if record.saved_state.get("terminal_intent"):
+                raise conflict("Terminal intent forbids new calls")
             attempt = self._latest(record, stage_id)
             private = self._private(record, attempt)
             if (record.run.status != "running" or attempt.status != "running"

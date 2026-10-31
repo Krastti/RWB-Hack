@@ -46,6 +46,8 @@ def fixture_transports():
         "data_model": load(ROOT / "backend/app/agents/generators/data_model/examples/data-model.json"),
         "ui_spec": load(Path(__file__).with_name("examples") / "ui-draft.json"),
     }
+    for name in ("Ticket", "TicketStatusUpdate"):
+        drafts["openapi"]["schemas"][name]["properties"]["status"]["maxLength"] = 32
     def transport(node):
         def reply(request):
             return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {

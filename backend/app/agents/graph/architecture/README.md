@@ -16,22 +16,10 @@ UI получает фактический новый OpenAPI, а не отде�
 prompt 1.1.0/catalog 1.0.0. OpenAPI — 3.1.0. Версия внутренней карты имён —
 `architecture-names/1.0`. Эти версии не заменяют Artifact.version.
 
-На момент реализации модули A-05–A-08 находятся в отдельных открытых PR. A-09
-добавляет свои адаптеры, не копирует их реализации в production и не сливает PR:
-
-| Узел | PR | Проверенный dependency SHA |
-|---|---|---|
-| A-05 | [#138](https://github.com/Krastti/RWB-Hack/pull/138) | `486c340dfb0d047649c08919517b0ddb65516c13` |
-| A-06 | [#141](https://github.com/Krastti/RWB-Hack/pull/141) | `106448886464edf0642ff1ea0177b149bfbac9e4` |
-| A-07 | [#142](https://github.com/Krastti/RWB-Hack/pull/142) | `05791bbe6696c44cde9f50ea68771381f35994cc` |
-| A-08 | [#139](https://github.com/Krastti/RWB-Hack/pull/139) | `2cae76afc0d808b76a276b3b64ce37fcf9e0bb0d` |
-
-Общая проверка выполнена с их реальным кодом в отдельном каталоге. До принятия
-этих зависимостей и повторной проверки интеграции в main PR A-09 остаётся Draft.
-`RuntimeNodes` при отсутствии модуля возвращает
-`ARCHITECTURE_DEPENDENCIES_UNAVAILABLE` до первого LLM-вызова. Fallback с фиктивными
-предметными результатами не используется. Core graph и clarification gate работают
-с существующими зависимостями worker.
+Зависимости A-05–A-08 приняты в main; интеграция проверяется offline-тестами
+`backend/tests/test_architecture_stage.py` с реальными адаптерами и mock transport.
+При отсутствии зависимостей `RuntimeNodes` возвращает
+`ARCHITECTURE_DEPENDENCIES_UNAVAILABLE` до первого LLM-вызова.
 
 ## Публичный интерфейс
 
@@ -170,7 +158,6 @@ fixtures; [UI draft](examples/ui-draft.json) вручную согласован
 HTTP-вызова, не реальная модель: provider tokens остаются null. Waiting-пример
 не читает fixtures незавершённых генераторов и работает на базе main.
 
-Откат — revert additive PR. БД/HTTP/Run lifecycle, кодогенераторы, deploy, CI/CD,
-контейнеры, scanners и новые test suites в рамках #87 не изменяются. При дальнейшем
+Откат — revert PR. БД/HTTP/Run lifecycle, кодогенераторы, deploy и контейнеры не изменяются. При дальнейшем
 встраивании worker должен принять весь результат атомарно; только после этого
 можно выдавать task references потребителям. Ранее сохранённые snapshots сохраняются.
