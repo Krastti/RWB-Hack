@@ -8,9 +8,40 @@ from .fixtures import example_model, bound_example
 from .model import ModelError, canonical, checksum, validate_model
 from .profile import behavior_profile
 from .node import BehaviorNode, artifact
-from ..context import PreparedContext
+from ..context import ContextBuilder, ResolvedArtifact
+from ..context.example import FixtureResolver, OWNER
 from ..llm import LLMConfig
 from ..generation.example import ExampleLedger
+
+
+def prepare_example(requirements, *, profile, config):
+    run_id = str(uuid4())
+    text = '\n'.join(item['text'] for item in requirements['functional_requirements'])
+    business = dict(schema_version='1.0', questions_revision=0, answers=[],
+                    requirements_text=text,
+                    previous_requirements_artifact_id=None, analysis_rules_artifact_id=None)
+    inputs = []
+    for path, kind, owner, payload in [
+        ('requirements.json', 'requirements', 'analysis', requirements),
+        ('inputs/business.json', 'business_requirements', 'orchestrator', business),
+    ]:
+        raw = canonical(payload).encode('utf-8')
+        metadata = dict(artifact_id=str(uuid4()), attempt_id=str(uuid4()), path=path, kind=kind,
+                        media_type='application/json', version=1, schema_version='1.0', author_agent=owner,
+                        checksum=checksum(payload), size_bytes=len(raw), related_fr_ids=[])
+        inputs.append(ResolvedArtifact(OWNER, run_id, 'demo-v1', True, metadata, raw))
+    request = dict(schema_version='1.0', run_id=run_id, stage_id='behavior_model', attempt=1,
+                   input_artifact_ids=[item.metadata['artifact_id'] for item in inputs],
+                   contract_version='demo-v1', profile_id=profile.profile_id,
+                   limits={'max_calls': 1, 'max_output_tokens': 4096, 'timeout_seconds': 10})
+    model_config = {key: value for key, value in vars(config).items() if key != 'api_key'}
+    configuration = canonical(model_config).encode('utf-8')
+    context = ContextBuilder(FixtureResolver(inputs), max_context_bytes=262144).prepare(
+        request, owner_id=OWNER, owner_agent='analysis', profile=profile,
+        references={item.metadata['artifact_id']: item.metadata for item in inputs},
+        execution_inputs={'prompt': b'Extract the finite behavior model.', 'template': b'',
+                          'model_configuration': configuration, 'compiler_configuration': b'{}'})
+    return request, context, configuration
 
 
 async def main():
@@ -34,18 +65,16 @@ async def main():
         try: validate_model(value,req)
         except ModelError: bad.append(mutation)
         else: raise AssertionError(mutation)
-    # Hand-built PreparedContext fixture: resolver authorization is tested in A-30.
-    # This tests the node/adapter boundary, not owner-scoped storage or live extraction.
     config=LLMConfig(base_url='https://fixture.invalid/v1',model='fixture',api_key='fixture',max_output_tokens=4096,timeout_seconds=10)
     results=[]
     for requirements,response_model in [(req,model),(partial_req,partial)]:
-        request=dict(schema_version='1.0',run_id=str(uuid4()),stage_id='behavior_model',attempt=1,input_artifact_ids=[str(uuid4())],contract_version='demo-v1',profile_id=profile.profile_id,limits={'max_calls':1,'max_output_tokens':4096,'timeout_seconds':10,'max_critical_questions':3})
-        payload=dict(agent_input=request,profile=profile.data,artifacts=[{'metadata':{'kind':'requirements'},'content':canonical(requirements)}],execution_inputs={'model_configuration':canonical({k:v for k,v in vars(config).items() if k!='api_key'})})
-        context=PreparedContext('Synthetic fixture',canonical(payload),canonical({'profile':profile.metadata}))
+        request, context, configuration = prepare_example(requirements, profile=profile, config=config)
         def handler(_):
             return httpx.Response(200,json={'choices':[{'message':{'content':canonical(response_model)},'finish_reason':'stop'}],'usage':{'prompt_tokens':100,'completion_tokens':40,'total_tokens':140}})
         ledger=ExampleLedger()
-        result=await BehaviorNode(config=config,ledger=ledger,transport=httpx.MockTransport(handler)).run(request,attempt_id=str(uuid4()),context=context,profile=profile,accepted_answers={})
+        result=await BehaviorNode(config=config,ledger=ledger,transport=httpx.MockTransport(handler)).run(
+            request,attempt_id=str(uuid4()),context=context,profile=profile,accepted_answers={},
+            model_configuration=configuration)
         assert len(result['output_artifacts'])==1,result
         results.append(result['status'])
     assert results==['succeeded','failed']

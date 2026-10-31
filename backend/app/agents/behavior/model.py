@@ -53,8 +53,8 @@ def value_type(kind, values=(), minimum=None, maximum=None, nullable=False):
     return dict(kind=kind, values=list(values), minimum=minimum, maximum=maximum, nullable=nullable)
 
 
-def expression_type(expr, fields, parameters, model, *, previous=False, depth=0):
-    require(depth < 24, 'BEHAVIOR_EXPRESSION_DEPTH')
+def expression_type(expr, fields, parameters, model, *, previous=False, depth=0, max_depth=24):
+    require(depth < max_depth, 'BEHAVIOR_EXPRESSION_DEPTH')
     op = expr['op']
     if op == 'literal':
         v = expr['value']
@@ -75,7 +75,8 @@ def expression_type(expr, fields, parameters, model, *, previous=False, depth=0)
         source = parameters if scope == 'param' else fields
         require(name in source, 'BEHAVIOR_UNKNOWN_REFERENCE')
         return source[name]['type']
-    args = [expression_type(x, fields, parameters, model, previous=previous, depth=depth+1) for x in expr['args']]
+    args = [expression_type(x, fields, parameters, model, previous=previous,
+                            depth=depth + 1, max_depth=max_depth) for x in expr['args']]
     require(len(args) == (1 if op in {'not','present','is_null'} else 2) or op in {'and','or'}, 'BEHAVIOR_ARITY')
     if op in {'and','or','not'}:
         require(all(x['kind'] == 'boolean' for x in args), 'BEHAVIOR_TYPE_ERROR')
@@ -103,21 +104,54 @@ def assignable(source, target, identities):
     return source['kind'] != 'integer' or target['minimum'] <= source['minimum'] <= source['maximum'] <= target['maximum']
 
 
-def validate_model(model, requirements=None, answers=None, *, max_bytes=262144):
+def _validate_bindings(bindings, contract_version, entities, actions):
+    require(bindings['contract_version'] == contract_version, 'BEHAVIOR_CONTRACT_MISMATCH')
+    require(set(bindings['entities']) == set(entities) and set(bindings['actions']) == set(actions),
+            'BEHAVIOR_BINDING_MISSING')
+    logical_fields = {
+        f"{entity['id']}.{field['id']}" for entity in entities.values() for field in entity['fields']
+    }
+    require(set(bindings['fields']) == logical_fields, 'BEHAVIOR_BINDING_MISSING')
+    require(len(set(bindings['entities'].values())) == len(entities), 'BEHAVIOR_BINDING_COLLISION')
+    for entity in entities.values():
+        mapped = [bindings['fields'][f"{entity['id']}.{field['id']}"] for field in entity['fields']]
+        require(len(mapped) == len(set(mapped)), 'BEHAVIOR_BINDING_COLLISION')
+    operations = [binding['operation_id'] for binding in bindings['actions'].values()]
+    require(len(operations) == len(set(operations)), 'BEHAVIOR_OPERATION_BINDING_INVALID')
+    for action in actions.values():
+        public = bindings['actions'][action['id']]['public_fields']
+        require(set(public) <= set(index(entities[action['entity']]['fields'])),
+                'BEHAVIOR_PUBLIC_FIELD_UNKNOWN')
+
+
+def validate_model(model, requirements=None, answers=None, *, max_bytes=262144,
+                   max_expression_depth=24, max_rules=128, max_domain_values=64):
+    require(all(type(value) is int and 1 <= value <= maximum for value, maximum in (
+        (max_bytes, 262144), (max_expression_depth, 24), (max_rules, 128), (max_domain_values, 64),
+    )), 'BEHAVIOR_INVALID_LIMITS')
     require(len(canonical(model).encode()) <= max_bytes, 'BEHAVIOR_SIZE_LIMIT')
     require(Draft202012Validator(SCHEMA, format_checker=FormatChecker()).is_valid(model), 'BEHAVIOR_SCHEMA_INVALID')
     entities, actions, rules = index(model['entities']), index(model['actions']), index(model['rules'])
-    require(len(rules) <= 128, 'BEHAVIOR_RULE_LIMIT')
+    require(len(rules) <= max_rules, 'BEHAVIOR_RULE_LIMIT')
     require(len(set(model['roles'])) == len(model['roles']) and len(set(model['identities'])) == len(model['identities']), 'BEHAVIOR_DUPLICATE_DOMAIN')
-    require(len(model['identities']) <= 64 and len(model['roles']) <= 64, 'BEHAVIOR_DOMAIN_LIMIT')
+    require(len(model['identities']) <= max_domain_values and len(model['roles']) <= max_domain_values,
+            'BEHAVIOR_DOMAIN_LIMIT')
     for owner in list(entities.values()) + list(actions.values()):
         for f in index(owner.get('fields', owner.get('parameters', []))).values():
             t = f['type']
-            require(len(t['values']) == len(set(t['values'])) <= 64, 'BEHAVIOR_INVALID_DOMAIN')
+            require(len(t['values']) == len(set(t['values'])), 'BEHAVIOR_INVALID_DOMAIN')
             if t['kind'] == 'integer':
                 require(type(t['minimum']) is int and type(t['maximum']) is int and t['minimum'] <= t['maximum'] and not t['values'], 'BEHAVIOR_INVALID_RANGE')
+                size = t['maximum'] - t['minimum'] + 1
             else:
                 require(t['minimum'] is None and t['maximum'] is None and (bool(t['values']) if t['kind'] == 'enum' else not t['values']), 'BEHAVIOR_INVALID_DOMAIN')
+                if t['kind'] == 'boolean':
+                    size = 2
+                elif t['kind'] == 'identity':
+                    size = len(model['identities'])
+                else:
+                    size = len(t['values'])
+            require(size + int(t['nullable']) <= max_domain_values, 'BEHAVIOR_DOMAIN_LIMIT')
     used = set()
     for a in actions.values():
         require(a['entity'] in entities, 'BEHAVIOR_UNKNOWN_ENTITY')
@@ -139,7 +173,8 @@ def validate_model(model, requirements=None, answers=None, *, max_bytes=262144):
             require(not any(e['source'] == 'assumption' for e in r['evidence']) or not r['critical'], 'BEHAVIOR_UNCONFIRMED_CRITICAL_RULE')
             fields = index(entities[r['entity']]['fields'])
             parameters = {} if invariant else index(actions[r['action']]['parameters'])
-            t = expression_type(r['expression'], fields, parameters, model, previous=invariant)
+            t = expression_type(r['expression'], fields, parameters, model, previous=invariant,
+                                max_depth=max_expression_depth)
             require(assignable(t, fields[r['field']]['type'], model['identities']) if r['kind'] == 'effect' else t['kind'] == 'boolean', 'BEHAVIOR_EFFECT_TYPE_ERROR')
     coverage = index(model['coverage'], 'fr_id')
     if requirements is not None:
@@ -172,11 +207,17 @@ def validate_model(model, requirements=None, answers=None, *, max_bytes=262144):
                 require(expected <= {a for r in relevant for a in r['ac_ids']}, 'BEHAVIOR_AC_COVERAGE_MISSING')
         if c['status'] == 'not_applicable':
             require(not relevant, 'BEHAVIOR_FALSE_NOT_APPLICABLE')
+    if model['bindings'] is not None:
+        _validate_bindings(model['bindings'], model['contract_version'], entities, actions)
     return deepcopy(model)
 
 
 def blockers(model):
-    return [r['id'] for r in model['rules'] if r['critical'] and r['status'] != 'supported']
+    """Return critical unresolved rule IDs and incomplete FR IDs."""
+    blocked = {rule['id'] for rule in model['rules'] if rule['critical'] and rule['status'] != 'supported'}
+    blocked.update(item['fr_id'] for item in model['coverage']
+                   if item['status'] in {'partial', 'unsupported'})
+    return sorted(blocked)
 
 
 def bind(model, bindings, catalog):
@@ -186,23 +227,20 @@ def bind(model, bindings, catalog):
      screens: {screen: {element: operation_id}}}. A-09 adapter is external.
     """
     validate_model(model)
+    result = deepcopy(model)
+    result.update(bindings=deepcopy(bindings), version=model['version'] + 1, parent_checksum=checksum(model))
+    result = validate_model(result)
+    require(result['bindings'] is not None, 'BEHAVIOR_BINDING_PHASE_MISMATCH')
     require(bindings['contract_version'] == catalog['contract_version'] == model['contract_version'], 'BEHAVIOR_CONTRACT_MISMATCH')
     entities, actions = index(model['entities']), index(model['actions'])
-    require(set(bindings['entities']) == set(entities) and set(bindings['actions']) == set(actions), 'BEHAVIOR_BINDING_MISSING')
-    require(set(bindings['fields']) == {f"{e['id']}.{f['id']}" for e in entities.values() for f in e['fields']}, 'BEHAVIOR_BINDING_MISSING')
-    require(len(set(bindings['entities'].values())) == len(entities), 'BEHAVIOR_BINDING_COLLISION')
     for e in entities.values():
         physical = bindings['entities'][e['id']]
         require(physical in catalog['entities'], 'BEHAVIOR_BINDING_UNKNOWN')
         mapped = [bindings['fields'][f"{e['id']}.{f['id']}"] for f in e['fields']]
-        require(len(mapped) == len(set(mapped)) and set(mapped) <= set(catalog['entities'][physical]), 'BEHAVIOR_BINDING_UNKNOWN')
-    used = set()
+        require(set(mapped) <= set(catalog['entities'][physical]), 'BEHAVIOR_BINDING_UNKNOWN')
     for a in actions.values():
         b = bindings['actions'][a['id']]
-        require(b['operation_id'] not in used and catalog['operations'].get(b['operation_id']) == bindings['entities'][a['entity']], 'BEHAVIOR_OPERATION_BINDING_INVALID')
-        used.add(b['operation_id'])
+        require(catalog['operations'].get(b['operation_id']) == bindings['entities'][a['entity']],
+                'BEHAVIOR_OPERATION_BINDING_INVALID')
         require(catalog['screens'].get(b['screen_id'], {}).get(b['element_id']) == b['operation_id'], 'BEHAVIOR_SCREEN_BINDING_INVALID')
-        require(set(b['public_fields']) <= set(index(entities[a['entity']]['fields'])), 'BEHAVIOR_PUBLIC_FIELD_UNKNOWN')
-    result = deepcopy(model)
-    result.update(bindings=deepcopy(bindings), version=model['version']+1, parent_checksum=checksum(model))
-    return validate_model(result)
+    return result

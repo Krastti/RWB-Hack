@@ -7,12 +7,18 @@ from ..llm import LLMAdapter
 from .model import SCHEMA, ModelError, blockers, canonical, checksum, require, rule_id, validate_model
 
 
+def _model_limits(profile):
+    limits = profile.data['limits']['behavior']
+    return dict(max_bytes=limits['max_model_bytes'], max_expression_depth=limits['max_expression_depth'],
+                max_rules=limits['max_rules'], max_domain_values=limits['max_domain_values'])
+
+
 def artifact(model, *, attempt_id, profile, bound=False):
-    validate_model(model)
+    validate_model(model, **_model_limits(profile))
+    require((model['bindings'] is not None) == bound, 'BEHAVIOR_BINDING_PHASE_MISMATCH')
     path,owner = ('behavior-bindings.json','architecture') if bound else ('behavior-model.json','analysis')
     require(profile.allows(owner,path), 'BEHAVIOR_PROFILE_GRANT_MISSING')
     raw = canonical(model)
-    require(len(raw.encode()) <= profile.data['limits']['behavior']['max_model_bytes'], 'BEHAVIOR_SIZE_LIMIT')
     value = dict(artifact_id=str(uuid5(UUID(attempt_id),path+':'+str(model['version']))), attempt_id=attempt_id,
                  path=path,kind='behavior_model',media_type='application/json',version=model['version'],schema_version='1.0',author_agent=owner,
                  checksum=sha256(raw.encode()).hexdigest(),size_bytes=len(raw.encode()),related_fr_ids=sorted(c['fr_id'] for c in model['coverage']),content=raw)
@@ -24,7 +30,8 @@ class BehaviorNode:
     def __init__(self, *, config, ledger, transport=None):
         self.config,self.ledger,self.transport = config,ledger,transport
 
-    async def run(self, request, *, attempt_id, context, profile, accepted_answers, previous=None):
+    async def run(self, request, *, attempt_id, context, profile, accepted_answers,
+                  model_configuration: bytes, previous=None):
         """Caller fences/replays StageAttempt before invoking. Never reuses call_id.
 
         accepted_answers is the owner-authorized B-12 snapshot keyed by question UUID,
@@ -44,11 +51,20 @@ class BehaviorNode:
         requirements=reqs[0]
         Contracts().validate('requirements',requirements)
         require(all(v.get('accepted') is True and isinstance(v.get('answer'),str) for v in accepted_answers.values()), 'BEHAVIOR_UNCONFIRMED_ANSWER')
+        model_limits = _model_limits(profile)
         if previous is not None:
-            validate_model(previous)
+            validate_model(previous, **model_limits)
             require(previous['contract_version']==request['contract_version'], 'BEHAVIOR_CONTRACT_MISMATCH')
         model_config={k:v for k,v in vars(self.config).items() if k!='api_key'}
-        require(loads(payload['execution_inputs']['model_configuration'])==model_config, 'BEHAVIOR_MODEL_CONFIG_MISMATCH')
+        try:
+            frozen = context.manifest['execution_inputs']['model_configuration']
+            require(type(model_configuration) is bytes and
+                    frozen == {'checksum': sha256(model_configuration).hexdigest(),
+                               'size_bytes': len(model_configuration)} and
+                    loads(model_configuration.decode('utf-8')) == model_config,
+                    'BEHAVIOR_MODEL_CONFIG_MISMATCH')
+        except (KeyError, TypeError, ValueError):
+            raise ModelError('BEHAVIOR_MODEL_CONFIG_MISMATCH') from None
         limits=profile.data['limits']
         cap=min(self.config.max_output_tokens, request['limits']['max_output_tokens'],limits['agent']['max_output_tokens'])
         timeout=min(self.config.timeout_seconds,limits['model_call']['timeout_seconds'],request['limits'].get('timeout_seconds',limits['agent']['timeout_seconds']))
@@ -81,16 +97,22 @@ class BehaviorNode:
             for a in model['actions']:
                 a['guard_ids']=[mapping[r] for r in a['guard_ids']]
                 a['effect_ids']=[mapping[r] for r in a['effect_ids']]
-            model=validate_model(model,requirements,accepted_answers,max_bytes=limits['behavior']['max_model_bytes'])
+            model=validate_model(model,requirements,accepted_answers,**model_limits)
             outputs=[artifact(model,attempt_id=attempt_id,profile=profile)]
-            if blockers(model):
-                diagnostics.append('BEHAVIOR_CRITICAL_UNRESOLVED')
+            blocked = set(blockers(model))
+            if blocked:
+                critical = [rule for rule in model['rules'] if rule['id'] in blocked]
+                fr_ids = {fr for rule in critical for fr in rule['fr_ids']}
+                fr_ids.update(item['fr_id'] for item in model['coverage'] if item['fr_id'] in blocked)
+                code = 'BEHAVIOR_CRITICAL_UNRESOLVED' if critical else 'BEHAVIOR_INCOMPLETE_COVERAGE'
+                diagnostics.append((code, sorted(fr_ids)))
         except ModelError as exc:
-            diagnostics.append(str(exc))
+            diagnostics.append((str(exc), []))
         except (KeyError,TypeError,ValueError,RecursionError):
-            diagnostics.append('BEHAVIOR_INVALID_RESPONSE')
+            diagnostics.append(('BEHAVIOR_INVALID_RESPONSE', []))
         result=dict(schema_version='1.0',**{k:request[k] for k in ('run_id','stage_id','attempt','contract_version')},status='failed' if diagnostics else 'succeeded',
                     output_artifacts=outputs,questions=[],assumptions=[],usage=self.ledger.usage(**accounting),
-                    diagnostics=[dict(code=c,message=c,severity='error',retryable=False,related_fr_ids=[]) for c in diagnostics])
+                    diagnostics=[dict(code=code,message=code,severity='error',retryable=False,
+                                      related_fr_ids=fr_ids) for code,fr_ids in diagnostics])
         Contracts().validate('agent-result',result)
         return result

@@ -12,7 +12,10 @@ partial blocking, immutable binding revision and rejection cases; it does not
 prove text extraction accuracy or test a live model/database.
 
 `BehaviorNode.run(request, attempt_id, context, profile, accepted_answers,
-previous=None)` returns the existing C-02 AgentResult. The worker must authorize
+model_configuration, previous=None)` returns the existing C-02 AgentResult.
+model_configuration is the frozen execution-input bytes, checked against the
+context manifest and the configured adapter before dispatch; it is not sent to
+the model. The worker must authorize
 and freeze B-12 answers, prepare A-30 context containing accepted requirements,
 fence/replay the StageAttempt before invocation, provide the durable shared
 BudgetLedger and atomically accept output+result. Every physical dispatch has a
@@ -22,7 +25,8 @@ A partial model is returned with an error diagnostic and failed status; the
 existing analysis/clarification coordinator must consume it without dispatching
 code generators. It is not a reason to automatically retry extraction.
 
-`validate_model(model, requirements, accepted_answers)` checks types, local
+`validate_model(model, requirements, accepted_answers, max_bytes=262144,
+max_expression_depth=24, max_rules=128, max_domain_values=64)` checks types, local
 references, stable UUIDs derived from semantic decision IDs, evidence links,
 FR/AC coverage, exclusive field assignments and critical assumptions. Fact,
 accepted answer and assumption are distinct. Quotes are checked against their
@@ -41,7 +45,12 @@ null comparisons are unknown (use is_null explicitly). No coercion, truthiness,
 code, arbitrary arithmetic, I/O, cross-record effects or clocks. Effects assign
 simultaneously from pre-state; assigning one field twice is rejected. Unsupported
 logic is an explicit unsupported rule with null expression, never a permissive
-predicate. Any critical unresolved/unsupported rule blocks downstream codegen.
+predicate. Critical unresolved/unsupported rules and partial/unsupported FR coverage
+block downstream codegen, including FRs without rules. `blockers` returns their
+rule UUIDs and FR IDs; node diagnostics preserve the affected FR IDs.
+Extraction, previous snapshots and artifact packaging apply all frozen behavior
+limits. Integer cardinality is maximum - minimum + 1; nullable fields also count
+the null value. Oversized domains are rejected without truncating business ranges.
 
 `bind(model, bindings, catalog)` checks an **accepted A-09 catalog**, including
 entity fields, operation→entity and screen element→operation, and returns version
@@ -50,6 +59,8 @@ The catalog is a narrow port documented in the function; an adapter to real
 A-09 payloads must be supplied by A-09, not populated by guessed names. Changes
 never overwrite accepted bytes. Consumers must validate against the accepted
 catalog as well as the structural model schema.
+Local validation checks bindings contract_version and complete logical mappings;
+the artifact helper also requires the requested logical/bound phase to match.
 
 Profile 1.1.0 is a separate opt-in snapshot. `behavior_profile()` registers it
 explicitly; default A-29 loading still selects unchanged 1.0.0.
