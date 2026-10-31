@@ -61,12 +61,9 @@ def prepare_openapi(context: dict, requirements_artifact: dict, *, profile: dict
         json.dumps([context, artifact, profile], allow_nan=False)
         contracts.validate("agent-input", context)
         contracts.validate("artifact", artifact)
-        schema = load(PROFILE_SCHEMA)
-        registry = contracts.registry.with_resource(schema["$id"], Resource.from_contents(schema))
-        require(Draft202012Validator(schema, registry=registry, format_checker=FormatChecker()).is_valid(profile),
-                "OPENAPI_INVALID_PROFILE")
-        require(context["profile_id"] == profile["profile_id"] == "web-fastapi-angular"
-                and profile["contracts"]["openapi_version"] == "3.1.0", "OPENAPI_UNSUPPORTED_PROFILE")
+        from backend.app.agents.profiles.loader import validate_profile_data
+        validate_profile_data(profile)
+        require(context["profile_id"] == profile["profile_id"], "PROFILE_CONTEXT_MISMATCH")
         require(artifact["artifact_id"] in context["input_artifact_ids"]
                 and artifact["kind"] == "requirements" and artifact["path"] == "requirements.json"
                 and "content" in artifact, "OPENAPI_REQUIREMENTS_NOT_ALLOWED")

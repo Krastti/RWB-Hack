@@ -95,7 +95,7 @@ class RunControlService:
 
     @staticmethod
     def _profile(record):
-        if record.run.profile_id != "web-fastapi-angular":
+        if record.run.profile_id not in {"web-fastapi-angular", "russtech-fullstack"}:
             raise ControlError(409, "UNSUPPORTED_RUN_PROFILE", "Historical Run is read-only")
 
     def cancel(self, *, owner_id: UUID, run_id: UUID) -> Run:

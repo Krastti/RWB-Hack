@@ -272,3 +272,11 @@ def _validate_policy(profile: dict) -> None:
              and limits["agent"]["max_critical_questions"] <= limits["run"]["max_critical_questions_per_round"]
              and limits["artifacts"]["max_file_bytes"] <= limits["artifacts"]["max_total_bytes"],
              "PROFILE_LIMIT_CONFLICT")
+
+
+def validate_profile_data(profile: dict, *, repository_root=ROOT) -> dict:
+    """Validate saved profile JSON against its allowlisted version, not live defaults."""
+    loader = ProfileLoader(repository_root=repository_root)
+    version, source = loader._source(profile.get('profile_id'), profile.get('profile_version'))
+    raw = json.dumps(profile, ensure_ascii=False, allow_nan=False).encode()
+    return loader._validate(raw, profile['profile_id'], version, source)

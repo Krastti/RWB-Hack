@@ -14,7 +14,10 @@
       "pattern": "\\S"
     },
     "profile_id": {
-      "const": "web-fastapi-angular"
+      "enum": [
+        "web-fastapi-angular",
+        "russtech-fullstack"
+      ]
     },
     "profile_version": {
       "const": "1.0.0"

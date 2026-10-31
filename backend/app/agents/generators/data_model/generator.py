@@ -52,13 +52,9 @@ def build_data_model_prompt(context: dict, requirements_artifact: dict, *, profi
             "DATA_MODEL_REQUIREMENTS_REQUIRED")
     require(requirements_artifact["artifact_id"] in context["input_artifact_ids"],
             "DATA_MODEL_INPUT_NOT_ALLOWED")
-    schema = load(PROFILE / "profile.schema.json")
-    registry = contracts.registry.with_resource(schema["$id"], Resource.from_contents(schema))
-    validator = Draft202012Validator(schema, registry=registry, format_checker=FormatChecker())
-    require(not any(validator.iter_errors(profile)), "DATA_MODEL_INVALID_PROFILE")
-    require(context["profile_id"] == profile["profile_id"] == "web-fastapi-angular" and
-            profile["profile_version"] == "1.0.0" and profile["stack"]["database"] == "PostgreSQL" and
-            profile["stack"]["migrations"] == "Alembic", "DATA_MODEL_UNSUPPORTED_PROFILE")
+    from backend.app.agents.profiles.loader import validate_profile_data
+    validate_profile_data(profile)
+    require(context["profile_id"] == profile["profile_id"], "PROFILE_CONTEXT_MISMATCH")
     require("data-model.json" in profile["ownership"]["agents"]["architecture"]["paths"],
             "DATA_MODEL_OUTPUT_NOT_ALLOWED")
     defaults = profile["limits"]["agent"]

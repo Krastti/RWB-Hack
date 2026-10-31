@@ -69,7 +69,7 @@ class Run(ReadDTO):
     run_id: UUID
     project_id: UUID
     revision_id: UUID
-    profile_id: Literal["web-fastapi-angular", "web-fastapi-react"]
+    profile_id: Literal["web-fastapi-angular", "web-fastapi-react", "russtech-fullstack"]
     status: RunStatus
     current_stage: str | None = None
     limits: Limits

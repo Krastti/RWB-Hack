@@ -70,7 +70,8 @@ class ArchitectureNode:
             _require(type(profile_bytes) is bytes and sha256(profile_bytes).hexdigest() == profile_checksum,
                      "ARCHITECTURE_PROFILE_CHECKSUM_MISMATCH")
             profile = loads(profile_bytes.decode("utf-8"))
-            _require(self._profile_validator.is_valid(profile), "ARCHITECTURE_INVALID_PROFILE")
+            from ...profiles.loader import validate_profile_data
+            validate_profile_data(profile)
             _require(context["profile_id"] == profile["profile_id"]
                      and context["stage_id"] == self._stage_id, "ARCHITECTURE_CONTEXT_MISMATCH")
             _require(isinstance(rules_text, str) and bool(rules_text.strip())

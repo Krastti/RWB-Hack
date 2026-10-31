@@ -86,14 +86,14 @@ def build_analysis_prompt(
     *,
     previous_requirements: dict[str, Any] | None = None,
     analysis_rules: str | None = None,
+    frozen_profile: dict | None = None,
 ) -> AnalysisPrompt:
     """Inputs are already resolved/authorized by the worker. No writes or calls."""
     contracts = _contracts()
     contracts.validate("agent-input", context)
     contracts.validate("analysis-input", business_input)
-    profile = load(PROFILE / "profile.json")
-    require(profile["profile_id"] == "web-fastapi-angular" and profile["profile_version"] == "1.0.0",
-            "ANALYSIS_UNSUPPORTED_PROFILE_VERSION")
+    from ...profiles.loader import validate_profile_data
+    profile = validate_profile_data(frozen_profile) if frozen_profile is not None else load(PROFILE / "profile.json")
     require(context["stage_id"] == "analysis" and context["profile_id"] == profile["profile_id"],
             "ANALYSIS_UNSUPPORTED_CONTEXT")
     require(context["limits"]["max_calls"] > 0, "ANALYSIS_CALL_BUDGET_EXHAUSTED")

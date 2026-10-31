@@ -67,11 +67,9 @@ def prepare_ui_spec(
         require(isinstance(profile_content, str)
                 and len(profile_content.encode("utf-8")) <= MAX_INPUT_BYTES, "UI_INVALID_PROFILE")
         profile = loads(profile_content)
-        profile_schema = load(REPO / "templates/profiles/web-fastapi-angular/profile.schema.json")
-        validator = Draft202012Validator(profile_schema, registry=contracts.registry, format_checker=FormatChecker())
-        require(not any(validator.iter_errors(profile)), "UI_INVALID_PROFILE")
-        require(profile["profile_id"] == context["profile_id"] == "web-fastapi-angular"
-                and profile["profile_version"] == "1.0.0", "UI_UNSUPPORTED_PROFILE")
+        from backend.app.agents.profiles.loader import validate_profile_data
+        validate_profile_data(profile)
+        require(context["profile_id"] == profile["profile_id"], "PROFILE_CONTEXT_MISMATCH")
         require(profile["ownership"]["default"] == "deny"
                 and "ui-spec.json" in profile["ownership"]["agents"]["architecture"]["paths"], "UI_OUTPUT_NOT_ALLOWED")
         require(profile["ui_kit"]["name"] == "Bootstrap"

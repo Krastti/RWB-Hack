@@ -39,8 +39,12 @@ class RunCreationService:
              "body": body.model_dump(mode="json")},
             sort_keys=True, separators=(",", ":"), ensure_ascii=True,
         )
+        profile = self._profile
+        if body.profile_id != profile["profile_id"]:
+            from ...agents.profiles import ProfileLoader
+            profile = ProfileLoader().load(body.profile_id).data
         return self._repository.create(
             owner_id=owner_id, project_id=project_id, key=idempotency_key,
             request_hash=sha256(normalized.encode("utf-8")).hexdigest(),
-            body=body, profile=deepcopy(self._profile), limits=self._limits,
+            body=body, profile=deepcopy(profile), limits=self._limits,
         )
