@@ -156,8 +156,11 @@ class ProfileLoader:
         self._registry = dict(registry) if registry is not None else {
             ("web-fastapi-angular", "1.0.0"): ProfileSource(
                 "templates/profiles/web-fastapi-angular/profile.json",
-                "templates/profiles/web-fastapi-angular/profile.schema.json")}
-        self._defaults = dict(defaults) if defaults is not None else {"web-fastapi-angular": "1.0.0"}
+                "templates/profiles/web-fastapi-angular/profile.schema.json"),
+            ("russtech-fullstack", "1.0.0"): ProfileSource(
+                "templates/profiles/russtech-fullstack/profile.json",
+                "templates/profiles/russtech-fullstack/profile.schema.json")}
+        self._defaults = dict(defaults) if defaults is not None else {"web-fastapi-angular": "1.0.0", "russtech-fullstack": "1.0.0"}
 
     def _source(self, profile_id: str, version: str | None) -> tuple[str, ProfileSource]:
         _require(isinstance(profile_id, str) and (version is None or isinstance(version, str)),

@@ -67,3 +67,13 @@ profiles retain the loader's repository root for C-02 validation; a missing loca
 schema registry cannot fall back to another checkout. Rules reads are capped at
 1 MiB before decoding and use descriptor-relative no-follow opens on Linux,
 including parent directories, to avoid symlink replacement between check/open.
+
+## Конкурсный профиль
+
+`ProfileLoader().load("russtech-fullstack")` загружает отдельный C-05 1.0.0.
+Правила: [docs/russtech-profile.md](../../../../docs/russtech-profile.md).
+Передавайте оба условия `has_android` и `has_integrations` при вычислении
+обязательных выходов. Для Android grants также нужен `has_android=True`.
+Это регистрация политики; текущие HTTP Run и архитектурные генераторы продолжают
+использовать web-fastapi-angular. Доступность загрузчика не означает готовность
+production generation/verification для нового стека.
