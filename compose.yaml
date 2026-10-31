@@ -43,8 +43,14 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+  bootstrap-user:
+    <<: *runtime
+    command: python -m app.bootstrap_user
   api:
     <<: *runtime
+    depends_on:
+      bootstrap-user:
+        condition: service_completed_successfully
     ports:
       - '127.0.0.1:${API_PORT:-8000}:8000'
   frontend:
