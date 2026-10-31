@@ -52,9 +52,11 @@ never overwrite accepted bytes. Consumers must validate against the accepted
 catalog as well as the structural model schema.
 
 Profile 1.1.0 is a separate opt-in snapshot. `behavior_profile()` registers it
-explicitly; default A-29 loading still selects unchanged 1.0.0. Analysis owns
-behavior-model.json; architecture owns behavior-bindings.json. The new profile
-limits model bytes, expression depth, rules and domain size. Its schema and the
+explicitly; default A-29 loading still selects unchanged 1.0.0.
+The node also accepts the caller's frozen 1.2.0 profile from #148, which includes
+search bounds. It never replaces that snapshot with the helper's 1.1.0 default.
+Analysis owns behavior-model.json; architecture owns behavior-bindings.json.
+The new profile limits model bytes, expression depth, rules and domain size. Its schema and the
 new payload schema are additive proposals for C-02/C-05 owner review; closed
 AgentInput/AgentResult are unchanged. Stage registry integration must assign
 unique stage IDs (e.g. behavior_model/behavior_bindings) under existing owners;

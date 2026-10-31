@@ -1,0 +1,537 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/generators/data-model/v1.schema.json",
+  "title": "PostgreSQL data model",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "data-model/1.0"
+    },
+    "contract_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "\\S"
+    },
+    "profile_id": {
+      "enum": [
+        "web-fastapi-angular",
+        "russtech-fullstack"
+      ]
+    },
+    "database": {
+      "const": "postgresql"
+    },
+    "requirements_artifact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/entity"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relationship"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/note"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "unresolved_items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unresolved"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "fr_coverage": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/coverage"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "contract_version",
+    "profile_id",
+    "database",
+    "requirements_artifact_id",
+    "entities",
+    "relationships",
+    "assumptions",
+    "unresolved_items",
+    "fr_coverage"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,62}$(?![\\s\\S])"
+    },
+    "fr_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^FR-[0-9]{3,}$(?![\\s\\S])"
+      },
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "field": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "description": {
+          "$ref": "#/$defs/text"
+        },
+        "type": {
+          "enum": [
+            "uuid",
+            "varchar",
+            "text",
+            "integer",
+            "bigint",
+            "numeric",
+            "boolean",
+            "date",
+            "timestamptz",
+            "jsonb"
+          ]
+        },
+        "nullable": {
+          "type": "boolean"
+        },
+        "max_length": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 10485760
+        },
+        "precision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "scale": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "default": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "none",
+                "literal",
+                "application_uuid4",
+                "server_now"
+              ]
+            },
+            "value": {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        "related_fr_ids": {
+          "$ref": "#/$defs/fr_ids"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "type",
+        "nullable",
+        "max_length",
+        "precision",
+        "scale",
+        "default",
+        "related_fr_ids"
+      ],
+      "additionalProperties": false
+    },
+    "key": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "name",
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "field": {
+          "$ref": "#/$defs/name"
+        },
+        "operator": {
+          "enum": [
+            "eq",
+            "ne",
+            "lt",
+            "lte",
+            "gt",
+            "gte",
+            "in",
+            "not_in",
+            "is_null",
+            "is_not_null"
+          ]
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": [
+                "string",
+                "number",
+                "boolean",
+                "null"
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "field",
+        "operator",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "entity": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "description": {
+          "$ref": "#/$defs/text"
+        },
+        "related_fr_ids": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/fr_ids"
+            }
+          ],
+          "minItems": 1
+        },
+        "source_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "section": {
+                "enum": [
+                  "entities",
+                  "roles",
+                  "functional_requirements",
+                  "nonfunctional_requirements",
+                  "constraints",
+                  "security_requirements"
+                ]
+              },
+              "text": {
+                "$ref": "#/$defs/text"
+              }
+            },
+            "required": [
+              "section",
+              "text"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/field"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "primary_key": {
+          "$ref": "#/$defs/key"
+        },
+        "unique_constraints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/key"
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "check_constraints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/check"
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "indexes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/name"
+              },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/name"
+                },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              "unique": {
+                "type": "boolean"
+              },
+              "method": {
+                "const": "btree"
+              }
+            },
+            "required": [
+              "name",
+              "fields",
+              "unique",
+              "method"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "related_fr_ids",
+        "source_refs",
+        "fields",
+        "primary_key",
+        "unique_constraints",
+        "check_constraints",
+        "indexes"
+      ],
+      "additionalProperties": false
+    },
+    "relationship": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "source_entity": {
+          "$ref": "#/$defs/name"
+        },
+        "source_fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "target_entity": {
+          "$ref": "#/$defs/name"
+        },
+        "target_fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "cardinality": {
+          "enum": [
+            "many_to_one",
+            "one_to_one"
+          ]
+        },
+        "on_delete": {
+          "enum": [
+            "restrict",
+            "no_action",
+            "cascade",
+            "set_null"
+          ]
+        },
+        "match": {
+          "enum": [
+            "simple",
+            "full"
+          ]
+        },
+        "description": {
+          "$ref": "#/$defs/text"
+        },
+        "related_fr_ids": {
+          "$ref": "#/$defs/fr_ids"
+        }
+      },
+      "required": [
+        "name",
+        "source_entity",
+        "source_fields",
+        "target_entity",
+        "target_fields",
+        "cardinality",
+        "on_delete",
+        "match",
+        "description",
+        "related_fr_ids"
+      ],
+      "additionalProperties": false
+    },
+    "note": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/text"
+        },
+        "reason": {
+          "$ref": "#/$defs/text"
+        },
+        "related_fr_ids": {
+          "$ref": "#/$defs/fr_ids"
+        }
+      },
+      "required": [
+        "text",
+        "reason",
+        "related_fr_ids"
+      ],
+      "additionalProperties": false
+    },
+    "unresolved": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$(?![\\s\\S])"
+        },
+        "message": {
+          "$ref": "#/$defs/text"
+        },
+        "related_fr_ids": {
+          "$ref": "#/$defs/fr_ids"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "related_fr_ids"
+      ],
+      "additionalProperties": false
+    },
+    "coverage": {
+      "type": "object",
+      "properties": {
+        "fr_id": {
+          "type": "string",
+          "pattern": "^FR-[0-9]{3,}$(?![\\s\\S])"
+        },
+        "status": {
+          "enum": [
+            "modeled",
+            "not_applicable"
+          ]
+        },
+        "entity_names": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          },
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "reason": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "required": [
+        "fr_id",
+        "status",
+        "entity_names",
+        "reason"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

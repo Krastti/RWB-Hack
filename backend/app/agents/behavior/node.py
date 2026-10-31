@@ -1,4 +1,4 @@
-"""A-31 opt-in node. Worker supplies its durable A-22 ledger and receipt fencing."""
+"""Extract behavior models using a worker-owned ledger and receipt fencing."""
 from dataclasses import replace
 from uuid import UUID, uuid4, uuid5
 from hashlib import sha256
@@ -36,7 +36,9 @@ class BehaviorNode:
         UUID(attempt_id)
         payload=loads(context.data)
         require(payload['agent_input']==request and context.manifest['profile']==profile.metadata and payload['profile']==profile.data, 'BEHAVIOR_CONTEXT_MISMATCH')
-        require(profile.data['profile_version']=='1.1.0' and profile.allows('analysis','behavior-model.json'), 'BEHAVIOR_PROFILE_MISMATCH')
+        require(profile.profile_id == 'web-fastapi-angular' and
+                profile.profile_version in {'1.1.0', '1.2.0'} and
+                profile.allows('analysis', 'behavior-model.json'), 'BEHAVIOR_PROFILE_MISMATCH')
         reqs=[loads(a['content']) for a in payload['artifacts'] if a['metadata']['kind']=='requirements']
         require(len(reqs)==1, 'BEHAVIOR_REQUIREMENTS_REQUIRED')
         requirements=reqs[0]
