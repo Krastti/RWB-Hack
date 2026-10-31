@@ -13,6 +13,7 @@ class WorkerCommand(Base):
     __table_args__ = (
         CheckConstraint("state IN ('pending', 'running', 'lost', 'recovering', 'completed', 'obsolete')", name="state"),
         CheckConstraint("generation >= 0", name="generation_nonnegative"),
+        CheckConstraint("recovery_failures BETWEEN 0 AND 3", name="recovery_failures_bounded"),
         CheckConstraint(
             "recovery_generation IS NULL OR (recovery_generation > 0 AND recovery_generation <= generation)",
             name="recovery_generation",
@@ -29,6 +30,8 @@ class WorkerCommand(Base):
     attempt_id: Mapped[UUID] = mapped_column(ForeignKey("stage_attempts.id", ondelete="RESTRICT"), unique=True)
     state: Mapped[str] = mapped_column(String(16), server_default="pending")
     generation: Mapped[int] = mapped_column(BigInteger, server_default="0")
+    recovery_failures: Mapped[int] = mapped_column(BigInteger, server_default="0")
+    recovery_error: Mapped[str | None] = mapped_column(Text)
     recovery_generation: Mapped[int | None] = mapped_column(BigInteger)
     owner_token: Mapped[UUID | None] = mapped_column(Uuid)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -47,10 +47,13 @@ class CeleryQueueAdapter:
 def create_worker_app(
     *, broker_url: str, sessions: sessionmaker[Session], orchestrator: Orchestrator,
     recovery: RecoveryHandler, config: QueueConfig | None = None,
+    store: PostgreSQLQueueStore | None = None, before_dispatch=None,
 ) -> Celery:
     if not broker_url:
         raise ValueError("A broker URL is required")
-    config = config or QueueConfig()
+    config = config or (store.config if store is not None else QueueConfig())
+    if store is not None and (store.sessions is not sessions or store.config != config):
+        raise ValueError("Worker and queue must share sessions and configuration")
     app = Celery("rwb_workers", broker=broker_url)
     exchange = Exchange("rwb", type="direct", durable=True)
     app.conf.update(
@@ -74,10 +77,11 @@ def create_worker_app(
         }},
         enable_utc=True, timezone="UTC",
     )
-    store = PostgreSQLQueueStore(sessions, config)
+    store = store if store is not None else PostgreSQLQueueStore(sessions, config)
     adapter = CeleryQueueAdapter(app, store)
     worker = StageWorker(store, orchestrator, recovery)
     app.queue_adapter = adapter
+    app.stage_worker = worker
 
     @worker_process_init.connect(weak=False)
     def reset_connection_pool(**kwargs):
@@ -105,6 +109,10 @@ def create_worker_app(
 
     @app.task(name=DISPATCH_TASK)
     def dispatch_commands():
-        return adapter.publish_due()
+        intake = before_dispatch() if before_dispatch is not None else None
+        result = adapter.publish_due()
+        if intake is not None:
+            result["intake"] = intake
+        return result
 
     return app

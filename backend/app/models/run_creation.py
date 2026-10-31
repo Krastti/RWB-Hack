@@ -35,6 +35,8 @@ class RunQueueJob(Base):
     __tablename__ = "run_queue_jobs"
     __table_args__ = (
         CheckConstraint("kind = 'createRun'", name="kind"),
+        CheckConstraint("state IN ('pending', 'rejected')", name="delivery_state"),
+        CheckConstraint("failures BETWEEN 0 AND 3", name="failures_bounded"),
         Index("ix_run_queue_jobs_created_id", "created_at", "id"),
     )
 
@@ -42,3 +44,8 @@ class RunQueueJob(Base):
     run_id: Mapped[UUID] = mapped_column(ForeignKey("runs.id", ondelete="RESTRICT"), unique=True)
     kind: Mapped[str] = mapped_column(Text, server_default="createRun")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    state: Mapped[str] = mapped_column(Text, server_default="pending")
+    failures: Mapped[int] = mapped_column(Integer, server_default="0")
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    failure_code: Mapped[str | None] = mapped_column(Text)
