@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "model_checksum": "1d516020552642f9f842983230731a53046ca485b60c0c58dde0a1218e1d51b3",
+  "interpreter_version": "1.0.0",
+  "initial_state": {
+    "entity": "ticket",
+    "values": {
+      "owner": "alice",
+      "status": "draft",
+      "priority": 1
+    }
+  },
+  "initial_actor": null,
+  "bounds": {
+    "max_depth": 3,
+    "max_states": 20,
+    "timeout_seconds": 2,
+    "max_domain_values": 64,
+    "max_scenarios": 10000
+  },
+  "status": "counterexample",
+  "reason": "INVARIANT_VIOLATED",
+  "domain_complete": true,
+  "states_visited": 2,
+  "transitions_checked": 2,
+  "trace": [
+    {
+      "actor": {
+        "id": "bob",
+        "role": "ROLE-001"
+      },
+      "action": {
+        "id": "cancel",
+        "parameters": {}
+      },
+      "result": {
+        "status": "allowed",
+        "state": {
+          "entity": "ticket",
+          "values": {
+            "owner": "alice",
+            "status": "cancelled",
+            "priority": 1
+          }
+        },
+        "rule_ids": [
+          "d86e0c6a-c2d2-529c-893d-b05db8ba2d93",
+          "ea621a7a-7438-58f6-a50c-fdaf0d9bdfb9"
+        ],
+        "fr_ids": [
+          "FR-001"
+        ],
+        "reason": "ALLOWED"
+      }
+    }
+  ],
+  "invariant_id": "e9a1b1a7-8df4-5de2-899a-035110fa4cba",
+  "fr_ids": [
+    "FR-001"
+  ],
+  "unknown_rules": [],
+  "depth_frontier": false
+}
