@@ -22,7 +22,6 @@ jobs:
     env:
       PYTHONPATH: backend:.
       RWB_TEST_DATABASE_URL: postgresql+psycopg://rwb_test:rwb_test@localhost:5432/rwb_test
-      RWB_MVP_EXPORT_DIR: ${{ runner.temp }}/rwb-product
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,6 +33,8 @@ jobs:
           backend/tests/test_pipeline_policies.py backend/tests/test_pipeline_policy_postgresql.py
           backend/tests/test_mvp_generated_product.py backend/tests/test_pipeline_execution.py
           backend/tests/test_pipeline_review_regressions.py backend/tests/test_artifact_persistence.py -q
+        env:
+          RWB_MVP_EXPORT_DIR: ${{ runner.temp }}/rwb-product
       - uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
