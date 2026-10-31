@@ -1,0 +1,212 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "project_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "old_snapshot": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "snapshot_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "checksum": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "schema_version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "snapshot_id",
+            "checksum",
+            "schema_version"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "new_snapshot": {
+      "type": "object",
+      "properties": {
+        "snapshot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "schema_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "checksum",
+        "schema_version"
+      ],
+      "additionalProperties": false
+    },
+    "contract_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "profile": {
+      "type": "object",
+      "properties": {
+        "profile_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "profile_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "checksum": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "rules_checksum": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_version",
+        "checksum",
+        "rules_checksum"
+      ],
+      "additionalProperties": false
+    },
+    "changed_nodes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      },
+      "maxItems": 100000
+    },
+    "affected_tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "stage_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "owner_agent": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "reason_chain": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                },
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
+                }
+              },
+              "required": [
+                "node",
+                "reason"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 100000
+          },
+          "input_artifact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 100000
+          }
+        },
+        "required": [
+          "task_id",
+          "stage_id",
+          "owner_agent",
+          "reason_chain",
+          "input_artifact_ids"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 100000
+    },
+    "unknown": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      },
+      "maxItems": 100000
+    },
+    "unchanged_recorded_inputs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      },
+      "maxItems": 100000
+    },
+    "automatic_reuse_allowed": {
+      "const": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "project_id",
+    "old_snapshot",
+    "new_snapshot",
+    "contract_version",
+    "profile",
+    "changed_nodes",
+    "affected_tasks",
+    "unknown",
+    "unchanged_recorded_inputs",
+    "automatic_reuse_allowed"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rwb-hack.invalid/contracts/agents/behavior/v1/impact-plan.schema.json"
+}

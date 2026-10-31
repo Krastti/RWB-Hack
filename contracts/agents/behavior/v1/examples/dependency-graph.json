@@ -1,0 +1,470 @@
+{
+  "schema_version": "1.0",
+  "project_id": "41c82cf9-28dc-56c6-b8f1-60336c85a7be",
+  "snapshot_id": "3717f67b-a949-527c-a1f5-2256e1da7485",
+  "contract_version": "demo-v1",
+  "profile": {
+    "profile_id": "web-fastapi-angular",
+    "profile_version": "1.1.0",
+    "checksum": "37ceeb543572a6c40704b20cd01a22f22ecb94287dd641cbe8c593fc24011571",
+    "rules_checksum": "84e12b8ea0d02c1b3d7487e759c54eea8729be9b48a97e44c46b6e937dcb12bc"
+  },
+  "nodes": [
+    {
+      "id": "artifact:frontend/src/styles.scss",
+      "kind": "artifact",
+      "checksum": "33f11a1529d3cb11c1b5e40e2442b1dc9b7794d9e788752f7d630599dc4465d4",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "artifact:requirements.json",
+      "kind": "artifact",
+      "checksum": "28c6dd30f55576915e8d979874b3f8babf9025177f633517cc54dfd768090103",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "behavior-domains",
+      "kind": "behavior",
+      "checksum": "781be7e1f761563aaf3790f9f11515b0dceb00908421a28f2ad3d985b9532b53",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "compiler:backend",
+      "kind": "compiler",
+      "checksum": "332831a1f1e79ecc3761d3ff4b4762e1420ee8410fd35e83f6c8d4f1afc11867",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "compiler:frontend",
+      "kind": "compiler",
+      "checksum": "332831a1f1e79ecc3761d3ff4b4762e1420ee8410fd35e83f6c8d4f1afc11867",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "contract",
+      "kind": "contract",
+      "checksum": "4d71ffe881288c0af83e721766c0909ade050d3385e396a2c531e670b977a016",
+      "version": "demo-v1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "entity:ticket",
+      "kind": "entity",
+      "checksum": "b45e633e9f0c41bf92fb845477fe09aad08bead249c47c0f5f2ea3d21bad0714",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "execution:backend:compiler_configuration",
+      "kind": "execution",
+      "checksum": "52865bbbcc90f410560c9bd4b7c16d6213a0cb8664281d069db2b2a0a6f3726b",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "execution:backend:model_configuration",
+      "kind": "execution",
+      "checksum": "fd700dae9bce2fbc2211d6ce8c67f8aef7a4d89124c4b4fe085a1e8812f7a817",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "execution:backend:prompt",
+      "kind": "execution",
+      "checksum": "5ef18f02386987782c98b06534cc214593619a1e450c231dda7f232361231aad",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "execution:backend:template",
+      "kind": "execution",
+      "checksum": "78f322d08d578aca32c8357485b1e90fb0197e53e60b1bb8036ed7313f998ca4",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "execution:frontend:compiler_configuration",
+      "kind": "execution",
+      "checksum": "52865bbbcc90f410560c9bd4b7c16d6213a0cb8664281d069db2b2a0a6f3726b",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "execution:frontend:model_configuration",
+      "kind": "execution",
+      "checksum": "fd700dae9bce2fbc2211d6ce8c67f8aef7a4d89124c4b4fe085a1e8812f7a817",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "execution:frontend:prompt",
+      "kind": "execution",
+      "checksum": "5ef18f02386987782c98b06534cc214593619a1e450c231dda7f232361231aad",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "execution:frontend:template",
+      "kind": "execution",
+      "checksum": "78f322d08d578aca32c8357485b1e90fb0197e53e60b1bb8036ed7313f998ca4",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "file:backend/app/services/domain_policy.py",
+      "kind": "file",
+      "checksum": "70d207a857fb7ca06e99443260aa938076d1c5464d6fe64301e611e1d7608079",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "file:frontend/src/app/domain/policy.ts",
+      "kind": "file",
+      "checksum": "2e9e34fe9eea61f3cd0c501673238644a6b1d4ddd9615f2a9c050894899c7bf2",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "fr:FR-001",
+      "kind": "fr",
+      "checksum": "a0c47f06206562e6c2344992828f76c0371ddb6e416f947c9f8a6c6555cb8e6f",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "fr:FR-002",
+      "kind": "fr",
+      "checksum": "10cc508bb8f8d2f90681ddedb9498131ef6a8930c678d41da0134cc991c45222",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "fr:FR-003",
+      "kind": "fr",
+      "checksum": "be228f22117d29313ccf20984f4311355e6c113253db401997a3687d217281f1",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "operation:cancelTicket",
+      "kind": "operation",
+      "checksum": "e38127af5a93720f5bac101a5424ad1bd6db74e5a62b39aef3c7b926fd432939",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "profile",
+      "kind": "profile",
+      "checksum": "5c45e0d0476a445484f0bfbb1844bcb641be9ba2ac2960c251e3a2dd4000c631",
+      "version": "1.1.0",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "rule:d86e0c6a-c2d2-529c-893d-b05db8ba2d93",
+      "kind": "rule",
+      "checksum": "dcaa48d3134f0ff613e50c7ea68fbe66206be49a95614956d77298ed5bb198ed",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "rule:e9a1b1a7-8df4-5de2-899a-035110fa4cba",
+      "kind": "rule",
+      "checksum": "3eb4715e5561532a158fae0dfae15bdb4a1c1feea7be1d88bb38cb147b4d25f6",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "rule:ea621a7a-7438-58f6-a50c-fdaf0d9bdfb9",
+      "kind": "rule",
+      "checksum": "53a03248a3d5874efe1e92593f54f8ebb5545ffc33b63676e1ac29cd4fc591a0",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "screen:ticket_detail:cancel_button",
+      "kind": "screen",
+      "checksum": "a9d0e90b33d8a8629f5a61a3f3fcd1a0704f7f99c3abc99d337e2d77c361bd5f",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "task:backend",
+      "kind": "task",
+      "checksum": "175f05d90faabe89d6fc3b0152e0e32dfed49cc1855e51889f081374c6f3270f",
+      "version": "1",
+      "schema_version": "1.0"
+    },
+    {
+      "id": "task:frontend",
+      "kind": "task",
+      "checksum": "3aa513311317e1bd17a313cf7907c395e3ec2d9b286a678e636cdfcea0e2b110",
+      "version": "1",
+      "schema_version": "1.0"
+    }
+  ],
+  "edges": [
+    {
+      "source": "artifact:frontend/src/styles.scss",
+      "target": "task:frontend",
+      "reason": "registered immutable input 985f257f-8fc9-5a7d-a7cf-66fd52302b40"
+    },
+    {
+      "source": "artifact:requirements.json",
+      "target": "task:backend",
+      "reason": "registered immutable input 3f3847fe-0b1c-5d3e-a213-4d51716d5776"
+    },
+    {
+      "source": "artifact:requirements.json",
+      "target": "task:frontend",
+      "reason": "registered immutable input 3f3847fe-0b1c-5d3e-a213-4d51716d5776"
+    },
+    {
+      "source": "behavior-domains",
+      "target": "task:backend",
+      "reason": "declared roles and identities"
+    },
+    {
+      "source": "behavior-domains",
+      "target": "task:frontend",
+      "reason": "declared roles and identities"
+    },
+    {
+      "source": "compiler:backend",
+      "target": "task:backend",
+      "reason": "emitter version"
+    },
+    {
+      "source": "compiler:frontend",
+      "target": "task:frontend",
+      "reason": "emitter version"
+    },
+    {
+      "source": "contract",
+      "target": "task:backend",
+      "reason": "contract version"
+    },
+    {
+      "source": "contract",
+      "target": "task:frontend",
+      "reason": "contract version"
+    },
+    {
+      "source": "entity:ticket",
+      "target": "rule:d86e0c6a-c2d2-529c-893d-b05db8ba2d93",
+      "reason": "rule reads/writes entity"
+    },
+    {
+      "source": "entity:ticket",
+      "target": "rule:e9a1b1a7-8df4-5de2-899a-035110fa4cba",
+      "reason": "rule reads/writes entity"
+    },
+    {
+      "source": "entity:ticket",
+      "target": "rule:ea621a7a-7438-58f6-a50c-fdaf0d9bdfb9",
+      "reason": "rule reads/writes entity"
+    },
+    {
+      "source": "execution:backend:compiler_configuration",
+      "target": "task:backend",
+      "reason": "actual compiler_configuration"
+    },
+    {
+      "source": "execution:backend:model_configuration",
+      "target": "task:backend",
+      "reason": "actual model_configuration"
+    },
+    {
+      "source": "execution:backend:prompt",
+      "target": "task:backend",
+      "reason": "actual prompt"
+    },
+    {
+      "source": "execution:backend:template",
+      "target": "task:backend",
+      "reason": "actual template"
+    },
+    {
+      "source": "execution:frontend:compiler_configuration",
+      "target": "task:frontend",
+      "reason": "actual compiler_configuration"
+    },
+    {
+      "source": "execution:frontend:model_configuration",
+      "target": "task:frontend",
+      "reason": "actual model_configuration"
+    },
+    {
+      "source": "execution:frontend:prompt",
+      "target": "task:frontend",
+      "reason": "actual prompt"
+    },
+    {
+      "source": "execution:frontend:template",
+      "target": "task:frontend",
+      "reason": "actual template"
+    },
+    {
+      "source": "fr:FR-001",
+      "target": "rule:d86e0c6a-c2d2-529c-893d-b05db8ba2d93",
+      "reason": "rule formalizes requirement"
+    },
+    {
+      "source": "fr:FR-001",
+      "target": "rule:e9a1b1a7-8df4-5de2-899a-035110fa4cba",
+      "reason": "rule formalizes requirement"
+    },
+    {
+      "source": "fr:FR-001",
+      "target": "rule:ea621a7a-7438-58f6-a50c-fdaf0d9bdfb9",
+      "reason": "rule formalizes requirement"
+    },
+    {
+      "source": "operation:cancelTicket",
+      "target": "screen:ticket_detail:cancel_button",
+      "reason": "screen element calls operation"
+    },
+    {
+      "source": "profile",
+      "target": "task:backend",
+      "reason": "frozen profile/rules"
+    },
+    {
+      "source": "profile",
+      "target": "task:frontend",
+      "reason": "frozen profile/rules"
+    },
+    {
+      "source": "rule:d86e0c6a-c2d2-529c-893d-b05db8ba2d93",
+      "target": "file:backend/app/services/domain_policy.py",
+      "reason": "compiler rule-to-symbol decide"
+    },
+    {
+      "source": "rule:d86e0c6a-c2d2-529c-893d-b05db8ba2d93",
+      "target": "file:frontend/src/app/domain/policy.ts",
+      "reason": "compiler rule-to-symbol decide"
+    },
+    {
+      "source": "rule:d86e0c6a-c2d2-529c-893d-b05db8ba2d93",
+      "target": "operation:cancelTicket",
+      "reason": "operation executes rule"
+    },
+    {
+      "source": "rule:d86e0c6a-c2d2-529c-893d-b05db8ba2d93",
+      "target": "task:backend",
+      "reason": "task owns mapped rule output"
+    },
+    {
+      "source": "rule:d86e0c6a-c2d2-529c-893d-b05db8ba2d93",
+      "target": "task:frontend",
+      "reason": "task owns mapped rule output"
+    },
+    {
+      "source": "rule:e9a1b1a7-8df4-5de2-899a-035110fa4cba",
+      "target": "file:backend/app/services/domain_policy.py",
+      "reason": "compiler rule-to-symbol decide"
+    },
+    {
+      "source": "rule:e9a1b1a7-8df4-5de2-899a-035110fa4cba",
+      "target": "file:frontend/src/app/domain/policy.ts",
+      "reason": "compiler rule-to-symbol decide"
+    },
+    {
+      "source": "rule:e9a1b1a7-8df4-5de2-899a-035110fa4cba",
+      "target": "task:backend",
+      "reason": "task owns mapped rule output"
+    },
+    {
+      "source": "rule:e9a1b1a7-8df4-5de2-899a-035110fa4cba",
+      "target": "task:frontend",
+      "reason": "task owns mapped rule output"
+    },
+    {
+      "source": "rule:ea621a7a-7438-58f6-a50c-fdaf0d9bdfb9",
+      "target": "file:backend/app/services/domain_policy.py",
+      "reason": "compiler rule-to-symbol decide"
+    },
+    {
+      "source": "rule:ea621a7a-7438-58f6-a50c-fdaf0d9bdfb9",
+      "target": "file:frontend/src/app/domain/policy.ts",
+      "reason": "compiler rule-to-symbol decide"
+    },
+    {
+      "source": "rule:ea621a7a-7438-58f6-a50c-fdaf0d9bdfb9",
+      "target": "operation:cancelTicket",
+      "reason": "operation executes rule"
+    },
+    {
+      "source": "rule:ea621a7a-7438-58f6-a50c-fdaf0d9bdfb9",
+      "target": "task:backend",
+      "reason": "task owns mapped rule output"
+    },
+    {
+      "source": "rule:ea621a7a-7438-58f6-a50c-fdaf0d9bdfb9",
+      "target": "task:frontend",
+      "reason": "task owns mapped rule output"
+    },
+    {
+      "source": "task:backend",
+      "target": "file:backend/app/services/domain_policy.py",
+      "reason": "task produces file"
+    },
+    {
+      "source": "task:frontend",
+      "target": "file:frontend/src/app/domain/policy.ts",
+      "reason": "task produces file"
+    }
+  ],
+  "tasks": [
+    {
+      "task_id": "backend",
+      "stage_id": "backend",
+      "owner_agent": "backend",
+      "depends_on": [],
+      "input_artifact_ids": [
+        "3f3847fe-0b1c-5d3e-a213-4d51716d5776"
+      ],
+      "output_paths": [
+        "backend/pyproject.toml",
+        "backend/app/__init__.py",
+        "backend/app/main.py",
+        "backend/.env.example",
+        "backend/alembic.ini"
+      ],
+      "output_directories": [
+        "backend/app/api",
+        "backend/app/core",
+        "backend/app/schemas",
+        "backend/app/services",
+        "backend/app/models",
+        "backend/app/repositories",
+        "backend/app/db"
+      ],
+      "related_fr_ids": [
+        "FR-001"
+      ]
+    },
+    {
+      "task_id": "frontend",
+      "stage_id": "frontend",
+      "owner_agent": "frontend",
+      "depends_on": [],
+      "input_artifact_ids": [
+        "3f3847fe-0b1c-5d3e-a213-4d51716d5776",
+        "985f257f-8fc9-5a7d-a7cf-66fd52302b40"
+      ],
+      "output_paths": [],
+      "output_directories": [
+        "frontend"
+      ],
+      "related_fr_ids": [
+        "FR-001"
+      ]
+    }
+  ],
+  "unknown": []
+}

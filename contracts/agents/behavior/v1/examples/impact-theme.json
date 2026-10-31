@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "project_id": "41c82cf9-28dc-56c6-b8f1-60336c85a7be",
+  "old_snapshot": {
+    "snapshot_id": "3717f67b-a949-527c-a1f5-2256e1da7485",
+    "checksum": "5ea49bbef995743b1814e796034b38dc368b805e4a30af446a5f1ddc4b479eee",
+    "schema_version": "1.0"
+  },
+  "new_snapshot": {
+    "snapshot_id": "a80ecfe2-519f-5d40-aef7-77c04613aa05",
+    "checksum": "6e0498f9c7a492aa226e0120970a10fd0c85e12a848fa53d019dee83b33a68c8",
+    "schema_version": "1.0"
+  },
+  "contract_version": "demo-v1",
+  "profile": {
+    "profile_id": "web-fastapi-angular",
+    "profile_version": "1.1.0",
+    "checksum": "37ceeb543572a6c40704b20cd01a22f22ecb94287dd641cbe8c593fc24011571",
+    "rules_checksum": "84e12b8ea0d02c1b3d7487e759c54eea8729be9b48a97e44c46b6e937dcb12bc"
+  },
+  "changed_nodes": [
+    "artifact:frontend/src/styles.scss"
+  ],
+  "affected_tasks": [
+    {
+      "task_id": "frontend",
+      "stage_id": "frontend",
+      "owner_agent": "frontend",
+      "reason_chain": [
+        {
+          "node": "artifact:frontend/src/styles.scss",
+          "reason": "changed input"
+        },
+        {
+          "node": "task:frontend",
+          "reason": "registered immutable input 985f257f-8fc9-5a7d-a7cf-66fd52302b40"
+        }
+      ],
+      "input_artifact_ids": [
+        "3f3847fe-0b1c-5d3e-a213-4d51716d5776",
+        "985f257f-8fc9-5a7d-a7cf-66fd52302b40"
+      ]
+    }
+  ],
+  "unknown": [],
+  "unchanged_recorded_inputs": [
+    "backend/app/services/domain_policy.py"
+  ],
+  "automatic_reuse_allowed": false
+}

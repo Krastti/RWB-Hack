@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "project_id": "41c82cf9-28dc-56c6-b8f1-60336c85a7be",
+  "old_snapshot": null,
+  "new_snapshot": {
+    "snapshot_id": "a80ecfe2-519f-5d40-aef7-77c04613aa05",
+    "checksum": "6e0498f9c7a492aa226e0120970a10fd0c85e12a848fa53d019dee83b33a68c8",
+    "schema_version": "1.0"
+  },
+  "contract_version": "demo-v1",
+  "profile": {
+    "profile_id": "web-fastapi-angular",
+    "profile_version": "1.1.0",
+    "checksum": "37ceeb543572a6c40704b20cd01a22f22ecb94287dd641cbe8c593fc24011571",
+    "rules_checksum": "84e12b8ea0d02c1b3d7487e759c54eea8729be9b48a97e44c46b6e937dcb12bc"
+  },
+  "changed_nodes": [
+    "artifact:frontend/src/styles.scss",
+    "artifact:requirements.json",
+    "behavior-domains",
+    "compiler:backend",
+    "compiler:frontend",
+    "contract",
+    "entity:ticket",
+    "execution:backend:compiler_configuration",
+    "execution:backend:model_configuration",
+    "execution:backend:prompt",
+    "execution:backend:template",
+    "execution:frontend:compiler_configuration",
+    "execution:frontend:model_configuration",
+    "execution:frontend:prompt",
+    "execution:frontend:template",
+    "file:backend/app/services/domain_policy.py",
+    "file:frontend/src/app/domain/policy.ts",
+    "fr:FR-001",
+    "fr:FR-002",
+    "fr:FR-003",
+    "operation:cancelTicket",
+    "profile",
+    "rule:d86e0c6a-c2d2-529c-893d-b05db8ba2d93",
+    "rule:e9a1b1a7-8df4-5de2-899a-035110fa4cba",
+    "rule:ea621a7a-7438-58f6-a50c-fdaf0d9bdfb9",
+    "screen:ticket_detail:cancel_button",
+    "task:backend",
+    "task:frontend"
+  ],
+  "affected_tasks": [
+    {
+      "task_id": "backend",
+      "stage_id": "backend",
+      "owner_agent": "backend",
+      "reason_chain": [
+        {
+          "node": "task:backend",
+          "reason": "changed input"
+        }
+      ],
+      "input_artifact_ids": [
+        "3f3847fe-0b1c-5d3e-a213-4d51716d5776"
+      ]
+    },
+    {
+      "task_id": "frontend",
+      "stage_id": "frontend",
+      "owner_agent": "frontend",
+      "reason_chain": [
+        {
+          "node": "task:frontend",
+          "reason": "changed input"
+        }
+      ],
+      "input_artifact_ids": [
+        "3f3847fe-0b1c-5d3e-a213-4d51716d5776",
+        "985f257f-8fc9-5a7d-a7cf-66fd52302b40"
+      ]
+    }
+  ],
+  "unknown": [
+    "Missing history or incompatible graph schema"
+  ],
+  "unchanged_recorded_inputs": [],
+  "automatic_reuse_allowed": false
+}
