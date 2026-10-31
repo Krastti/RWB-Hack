@@ -31,7 +31,7 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
 
 
-def setup(db, *, waiting, profile, configured=True, fail_first=False):
+def setup(db, *, waiting, profile, configured=True, fail_first=False, reject_status=429, response_format="json_schema", invalid_first=False):
     owner = uuid4()
     with db.begin() as s:
         s.add(User(id=owner, login=str(owner), password_hash='test'))
@@ -54,6 +54,11 @@ def setup(db, *, waiting, profile, configured=True, fail_first=False):
     checksum = sha256(canonical(answered['requirements']).encode()).hexdigest()
     policies = {'api_policy': read('backend/app/agents/generators/openapi/examples/api-policy.json'),
                 'naming_policy': read('backend/app/agents/graph/architecture/examples/naming-policy.json')}
+    for operation in policies['api_policy']['operations']:
+        for index in operation['security_requirement_indices']:
+            security_text = answered['requirements']['security_requirements'][index]['text']
+            operation['authorization_rules'] = ['{{security_requirement:' + str(index) + '}}' if rule == security_text else rule
+                                                 for rule in operation['authorization_rules']]
     for p in policies.values(): p['requirements_checksum'] = checksum
     with db() as s:
         schema = s.scalar(text('select current_schema()'))
@@ -69,7 +74,7 @@ def setup(db, *, waiting, profile, configured=True, fail_first=False):
                 unlocked.execute(select(Run).with_for_update(nowait=True)).all()
             calls.append((node, payload))
             if fail_first and len(calls) <= int(fail_first):
-                return httpx.Response(429, json={'error': {'message': 'controlled rate limit'}})
+                return httpx.Response(reject_status, json={'error': {'message': 'controlled rejection'}})
             if node == 'analysis':
                 draft = answered if payload['business_input']['answers'] or not waiting else original
             elif node == 'proposal':
@@ -79,22 +84,33 @@ def setup(db, *, waiting, profile, configured=True, fail_first=False):
                     for c in draft['components']:
                         c['output_directories'] = ['backend/src' if d == 'backend' else d.replace('backend/app', 'backend/src') for d in c['output_directories']]
             elif node == 'openapi':
+                assert payload['naming_policy']['schema_version'] == 'architecture-names/1.0'
+                assert payload['first_new_assumption_id'] not in payload['reserved_assumption_ids']
                 draft = read('backend/app/agents/generators/openapi/examples/draft.json')
                 draft['assumptions'] = [a for a in payload['requirements']['assumptions'] if a['id'] == 'ASM-002']
                 for name in ('Ticket', 'TicketStatusUpdate'):
                     draft['schemas'][name]['properties']['status']['maxLength'] = 32
             elif node == 'data_model':
+                assert payload['approved_api_contract']['openapi'].startswith('3.1')
+                assert payload['naming_policy']['schema_version'] == 'architecture-names/1.0'
                 draft = read('backend/app/agents/generators/data_model/examples/data-model.json')
                 draft.update(profile_id=profile, contract_version=payload['context']['contract_version'],
                              requirements_artifact_id=payload['requirements_artifact_id'])
             else:
                 draft = read('backend/app/agents/graph/architecture/examples/ui-draft.json')
+            if invalid_first and len(calls) == 1:
+                from copy import deepcopy
+                draft = deepcopy(draft)
+                draft['requirements']['security_requirements'][0]['id'] = 'FORBIDDEN'
+            if invalid_first and len(calls) == 2:
+                assert payload['repair_candidate']['requirements']['security_requirements'][0]['id'] == 'FORBIDDEN'
+                assert payload['validation_feedback']
             return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(draft)}}],
                 'usage': {'prompt_tokens': 100, 'completion_tokens': 200, 'total_tokens': 300}})
         return httpx.MockTransport(reply)
     def worker():
         return create_pipeline_worker(sessions=db, config=LLMConfig(base_url='https://controlled.invalid/v1', model='test',
-            api_key='controlled-test', max_output_tokens=8000), broker_url='memory://',
+            api_key='controlled-test', max_output_tokens=8000, response_format=response_format), broker_url='memory://',
             transports={k: transport(k) for k in ('analysis', 'proposal', 'openapi', 'data_model', 'ui_spec')})
     return app, worker, calls, requirements_text
 
@@ -205,7 +221,7 @@ def test_http_clarification_resume_same_run(db):
 def test_accepted_analysis_checkpoint_failure_recovers_without_call(db, monkeypatch, fault):
     from app.services.pipeline.checkpoints import PostgreSQLCheckpoints
     from app.services.artifacts import PostgreSQLArtifactStore
-    app, worker_factory, calls, requirements = setup(db, waiting=False, profile='russtech-fullstack')
+    app, worker_factory, calls, requirements = setup(db, waiting=False, profile='russtech-fullstack', response_format='json_object')
     with TestClient(app) as client:
         project = client.post('/api/v1/projects', json={'name': 'Recovery', 'requirements_text': requirements}).json()
         response = client.post(f'/api/v1/projects/{project["id"]}/runs', headers={'Idempotency-Key': 'recovery'},
@@ -296,8 +312,8 @@ def test_http_retry_after_model_rate_limit(db):
         assert len(calls) == 6
 
 
-def test_unknown_rate_limit_usage_stops_at_durable_budget(db):
-    app, factory, calls, requirements = setup(db, waiting=False, profile='web-fastapi-angular', fail_first=20)
+def test_unknown_server_failure_usage_stops_at_durable_budget(db):
+    app, factory, calls, requirements = setup(db, waiting=False, profile='web-fastapi-angular', fail_first=20, reject_status=503)
     with TestClient(app) as client:
         project = client.post('/api/v1/projects', json={'name': 'Budget', 'requirements_text': requirements}).json()
         created = client.post(f'/api/v1/projects/{project["id"]}/runs',
@@ -354,3 +370,33 @@ def test_registered_retry_after_pre_result_worker_failure(db, monkeypatch):
         assert len(calls) == 5
         current = client.get(f'/api/v1/runs/{run_id}').json()
         assert current['stages'][-1]['status'] == 'succeeded'
+
+
+def test_invalid_model_candidate_is_repaired_by_another_accounted_call(db):
+    app, factory, calls, requirements = setup(db, waiting=False, profile='russtech-fullstack',
+                                            response_format='json_object', invalid_first=True)
+    with TestClient(app) as client:
+        project = client.post('/api/v1/projects', json={'name': 'Repair', 'requirements_text': requirements}).json()
+        created = client.post(f'/api/v1/projects/{project["id"]}/runs', headers={'Idempotency-Key': 'repair'},
+                             json={'requirements_text': requirements, 'profile_id': 'russtech-fullstack'})
+        run_id = created.json()['run_id']
+        assert client.get(f'/api/v1/runs/{run_id}/accepted-artifacts').json() == {'items': []}
+        worker = factory()
+        worker.stage_worker.orchestrator.runtime.intake.dispatch()
+        execute_next(db, worker)
+        assert len(client.get(f'/api/v1/runs/{run_id}/accepted-artifacts').json()['items']) == 3
+        execute_next(db, worker)
+        accepted = client.get(f'/api/v1/runs/{run_id}/accepted-artifacts')
+        assert accepted.status_code == 200, accepted.text
+        assert len(accepted.json()['items']) == 8
+        assert len(calls) == 6
+        with db() as s:
+            rows = list(s.scalars(select(ModelCall).where(ModelCall.run_id == UUID(run_id))))
+            assert len(rows) == 6
+            assert sum(r.payload['usage']['output_tokens'] for r in rows) == 1200
+            assert sum(r.payload['status'] == 'failed' for r in rows) == 1
+        for artifact in accepted.json()['items']:
+            raw = client.get(f'/api/v1/runs/{run_id}/artifacts/{artifact["artifact_id"]}')
+            assert raw.status_code == 200 and sha256(raw.content).hexdigest() == artifact['checksum']
+        app.dependency_overrides[current_user] = lambda: CurrentUser(uuid4(), 'other')
+        assert client.get(f'/api/v1/runs/{run_id}/accepted-artifacts').status_code == 404

@@ -50,15 +50,50 @@ def _contains_secret(value: Any, secret: str) -> bool:
     return False
 
 
+def provider_shape(schema):
+    """Decoder guidance only; the untouched full schema remains authoritative."""
+    if isinstance(schema, list):
+        return [provider_shape(v) for v in schema]
+    if not isinstance(schema, dict):
+        return schema
+    result = {}
+    for key, value in schema.items():
+        if key in {'if', 'then', 'else', 'not', 'contains', 'minContains', 'maxContains',
+                   'uniqueItems', 'propertyNames', 'unevaluatedProperties', 'dependentSchemas'}:
+            continue
+        if key in {'properties', '$defs', 'definitions', 'patternProperties'}:
+            result[key] = {name: provider_shape(child) for name, child in value.items()}
+        elif key in {'const', 'enum', 'default', 'examples'}:
+            result[key] = value
+        elif key == 'pattern':
+            pattern = value[:value.index('$(?!')] + '$' if '$(?!' in value else value
+            if '(?' not in pattern:
+                result[key] = pattern
+        elif key == 'allOf':
+            parts = [provider_shape(v) for v in value]
+            parts = [v for v in parts if v]
+            if parts:
+                result[key] = parts
+        else:
+            result[key] = provider_shape(value)
+    return result
+
+
 def request_payload(config: LLMConfig, system: str, prompt: str, schema: dict) -> dict:
     """Build the exact JSON envelope dispatched by the adapter."""
-    response_format: dict[str, Any] = {"type": config.response_format}
-    if config.response_format == "json_schema":
-        response_format["json_schema"] = {"name": "result", "strict": True, "schema": schema}
-    instruction = system + "\nReturn only JSON matching this schema:\n" + json.dumps(schema)
-    return {"model": config.model,
+    compat = config.response_format == "json_schema_compat"
+    response_format: dict[str, Any] = {"type": "json_schema" if compat else config.response_format}
+    if config.response_format in {"json_schema", "json_schema_compat"}:
+        response_format["json_schema"] = {"name": "result", "strict": True, "schema": provider_shape(schema) if compat else schema}
+    instruction = system + "\nReturn only JSON matching the supplied response schema."
+    if config.response_format in {"json_object", "json_schema_compat"}:
+        instruction += "\n" + json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
+    payload = {"model": config.model,
             "messages": [{"role": "system", "content": instruction}, {"role": "user", "content": prompt}],
             "response_format": response_format, "max_tokens": config.max_output_tokens, "stream": False}
+    if config.enable_thinking is not None:
+        payload["chat_template_kwargs"] = {"enable_thinking": config.enable_thinking}
+    return payload
 
 
 class LLMAdapter:
@@ -124,6 +159,20 @@ class LLMAdapter:
             return fail("LLM_UNAVAILABLE", "The model API is unavailable.", True)
 
         status = response.status_code
+        # A definitive client rejection did not admit a completion. Keep the
+        # physical request in the ledger, but release its token reservation.
+        # Timeouts/5xx remain unknown and retain conservative reservations.
+        if status in {400, 401, 403, 404, 413, 415, 422, 429}:
+            counts.update(tokens_in=0, tokens_out=0, total_tokens=0)
+        if status >= 400:
+            try:
+                reported = _json_loads(response.text).get("usage")
+                if isinstance(reported, dict):
+                    for source, target in (("prompt_tokens", "tokens_in"), ("completion_tokens", "tokens_out"), ("total_tokens", "total_tokens")):
+                        value = reported.get(source)
+                        counts[target] = value if type(value) is int and value >= 0 else None
+            except (ValueError, TypeError, AttributeError):
+                pass
         if status in (401, 403):
             return fail("LLM_AUTH_ERROR", "The model API rejected the credentials.", status=status)
         if status == 429:
@@ -163,7 +212,13 @@ class LLMAdapter:
             json.dumps(data, allow_nan=False)
             if _contains_secret(data, self._config.api_key):
                 return fail("LLM_INVALID_RESPONSE", "The model returned unsafe content.")
-            validator.validate(data)
+            errors = list(validator.iter_errors(data))
+            if errors:
+                feedback = tuple("/" + "/".join(map(str, error.absolute_path)) + ": " + error.validator
+                                 for error in errors[:20])
+                return LLMResult(usage=usage(), error=LLMError("LLM_INVALID_RESPONSE",
+                    "The model response is not valid for the requested schema."),
+                    candidate=data, validation_feedback=feedback)
             return LLMResult(data=data, usage=usage())
         except Exception:
             # No provider body, prompt, content, URL or exception text in errors.

@@ -119,6 +119,18 @@ class PipelineOrchestrator:
                         for policy in policies.values():
                             if policy.get('requirements_checksum') is None:
                                 policy['requirements_checksum'] = requirements['checksum']
+                        # Explicit trusted policy placeholders bind exact accepted
+                        # wording without mutating the frozen policy snapshot.
+                        accepted_requirements = json.loads(requirements['content'])
+                        for operation in policies['api_policy']['operations']:
+                            for index in operation['security_requirement_indices']:
+                                if type(index) is not int or not 0 <= index < len(accepted_requirements['security_requirements']):
+                                    raise ValueError('ARCHITECTURE_POLICY_SECURITY_BINDING_INVALID')
+                                marker = '{{security_requirement:' + str(index) + '}}'
+                                if marker in operation['authorization_rules']:
+                                    text = accepted_requirements['security_requirements'][index]['text']
+                                    operation['authorization_rules'] = [text if rule == marker else rule
+                                        for rule in operation['authorization_rules']]
                         prepared = prepare_architecture(request, requirements,
                             profile_bytes=profile._raw, profile_checksum=profile.checksum,
                             rules_text=profile.rules_text, rules_checksum=profile.metadata['rules_checksum'],

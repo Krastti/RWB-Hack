@@ -1,0 +1,168 @@
+{
+  "api_policy": {
+    "schema_version": "openapi-policy/1.0",
+    "requirements_checksum": null,
+    "operations": [
+      {
+        "operation_id": "createTicket",
+        "path": "/tickets",
+        "method": "post",
+        "related_fr_ids": [
+          "FR-001"
+        ],
+        "authentication": "bearer",
+        "authorization_rules": [
+          "Создавать заявки может сотрудник; owner_id берётся из доверенного пользователя."
+        ],
+        "grants": [
+          {
+            "role_id": "ROLE-001",
+            "permission_indices": [
+              0
+            ]
+          }
+        ],
+        "security_requirement_indices": []
+      },
+      {
+        "operation_id": "listOwnTickets",
+        "path": "/tickets",
+        "method": "get",
+        "related_fr_ids": [
+          "FR-002"
+        ],
+        "authentication": "bearer",
+        "authorization_rules": [
+          "Выборка на сервере ограничена owner_id текущего сотрудника.",
+          "{{security_requirement:0}}"
+        ],
+        "grants": [
+          {
+            "role_id": "ROLE-001",
+            "permission_indices": [
+              1
+            ]
+          }
+        ],
+        "security_requirement_indices": [
+          0
+        ]
+      },
+      {
+        "operation_id": "listTickets",
+        "path": "/dispatch/tickets",
+        "method": "get",
+        "related_fr_ids": [
+          "FR-003"
+        ],
+        "authentication": "bearer",
+        "authorization_rules": [
+          "Просмотр всех заявок доступен только диспетчеру."
+        ],
+        "grants": [
+          {
+            "role_id": "ROLE-002",
+            "permission_indices": [
+              0
+            ]
+          }
+        ],
+        "security_requirement_indices": []
+      },
+      {
+        "operation_id": "changeTicketStatus",
+        "path": "/tickets/{id}/status",
+        "method": "patch",
+        "related_fr_ids": [
+          "FR-003"
+        ],
+        "authentication": "bearer",
+        "authorization_rules": [
+          "Изменение статуса доступно только диспетчеру; заявка должна существовать."
+        ],
+        "grants": [
+          {
+            "role_id": "ROLE-002",
+            "permission_indices": [
+              1
+            ]
+          }
+        ],
+        "security_requirement_indices": []
+      }
+    ],
+    "coverage": [
+      {
+        "fr_id": "FR-001",
+        "kind": "operation",
+        "operation_ids": [
+          "createTicket"
+        ],
+        "reason": "Подача заявки с описанием."
+      },
+      {
+        "fr_id": "FR-002",
+        "kind": "operation",
+        "operation_ids": [
+          "listOwnTickets"
+        ],
+        "reason": "Чтение собственных заявок с серверным фильтром владельца."
+      },
+      {
+        "fr_id": "FR-003",
+        "kind": "operation",
+        "operation_ids": [
+          "listTickets",
+          "changeTicketStatus"
+        ],
+        "reason": "Просмотр и изменение статуса диспетчером."
+      },
+      {
+        "fr_id": "FR-004",
+        "kind": "constraint",
+        "operation_ids": [],
+        "reason": "Удаление запрещено всем ролям; DELETE endpoint не создаётся. Backend должен отклонять неподдержанное удаление."
+      }
+    ]
+  },
+  "naming_policy": {
+    "schema_version": "architecture-names/1.0",
+    "requirements_checksum": null,
+    "bindings": [
+      {
+        "schema": "Ticket",
+        "entity": "tickets",
+        "fields": {
+          "id": "id",
+          "owner_id": "owner_id",
+          "description": "description",
+          "status": "status"
+        },
+        "derived_fields": {}
+      },
+      {
+        "schema": "TicketCreate",
+        "entity": "tickets",
+        "fields": {
+          "description": "description"
+        },
+        "derived_fields": {}
+      },
+      {
+        "schema": "TicketStatusUpdate",
+        "entity": "tickets",
+        "fields": {
+          "status": "status"
+        },
+        "derived_fields": {}
+      }
+    ],
+    "nonpersistent_schemas": {
+      "Error": "Общий error envelope, не SQL entity.",
+      "TicketList": "Массив Ticket, не отдельная SQL entity."
+    },
+    "unexposed_entities": {
+      "employees": "Справочник владельцев; публичный employee API требованиями не задан."
+    }
+  }
+}

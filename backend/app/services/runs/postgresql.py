@@ -53,7 +53,7 @@ class PostgreSQLRunCreationRepository:
                 "profile_snapshot": frozen_profile.snapshot(), "execution_policies": self._execution_policies,
                 "revision_id": str(revision.id), "requirements_text": revision.requirements_text,
                 "requirements_hash": revision.hash, "profile": profile,
-                "contracts": {"platform": "2.2.0", "lifecycle": "1.0",
+                "contracts": {"platform": "2.3.0", "lifecycle": "1.0",
                               "agents": profile["contracts"]["agent_schema_version"]},
                 "limits": limits.model_dump(mode="json"),
             }))

@@ -62,7 +62,7 @@ def create_app(
         finally:
             engine.dispose()
 
-    app = FastAPI(title="RWB-Hack Platform API", version="2.2.0", lifespan=lifespan)
+    app = FastAPI(title="RWB-Hack Platform API", version="2.3.0", lifespan=lifespan)
     app.state.engine = engine
     app.state.run_runtime = compose_runtime(
         sessions, retry_limits=retry_limits or ControlLimits.model_validate(run_config.limits.model_dump()),

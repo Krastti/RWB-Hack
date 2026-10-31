@@ -45,7 +45,23 @@ class AnalysisNode:
         prepared = replace(prepared, system=prepared_context.system + '\n' + prepared.system)
         config = replace(self.config, max_output_tokens=min(self.config.max_output_tokens, prepared.max_output_tokens),
                          timeout_seconds=min(self.config.timeout_seconds, prepared.timeout_seconds))
-        response = asyncio.run(generate_analysis(LLMAdapter(config, transport=self.transport), prepared))
+        adapter = LLMAdapter(config, transport=self.transport)
+        original_prompt = json.loads(prepared.prompt)
+        for repair in range(3):
+            response = asyncio.run(generate_analysis(adapter, prepared))
+            if response.ok or response.candidate is None or response.error.code not in {'LLM_INVALID_RESPONSE', 'ANALYSIS_INVALID_DRAFT'}:
+                break
+            if repair == 2:
+                break
+            # Rejected candidates remain private ledger data. Only a fresh model
+            # response passing A-01 and A-02 validation can become a result.
+            payload = dict(original_prompt, repair_candidate=response.candidate,
+                           validation_feedback=list(response.validation_feedback))
+            prepared = replace(prepared, prompt=canonical(payload), system=prepared.system +
+                "\nThe previous candidate failed validation. Regenerate the complete JSON document, fixing the listed paths/codes. "
+                "Never add fields forbidden by the schema. For design_notes status=proposed, assumption_ids must reference "
+                "at least one declared ASM. For needs_clarification, question_ids must include an unresolved required question. "
+                "Preserve all original facts, source quotes and confirmed answers.")
         # The A-01 call ledger survives even if draft validation rejects the response.
         from ..artifacts.budget import PostgreSQLBudgetLedger
         usage = PostgreSQLBudgetLedger(self.store).usage(run_id=request['run_id'], attempt_id=attempt_id)

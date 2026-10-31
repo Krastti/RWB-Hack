@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[5]
 TEMPLATES = ROOT / "templates" / "analysis"
 PROFILE = ROOT / "templates" / "profiles" / "web-fastapi-angular"
-PROMPT_VERSION = "1.0.0"
+PROMPT_VERSION = "1.0.1"
 
 
 class StructuredLLM(Protocol):
@@ -165,9 +165,9 @@ async def generate_analysis(llm: StructuredLLM, prepared: AnalysisPrompt) -> LLM
         return result
     try:
         validate_draft(result.data, prepared)
-    except ContractError:
+    except ContractError as error:
         return LLMResult(
-            usage=result.usage,
+            usage=result.usage, candidate=result.data, validation_feedback=(str(error),),
             error=LLMError(
                 code="ANALYSIS_INVALID_DRAFT",
                 message="The model response failed analysis validation.",

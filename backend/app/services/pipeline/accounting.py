@@ -20,21 +20,22 @@ class AccountedCalls:
             row = s.get(ModelCall, UUID(call_id))
             if row and row.payload.get('response'):
                 from ...agents.llm.adapter import request_payload
-                from dataclasses import replace
                 from hashlib import sha256
                 from ..artifacts.budget import canonical
-                expected = request_payload(replace(adapter._config, response_format='json_schema'), system, prompt, schema)
+                expected = request_payload(adapter._config, system, prompt, schema)
                 if sha256(canonical(expected).encode()).hexdigest() != row.payload['fingerprint']:
                     raise ValueError('MODEL_CALL_REPLAY_INPUT_CHANGED')
                 saved = row.payload['response']
                 return LLMResult(data=saved['data'], usage=LLMUsage(**saved['usage']),
-                    error=LLMError(**saved['error']) if saved['error'] else None)
+                    error=LLMError(**saved['error']) if saved['error'] else None,
+                    candidate=saved.get('candidate'), validation_feedback=tuple(saved.get('validation_feedback', ())))
         config = adapter._config
         from importlib import import_module
         BudgetAdmissionError = import_module(type(self.ledger).__module__).BudgetAdmissionError
         try:
             self.ledger.reserve(**scope, model=config.model, system=system, prompt=prompt, schema=schema,
-                max_output_tokens=config.max_output_tokens, timeout_seconds=config.timeout_seconds, agent_limits=self.limits)
+                max_output_tokens=config.max_output_tokens, timeout_seconds=config.timeout_seconds, agent_limits=self.limits,
+                response_format=config.response_format, enable_thinking=config.enable_thinking)
         except BudgetAdmissionError as error:
             # Admission denied: no physical call and no fabricated usage row.
             return LLMResult(usage=LLMUsage(), error=LLMError('BUDGET_' + error.reason,

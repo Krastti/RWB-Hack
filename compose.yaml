@@ -48,6 +48,8 @@ services:
     command: python -m app.bootstrap_user
   api:
     <<: *runtime
+    volumes:
+      - ./config:/app/config:ro
     depends_on:
       bootstrap-user:
         condition: service_completed_successfully

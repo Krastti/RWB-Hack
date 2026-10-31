@@ -2,6 +2,8 @@
 
 from copy import deepcopy
 from dataclasses import replace
+import json
+import yaml
 import re
 from time import monotonic
 
@@ -74,8 +76,32 @@ class RuntimeNodes:
             if node == "openapi":
                 prepared = modules["prepare_openapi"](request.context, request.requirements_artifact,
                                                        profile=profile, api_policy=request.api_policy)
+                payload = json.loads(prepared.prompt)
+                payload["naming_policy"] = request.naming_policy
+                inherited_ids = [a["id"] for a in payload["requirements"]["assumptions"]]
+                payload["reserved_assumption_ids"] = inherited_ids
+                payload["first_new_assumption_id"] = "ASM-" + str(max(
+                    (int(a.removeprefix("ASM-")) for a in inherited_ids), default=0) + 1).zfill(3)
+                prepared = replace(prepared, prompt=json.dumps(payload, ensure_ascii=False),
+                    system=prepared.system + "\nThe output assumptions array must contain only NEW assumptions, starting at "
+                    "first_new_assumption_id; never copy, paraphrase or redefine reserved_assumption_ids. "
+                    "Operation assumption_ids may reference inherited IDs directly. Use exact API schema and field names "
+                    "from naming_policy.bindings and naming_policy.nonpersistent_schemas. Error is supplied by the compiler, "
+                    "so do not declare it. Do not create unlisted wrapper/response DTO names. "
+                    "For bounded persistent string fields, include maxLength even when enum is present; "
+                    "preserve the explicit string lengths and enums from requirements.")
             elif node == "data_model":
                 prepared = modules["build_data_model_prompt"](request.context, request.requirements_artifact, profile=profile)
+                # A-09 already has the validated A-06 result. A-07 must see those
+                # exact names/types/constraints rather than independently guessing.
+                require(request.openapi_artifact is not None, "ARCHITECTURE_OPENAPI_REQUIRED")
+                payload = json.loads(prepared.prompt)
+                payload["approved_api_contract"] = yaml.safe_load(request.openapi_artifact["content"])
+                payload["naming_policy"] = request.naming_policy
+                prepared = replace(prepared, prompt=json.dumps(payload, ensure_ascii=False),
+                    system=prepared.system + "\nUse approved_api_contract and naming_policy as the trusted API-to-storage contract. "
+                    "Preserve mapped entity/field names, UUID types, nullability, lengths and enum constraints. "
+                    "These are planning inputs; do not claim implementation or verification.")
             else:
                 prepared = modules["prepare_ui_spec"](request.context,
                     requirements_artifact=request.requirements_artifact, openapi_artifact=request.openapi_artifact,

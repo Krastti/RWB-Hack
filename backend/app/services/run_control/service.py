@@ -326,6 +326,8 @@ class RunControlService:
                 raise ControlError(422, "VALIDATION_ERROR", "Result identity or recovery state is invalid")
             private.accepted_result = deepcopy(accepted_result)
             attempt.status, attempt.finished_at = status, now()
+            if status in {'succeeded', 'waiting_for_input'}:
+                attempt.reason = None
             if status == 'failed' and accepted_result.get('diagnostics'):
                 diagnostic = next((d for d in accepted_result['diagnostics'] if d.get('severity') == 'error'), None)
                 if diagnostic:

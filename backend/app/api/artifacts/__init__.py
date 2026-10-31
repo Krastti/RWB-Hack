@@ -2,7 +2,7 @@
 from uuid import UUID
 from urllib.parse import quote
 from fastapi import APIRouter, Depends, Query, Response
-from .dto import ManifestPage
+from .dto import ManifestPage, AcceptedArtifacts
 from ..auth import current_user
 from ..common import ContractRoute, error_response
 from ...models.dto.auth import CurrentUser
@@ -13,6 +13,10 @@ from ...services.artifacts import ArtifactError
 def configure_artifacts(app, sessions):
     service = ArtifactReadService(sessions)
     router = APIRouter(prefix='/api/v1/runs', tags=['artifacts'], route_class=ContractRoute)
+
+    @router.get('/{run_id}/accepted-artifacts', operation_id='listAcceptedArtifacts', response_model=AcceptedArtifacts)
+    def accepted_artifacts(run_id: UUID, user: CurrentUser = Depends(current_user)):
+        return service.accepted(owner_id=user.id, run_id=run_id)
 
     @router.get('/{run_id}/artifacts', operation_id='listArtifacts', response_model=ManifestPage)
     def list_artifacts(run_id: UUID, limit: int = Query(100, ge=1, le=100),

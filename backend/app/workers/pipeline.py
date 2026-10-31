@@ -13,6 +13,15 @@ from ..services.run_control.models import Limits
 from ..services.pipeline import compose_pipeline
 
 
+def thinking_from_env():
+    value = os.environ.get('LLM_ENABLE_THINKING')
+    if value is None or not value.strip():
+        return None
+    if value.lower() not in {'true', 'false'}:
+        raise ValueError('LLM_ENABLE_THINKING must be true or false')
+    return value.lower() == 'true'
+
+
 def create_pipeline_worker(*, sessions=None, config=None, broker_url=None, transports=None):
     if sessions is None:
         url = make_url(os.environ['DATABASE_URL'])
@@ -22,7 +31,7 @@ def create_pipeline_worker(*, sessions=None, config=None, broker_url=None, trans
     config = config or LLMConfig(base_url=os.environ['LLM_BASE_URL'], model=os.environ['LLM_MODEL'],
         api_key=os.environ['LLM_API_KEY'], max_output_tokens=int(os.environ.get('LLM_MAX_OUTPUT_TOKENS', '30000')),
         timeout_seconds=float(os.environ.get('LLM_TIMEOUT_SECONDS', '60')),
-        response_format=os.environ.get('LLM_RESPONSE_FORMAT', 'json_schema'))
+        response_format=os.environ.get('LLM_RESPONSE_FORMAT', 'json_schema'), enable_thinking=thinking_from_env())
     runtime = compose_runtime(sessions, retry_limits=Limits(max_calls=int(os.environ.get('RUN_MAX_CALLS', '60')),
         max_output_tokens=int(os.environ.get('RUN_MAX_OUTPUT_TOKENS', '180000'))))
     return compose_pipeline(runtime, config, broker_url=broker_url or os.environ['CELERY_BROKER_URL'], transports=transports)

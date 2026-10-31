@@ -12,7 +12,7 @@ from uuid import UUID
 from zipfile import ZipFile, ZIP_DEFLATED
 from sqlalchemy import select
 from contracts.agents.validate import Contracts
-from ...models import Run, Project
+from ...models import Run, Project, StageAttempt
 from .models import ArtifactObject, ArtifactSnapshot, ExecutionReceipt
 from .store import require, ArtifactError
 
@@ -109,6 +109,36 @@ class ArtifactReadService:
         if row is None:
             raise SnapshotReadError(404, 'NOT_FOUND')
         return row
+
+    def accepted(self, *, owner_id, run_id):
+        """Latest checkpoint-confirmed stage outputs, independently of assembly."""
+        with self.sessions() as session:
+            self.owned(session, owner_id, run_id)
+            attempts = session.scalars(select(StageAttempt).where(StageAttempt.run_id == run_id,
+                StageAttempt.status.in_(['succeeded', 'waiting_for_input'])))
+            latest = {}
+            for attempt in attempts:
+                receipt = session.get(ExecutionReceipt, (attempt.id, 'result'))
+                checkpoint = session.get(ExecutionReceipt, (attempt.id, 'checkpoint'))
+                if receipt is None or checkpoint is None:
+                    continue
+                checksum = sha256(json.dumps(receipt.payload, sort_keys=True, separators=(',', ':'),
+                    ensure_ascii=False).encode()).hexdigest()
+                if checkpoint.payload.get('result_checksum') != checksum:
+                    continue
+                for ref in receipt.payload['output_artifacts']:
+                    row = session.get(ArtifactObject, UUID(ref['artifact_id']))
+                    require(row is not None and row.run_id == run_id and row.attempt_id == attempt.id,
+                            'ARTIFACT_ACCEPTANCE_MISMATCH')
+                    metadata = {k: v for k, v in ref.items() if k not in {'content', 'storage_ref'}}
+                    require(row.metadata_json == metadata, 'ARTIFACT_ACCEPTANCE_MISMATCH')
+                    if metadata['author_agent'] == 'orchestrator':
+                        continue
+                    verified(row)
+                    old = latest.get(metadata['path'])
+                    if old is None or (metadata['version'], metadata['artifact_id']) > (old['version'], old['artifact_id']):
+                        latest[metadata['path']] = deepcopy(metadata)
+            return {'items': [latest[path] for path in sorted(latest)]}
 
     def list(self, *, owner_id, run_id, limit=100, cursor=None):
         with self.sessions() as session:

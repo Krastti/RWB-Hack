@@ -24,3 +24,8 @@ class ManifestPage(BaseModel):
     snapshot_id: UUID
     items: list[Artifact]
     next_cursor: str | None
+
+
+class AcceptedArtifacts(BaseModel):
+    model_config = ConfigDict(extra='forbid', frozen=True)
+    items: list[Artifact]

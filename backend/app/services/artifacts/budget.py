@@ -32,12 +32,12 @@ class PostgreSQLBudgetLedger:
         self.artifacts = artifacts
 
     def reserve(self, *, run_id, attempt_id, call_id, model, system, prompt, schema,
-                max_output_tokens, timeout_seconds, agent_limits):
+                max_output_tokens, timeout_seconds, agent_limits, response_format="json_schema", enable_thinking=None):
         # UTF-8 bytes bound the tokenizer input conservatively; includes A-01's
         # schema instruction and provider envelope, not only the subject prompt.
-        # json_schema is the larger envelope even for json_object callers.
         envelope = request_payload(LLMConfig(base_url='https://unused.invalid/v1', model=model,
-            api_key='unused', max_output_tokens=max_output_tokens, timeout_seconds=timeout_seconds),
+            api_key='unused', max_output_tokens=max_output_tokens, timeout_seconds=timeout_seconds,
+            response_format=response_format, enable_thinking=enable_thinking),
             system=system, prompt=prompt, schema=schema)
         encoded = canonical(envelope).encode()
         reservation = {'input': len(encoded), 'output': max_output_tokens}
