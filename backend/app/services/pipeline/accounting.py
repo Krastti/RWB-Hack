@@ -32,10 +32,21 @@ class AccountedCalls:
         config = adapter._config
         from importlib import import_module
         BudgetAdmissionError = import_module(type(self.ledger).__module__).BudgetAdmissionError
+        import asyncio, os
+        from hashlib import sha256
+        module = import_module(type(self.ledger).__module__)
+        interval = 0 if adapter._transport is not None else float(os.environ.get('LLM_MIN_CALL_INTERVAL_SECONDS', '0'))
+        rate_scope = sha256((config.base_url + ':' + config.api_key).encode()).hexdigest()
         try:
-            self.ledger.reserve(**scope, model=config.model, system=system, prompt=prompt, schema=schema,
-                max_output_tokens=config.max_output_tokens, timeout_seconds=config.timeout_seconds, agent_limits=self.limits,
-                response_format=config.response_format, enable_thinking=config.enable_thinking)
+            while True:
+                try:
+                    self.ledger.reserve(**scope, model=config.model, system=system, prompt=prompt, schema=schema,
+                        max_output_tokens=config.max_output_tokens, timeout_seconds=config.timeout_seconds, agent_limits=self.limits,
+                        response_format=config.response_format, enable_thinking=config.enable_thinking,
+                        minimum_interval_seconds=interval, rate_scope=rate_scope)
+                    break
+                except module.RateAdmissionDeferred as deferred:
+                    await asyncio.sleep(min(deferred.seconds, 30))
         except BudgetAdmissionError as error:
             # Admission denied: no physical call and no fabricated usage row.
             return LLMResult(usage=LLMUsage(), error=LLMError('BUDGET_' + error.reason,

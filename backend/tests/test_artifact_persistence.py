@@ -252,3 +252,21 @@ def test_archive_reader_roundtrip_pins_immutable_bytes(db):
         assert zipped.read(item['path']) == item['content'].encode()
         assert json.loads(zipped.read('manifest.json')) == manifest
         assert sha256(zipped.read(item['path'])).hexdigest() == item['checksum']
+
+
+def test_provider_admission_spacing_is_durable_and_does_not_reserve_denied_call(db):
+    from app.services.artifacts.budget import RateAdmissionDeferred
+    store, run_id, lease, rt = setup_store(db)
+    scope = dict(run_id=str(run_id), attempt_id=str(lease.command.attempt_id))
+    args = dict(**scope, model='rate-test', system='policy', prompt='subject', schema={'type': 'object'},
+                max_output_tokens=100, timeout_seconds=10, agent_limits={'max_calls': 10, 'max_output_tokens': 1000},
+                minimum_interval_seconds=65, rate_scope='controlled-provider-key-hash')
+    ledger = PostgreSQLBudgetLedger(store)
+    ledger.reserve(**args, call_id=str(uuid4()))
+    fresh = PostgreSQLBudgetLedger(store)
+    with pytest.raises(RateAdmissionDeferred) as error:
+        fresh.reserve(**args, call_id=str(uuid4()))
+    assert 0 < error.value.seconds <= 65
+    assert fresh.usage(**scope)['calls'] == 1
+    # Admission rollback released the Run lock; heartbeat remains possible.
+    rt.queue.heartbeat(lease)

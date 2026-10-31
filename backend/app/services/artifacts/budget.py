@@ -5,7 +5,7 @@ from hashlib import sha256
 import json
 import math
 from uuid import UUID
-from sqlalchemy import select
+from sqlalchemy import select, text
 from ...agents.generation import GenerationError
 from ...agents.llm.adapter import request_payload
 from ...agents.llm import LLMConfig
@@ -21,6 +21,11 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+class RateAdmissionDeferred(Exception):
+    def __init__(self, seconds):
+        self.seconds = seconds
+
+
 class BudgetAdmissionError(GenerationError):
     def __init__(self, reason):
         super().__init__('BUDGET_EXCEEDED')
@@ -32,7 +37,7 @@ class PostgreSQLBudgetLedger:
         self.artifacts = artifacts
 
     def reserve(self, *, run_id, attempt_id, call_id, model, system, prompt, schema,
-                max_output_tokens, timeout_seconds, agent_limits, response_format="json_schema", enable_thinking=None):
+                max_output_tokens, timeout_seconds, agent_limits, response_format="json_schema", enable_thinking=None, minimum_interval_seconds=0, rate_scope=None):
         # UTF-8 bytes bound the tokenizer input conservatively; includes A-01's
         # schema instruction and provider envelope, not only the subject prompt.
         envelope = request_payload(LLMConfig(base_url='https://unused.invalid/v1', model=model,
@@ -44,6 +49,14 @@ class PostgreSQLBudgetLedger:
         with self.artifacts.execution.transaction() as session:
             self.artifacts._writing(session, run_id, attempt_id)
             run = session.get(Run, UUID(str(run_id)))  # lease transaction already holds Run lock
+            if minimum_interval_seconds and rate_scope:
+                session.execute(text('SELECT pg_advisory_xact_lock(hashtext(:scope))'), {'scope': rate_scope})
+                latest = session.scalar(select(ModelCall).where(ModelCall.payload['rate_scope'].astext == rate_scope)
+                    .order_by(ModelCall.payload['started_at'].astext.desc()).limit(1))
+                if latest:
+                    elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(latest.payload['started_at'])).total_seconds()
+                    if elapsed < minimum_interval_seconds:
+                        raise RateAdmissionDeferred(minimum_interval_seconds - elapsed)
             old = session.get(ModelCall, UUID(call_id))
             if old is not None:
                 raise GenerationError('MODEL_CALL_ALREADY_RESERVED')
@@ -65,7 +78,7 @@ class PostgreSQLBudgetLedger:
                 if exceeded:
                     raise BudgetAdmissionError(reason)
             session.add(ModelCall(call_id=UUID(call_id), run_id=run.id, attempt_id=UUID(str(attempt_id)),
-                payload={'model': model, 'reservation': reservation, 'fingerprint': sha256(encoded).hexdigest(),
+                payload={'model': model, 'rate_scope': rate_scope, 'reservation': reservation, 'fingerprint': sha256(encoded).hexdigest(),
                          'started_at': now(), 'finished_at': None, 'status': 'reserved', 'usage': None}))
 
     def _settle(self, run_id, attempt_id, call_id, usage, status, response=None):

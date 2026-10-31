@@ -109,6 +109,7 @@ class ArchitectureNode:
             payload = {
                 "context": {key: context[key] for key in ("run_id", "stage_id", "attempt", "contract_version")},
                 "requirements": requirements,
+                "mandatory_component_coverage": [f['id'] for f in requirements['functional_requirements']],
                 "profile_policy": {key: profile[key] for key in (
                     "profile_id", "profile_version", "stack", "ui_kit", "ownership", "required_artifacts")},
                 "profile_rules": rules_text,
