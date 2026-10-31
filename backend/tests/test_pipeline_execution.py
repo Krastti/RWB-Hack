@@ -295,6 +295,35 @@ def test_missing_trusted_policy_fails_without_architecture_model_call(db):
             assert receipt.payload['diagnostics'][0]['code'] == 'ARCHITECTURE_POLICIES_REQUIRED'
 
 
+def test_invalid_analysis_schema_fails_before_physical_call_reservation(db, monkeypatch):
+    from dataclasses import replace
+    from app.services.pipeline import analysis
+
+    original = analysis.build_analysis_prompt
+
+    def invalid_schema(*args, **kwargs):
+        return replace(original(*args, **kwargs), schema={'type': 'invalid-type'})
+
+    monkeypatch.setattr(analysis, 'build_analysis_prompt', invalid_schema)
+    app, factory, calls, requirements = setup(db, waiting=False, profile='web-fastapi-angular')
+    with TestClient(app) as client:
+        project = client.post('/api/v1/projects', json={'name': 'Schema preflight', 'requirements_text': requirements}).json()
+        created = client.post(f'/api/v1/projects/{project["id"]}/runs',
+            headers={'Idempotency-Key': 'invalid-schema'}, json={'requirements_text': requirements})
+        run_id = UUID(created.json()['run_id'])
+        worker = factory()
+        worker.stage_worker.orchestrator.runtime.intake.dispatch()
+        execute_next(db, worker)
+        assert not calls
+        with db() as session:
+            assert session.get(Run, run_id).status == 'failed'
+            assert session.scalar(select(func.count()).select_from(ModelCall).where(ModelCall.run_id == run_id)) == 0
+            attempt = session.scalar(select(StageAttempt).where(StageAttempt.run_id == run_id))
+            result = session.get(ExecutionReceipt, (attempt.id, 'result')).payload
+            assert result['diagnostics'][0]['code'] == 'LLM_INVALID_SCHEMA'
+            assert result['usage']['calls'] == 0
+
+
 def test_http_retry_after_model_rate_limit(db):
     app, factory, calls, requirements = setup(db, waiting=False, profile='russtech-fullstack', fail_first=True)
     with TestClient(app) as client:

@@ -102,6 +102,31 @@ def request_payload(config: LLMConfig, system: str, prompt: str, schema: dict) -
     return payload
 
 
+class _InvalidRequest(ValueError):
+    def __init__(self, code: str, message: str):
+        self.code, self.message = code, message
+        super().__init__(code)
+
+
+def _prepare_request(config, system, prompt, schema):
+    """Validate locally before admitting a physical model call."""
+    if not isinstance(system, str) or not isinstance(prompt, str) or not prompt.strip():
+        raise _InvalidRequest("LLM_INVALID_INPUT", "A nonempty prompt and string system message are required.")
+    try:
+        if not isinstance(schema, dict):
+            raise ValueError()
+        schema = _json_loads(json.dumps(schema, allow_nan=False))
+        validator_class = validator_for(schema)
+        validator_class.check_schema(schema)
+        validator = validator_class(
+            schema, registry=Registry(retrieve=_no_remote_schema), format_checker=FormatChecker(),
+        )
+        return validator, request_payload(config, system, prompt, schema)
+    except Exception:
+        # Validation exceptions may contain private schema or business values.
+        raise _InvalidRequest("LLM_INVALID_SCHEMA", "The supplied schema cannot be used.") from None
+
+
 class LLMAdapter:
     """One HTTP call per generate(); caller owns retries and run budgets.
 
@@ -117,6 +142,10 @@ class LLMAdapter:
         from backend.app.agents.llm.accounting import active_accounting
         accounting = active_accounting.get()
         if accounting is not None:
+            try:
+                _prepare_request(self._config, system, prompt, schema)
+            except _InvalidRequest as error:
+                return LLMResult(usage=LLMUsage(), error=LLMError(error.code, error.message))
             return await accounting.generate(self, system, prompt, schema)
         return await self._generate(system=system, prompt=prompt, schema=schema)
 
@@ -132,21 +161,9 @@ class LLMAdapter:
             return LLMResult(usage=usage(), error=LLMError(code, message, retryable, status))
 
         try:
-            if not isinstance(system, str) or not isinstance(prompt, str) or not prompt.strip():
-                return fail("LLM_INVALID_INPUT", "A nonempty prompt and string system message are required.")
-            if not isinstance(schema, dict):
-                return fail("LLM_INVALID_SCHEMA", "A JSON Schema object is required.")
-            # Copy the caller's schema and reject values outside the JSON data model.
-            schema = _json_loads(json.dumps(schema, allow_nan=False))
-            validator_class = validator_for(schema)
-            validator_class.check_schema(schema)
-            validator = validator_class(
-                schema, registry=Registry(retrieve=_no_remote_schema), format_checker=FormatChecker(),
-            )
-            payload = request_payload(self._config, system, prompt, schema)
-        except Exception:
-            # Never expose validation exceptions: they can contain schema values.
-            return fail("LLM_INVALID_SCHEMA", "The supplied schema cannot be used.")
+            validator, payload = _prepare_request(self._config, system, prompt, schema)
+        except _InvalidRequest as error:
+            return fail(error.code, error.message)
 
         try:
             async with asyncio.timeout(self._config.timeout_seconds):

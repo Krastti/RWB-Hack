@@ -533,3 +533,57 @@ normal Compose configuration; the temporary diagnostic HTTP relay was removed.
 The three real accepted analysis files were reread after restart and their bytes
 matched stored SHA-256 checksums. No further live model retry was issued at this
 commit-only completion step. Live A-09 acceptance remains outstanding.
+
+## Follow-up: preflight accounting and live-verification refusal (2026-10-31)
+
+Checked source: `6d8960f0bd2d06757a6fc11556f9e05efce51731` plus the
+uncommitted follow-up patch. Main base is `0337844f0f47c5eba6600beec87e833a2f63738a`.
+Work used a separate checkout; the user's `feat/83-architecture-node` was untouched.
+The existing PR branch name was preserved despite lacking an issue number.
+
+Two regressions were reproduced before their corrections:
+
+- A locally invalid analysis JSON Schema reserved a ModelCall before A-01
+  returned calls=0. Ledger settlement raised MODEL_CALL_INVALID_USAGE and the
+  command returned recovery_pending. Preflight now runs before physical-call
+  admission. The HTTP/worker/PostgreSQL regression verifies a normal failed
+  result with LLM_INVALID_SCHEMA, zero calls and no ModelCall reservation.
+  Additional cases cover blank prompts, non-object schemas and non-JSON values.
+- The live verification tool accepted a succeeded architecture stage before
+  checking the current Run state. A failed, cancelled, budget-exceeded or waiting
+  Run could proceed to byte verification and a success report. The tool now
+  refuses these states, including cancelling, before reading accepted artifacts.
+  Four pre-fix reproductions failed; all five final state cases pass.
+
+Python 3.12.15 and a separate PostgreSQL 16 instance were used. Final commands
+were run from the checkout root with the temporary virtualenv's Python:
+
+```sh
+RWB_TEST_DATABASE_URL=<disposable PostgreSQL URL> PYTHONPATH=backend:backend/tests:. python -m pytest -q backend/tests --tb=short
+# 158 passed, 15 subtests passed; 148.66s
+
+PYTHONPATH=backend:backend/app/agents:. python -m unittest backend.app.agents.graph.test_graph backend.app.agents.graph.test_cross_version backend.app.agents.nodes.architecture.test_node backend.app.agents.generators.ui_spec.test_ui_spec backend.app.agents.requirements_analyst.tests.test_agent backend.app.agents.generation.tests.test_executor -q
+# 144 tests OK; 54.631s
+
+python -m contracts.agents.validate --check
+# 11 schemas, 22 examples, 4 linked bundles, 1 snapshot; offline OK
+
+uv pip check --python <temporary virtualenv>/bin/python
+# 88 packages; all installed packages compatible
+
+git diff --check
+# PASS
+```
+
+Models in these tests use controlled HTTP transport; PostgreSQL is real.
+SQL test fixtures apply migrations directly; a new Flyway CLI, Redis/Celery
+subprocess, frontend/browser or live-provider run was not executed in this
+follow-up. No paid provider request was sent. The earlier live failure remains
+unresolved by live evidence: this environment has neither the working provider
+configuration nor access to the old Run. PR readiness still requires a real
+accepted five-artifact A-09 bundle and HTTP verification of all eight outputs.
+
+The operator-supplied tickets policy is domain-specific. Arbitrary-input policy
+generation remains unimplemented; no universal live-input success is claimed.
+No public DTO, grants or database schema changed in this follow-up. No issues,
+commits, pushes, PR edits or merges were performed by this verification.

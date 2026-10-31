@@ -34,11 +34,11 @@ def main():
             if state != previous:
                 print(json.dumps({'status': run['status'], 'stages': state}, ensure_ascii=False), flush=True)
                 previous = state
+            if run['status'] in {'failed', 'budget_exceeded', 'cancelling', 'cancelled', 'waiting_for_input'}:
+                raise SystemExit('Run requires intervention; no successful architecture claim')
             architecture = [a for a in run['stages'] if a['stage_id'] == 'architecture']
             if architecture and max(architecture, key=lambda a: a['attempt_no'])['status'] == 'succeeded':
                 break
-            if run['status'] in {'failed', 'budget_exceeded', 'cancelled', 'waiting_for_input'}:
-                raise SystemExit('Run requires intervention; no successful architecture claim')
             if time.monotonic() >= deadline:
                 raise SystemExit('Architecture is not accepted within the wait limit')
             time.sleep(2)

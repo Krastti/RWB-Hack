@@ -7,6 +7,29 @@ from backend.app.agents.llm import LLMAdapter, LLMConfig
 from backend.app.agents.llm.adapter import request_payload
 
 
+@pytest.mark.parametrize('prompt,schema,code', [
+    (' ', {'type': 'object'}, 'LLM_INVALID_INPUT'),
+    ('prompt', [], 'LLM_INVALID_SCHEMA'),
+    ('prompt', {'type': 'invalid-type'}, 'LLM_INVALID_SCHEMA'),
+    ('prompt', {'enum': [float('nan')]}, 'LLM_INVALID_SCHEMA'),
+])
+def test_invalid_request_does_not_enter_physical_call_accounting(prompt, schema, code):
+    from backend.app.agents.llm.accounting import active_accounting
+
+    class UnexpectedAccounting:
+        async def generate(self, *args):
+            pytest.fail('Preflight failure must not reserve a physical call')
+
+    token = active_accounting.set(UnexpectedAccounting())
+    try:
+        result = asyncio.run(LLMAdapter(LLMConfig(base_url='https://controlled.invalid/v1',
+            model='test', api_key='test')).generate(system='system', prompt=prompt, schema=schema))
+    finally:
+        active_accounting.reset(token)
+    assert result.error.code == code
+    assert result.usage.calls == 0
+
+
 @pytest.mark.parametrize('status', [400, 401, 403, 404, 413, 415, 422, 429, 500, 503])
 def test_rejected_requests_release_tokens_but_server_failures_remain_unknown(status):
     result = asyncio.run(LLMAdapter(LLMConfig(base_url='https://controlled.invalid/v1', model='test', api_key='test'),

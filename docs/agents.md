@@ -158,6 +158,10 @@ CancelledError распространяется наружу. Schema — сам�
 refs допустимы, внешняя загрузка запрещена. Перед отправкой копируется/проверяется;
 ответ локально проверяется с FormatChecker. Duplicate JSON keys, NaN/Infinity,
 Markdown wrappers, неверная схема/finish reason/usage отклоняются.
+В pipeline проверка prompt и схемы выполняется до резервирования физического
+вызова. Локальный отказ возвращает `LLM_INVALID_INPUT`/`LLM_INVALID_SCHEMA` с
+`calls=0`: запись ModelCall и резерв бюджета не создаются, worker сохраняет
+обычный failed result вместо технического recovery.
 
 LLMConfig требует доверенные base_url/model/api_key; defaults: timeout_seconds=60,
 max_output_tokens=2048, response_format=json_schema. Strict json_schema и явно
