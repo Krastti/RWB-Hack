@@ -650,3 +650,41 @@ rerun for these backend changes. No schema/DTO/grant/migration change is needed.
 Rollback reverts these fixes while retaining all existing call/receipt/checkpoint
 data. Live A-09 acceptance and arbitrary-input domain policy generation remain
 unresolved acceptance items; this is not a claim of full pipeline readiness.
+
+## CI follow-up: minimal generation dependencies (2026-10-31)
+
+GitHub Actions run 41175452983 on head
+`31e8aef0cab39f7a2c334ee3b2bca6f3e01315c7` passed architecture-integration but
+failed profile-tests when importing generation tests: config.__init__ imports
+dotenv, while the minimal generation/LLM dependency chain did not declare it.
+The previous remote head 6d8960f failed at the same import. Local full-worker
+checks had installed python-dotenv through backend/requirements.txt and therefore
+did not expose this minimal-install failure.
+
+The LLM requirements now declare python-dotenv>=1.0,<2 because importing its
+config initializes shared environment configuration. Backend API requirements
+retain their own dependency. No workflow command, assertion or runtime behavior
+was removed or changed.
+
+Reproduced the import failure in a fresh Python 3.12.15 environment with precisely
+the job's dependency files, then installed the corrected requirements and reran
+all three job commands with PYTHONPATH=backend:.:
+
+```sh
+uv pip install --python /tmp/rwb152-ci-venv/bin/python -r backend/requirements-test.txt -r backend/app/agents/generation/requirements.txt
+uv pip check --python /tmp/rwb152-ci-venv/bin/python
+# 22 packages, compatible
+
+PYTHONPATH=backend:. /tmp/rwb152-ci-venv/bin/python -m pytest backend/tests/test_profile_review.py -v
+# 12 passed
+PYTHONPATH=backend:. /tmp/rwb152-ci-venv/bin/python -m pytest backend/tests/test_context_review.py contracts/agents/test_validate.py -v
+# 21 passed, 2 subtests passed
+PYTHONPATH=backend:. /tmp/rwb152-ci-venv/bin/python -m unittest backend.app.agents.generation.tests.test_executor -v
+# 11 tests OK
+git diff --check
+# PASS
+```
+
+Checked source is head 31e8aef plus this uncommitted dependency/documentation fix.
+New CI success is pending user commit/push; no remote rerun or publication was
+performed. No provider configuration or paid model call was needed.
