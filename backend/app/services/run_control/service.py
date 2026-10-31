@@ -326,6 +326,11 @@ class RunControlService:
                 raise ControlError(422, "VALIDATION_ERROR", "Result identity or recovery state is invalid")
             private.accepted_result = deepcopy(accepted_result)
             attempt.status, attempt.finished_at = status, now()
+            if status == 'failed' and accepted_result.get('diagnostics'):
+                diagnostic = next((d for d in accepted_result['diagnostics'] if d.get('severity') == 'error'), None)
+                if diagnostic:
+                    attempt.reason = diagnostic['code']
+
             previous_metrics = record.run.metrics.model_dump()
             previous_completeness = dict(record.tokens_complete)
             saved_state = save_boundary(record)

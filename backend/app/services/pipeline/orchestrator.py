@@ -72,8 +72,14 @@ class PipelineOrchestrator:
                                       store, PostgreSQLCheckpoints(store))
                 if command.attempt_no > 1 and (source.input_state.get('schema_version') != 'clarification-input/1'
                         or graph.snapshot(str(command.run_id))['stage_status'] == 'failed'):
+                    old = graph.snapshot(str(command.run_id))
+                    # A pre-result crash may leave LangGraph running after C-03 has
+                    # durably failed that attempt. Only that terminal lifecycle
+                    # record authorizes replacing its pending graph task.
+                    previous_failed = any(a.stage_id == 'analysis' and a.status == 'failed'
+                        and a.attempt_no == old['request']['attempt'] for a in record.run.stages)
                     state = graph.retry(str(command.run_id), attempt_id=str(command.attempt_id),
-                                        attempt_no=command.attempt_no)
+                                        attempt_no=command.attempt_no, previous_attempt_failed=previous_failed)
                 elif source.input_state.get('schema_version') == 'clarification-input/1':
                     state = graph.resume(str(command.run_id), questions_revision=source.input_state['questions_revision'],
                         answers=source.input_state['answers'], attempt_id=str(command.attempt_id))
@@ -154,6 +160,10 @@ class PipelineOrchestrator:
                     setattr(record.run.metrics, target, sum(v for v in values if v is not None))
                 record.run.metrics.attempts = len(record.attempts)
                 record.run.metrics.duration_ms = max(0, int((now() - record.run.created_at).total_seconds() * 1000))
+                budget_reason = next((d['code'][7:] for d in result['diagnostics']
+                                      if d['code'].startswith('BUDGET_')), None)
+                if budget_reason:
+                    record.run.stop_reason = budget_reason
                 if command.stage_id == 'analysis':
                     from ..run_control.models import Question
                     record.run.questions = [Question.model_validate(q) for q in result['questions']]
@@ -167,7 +177,10 @@ class PipelineOrchestrator:
                 if tx.snapshot.status == 'cancelling':
                     return
                 if result['status'] in {'failed', 'cancelled'}:
-                    tx.transition_run(expected='running', target='failed', reason_code='PIPELINE_STAGE_FAILED')
+                    budget_reason = next((d['code'][7:] for d in result['diagnostics']
+                                          if d['code'].startswith('BUDGET_')), None)
+                    tx.transition_run(expected='running', target='budget_exceeded' if budget_reason else 'failed',
+                                      reason_code=budget_reason or 'PIPELINE_STAGE_FAILED')
                 elif result['status'] == 'waiting_for_input':
                     tx.transition_run(expected='running', target='waiting_for_input', reason_code='ANALYSIS_QUESTIONS_REQUIRED')
             if command.stage_id == 'analysis' and result['status'] == 'succeeded' and run.status == 'running':

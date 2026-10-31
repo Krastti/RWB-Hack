@@ -419,3 +419,27 @@ including controlled model 429 → HTTP retry → accepted analysis and A-09 →
 duplicate delivery without another call. AnalysisGraph regression suite: 26
 tests passed. Angular analysis component: 3 tests passed. Controlled transport
 was used for verification; no additional live model call was issued.
+
+### Budget admission after repeated unknown-usage failures
+
+The fifth local analysis attempt failed before dispatch: two earlier provider
+429 responses had no usage, leaving conservative input reservations of 122803
+each. Another identical reservation exceeds the frozen 300000 input limit.
+This is internal admission exhaustion, not another provider response. Unknown
+usage remains unknown and its reservation is retained.
+
+Budget denial now returns a failed C-02 result with zero physical calls and a
+specific `BUDGET_MAX_INPUT_TOKENS` diagnostic. Result and checkpoint are accepted,
+Run transitions to `budget_exceeded` with `MAX_INPUT_TOKENS`, and unsupported
+input-limit retries are rejected through the existing C-03 path. Failed stage
+reasons now expose the accepted diagnostic instead of retaining WORKER_STARTED.
+Historical attempts are not rewritten.
+
+A registered retry can also replace pending graph work from a pre-result crash
+only after the worker verifies that the previous C-03 attempt is durably failed.
+This preserves the old receipts and uses the new registered attempt identity.
+
+Validation: PostgreSQL pipeline suite 9 passed (51.48s), additional pre-result
+crash/retry integration test 1 passed (7.82s), persistence suite 6 passed, and
+AnalysisGraph regression suite 26 passed. All model verification used controlled
+transport; no additional live provider call was made for this fix.

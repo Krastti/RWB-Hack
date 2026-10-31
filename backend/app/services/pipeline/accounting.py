@@ -30,8 +30,15 @@ class AccountedCalls:
                 return LLMResult(data=saved['data'], usage=LLMUsage(**saved['usage']),
                     error=LLMError(**saved['error']) if saved['error'] else None)
         config = adapter._config
-        self.ledger.reserve(**scope, model=config.model, system=system, prompt=prompt, schema=schema,
-            max_output_tokens=config.max_output_tokens, timeout_seconds=config.timeout_seconds, agent_limits=self.limits)
+        from importlib import import_module
+        BudgetAdmissionError = import_module(type(self.ledger).__module__).BudgetAdmissionError
+        try:
+            self.ledger.reserve(**scope, model=config.model, system=system, prompt=prompt, schema=schema,
+                max_output_tokens=config.max_output_tokens, timeout_seconds=config.timeout_seconds, agent_limits=self.limits)
+        except BudgetAdmissionError as error:
+            # Admission denied: no physical call and no fabricated usage row.
+            return LLMResult(usage=LLMUsage(), error=LLMError('BUDGET_' + error.reason,
+                'Model call was not sent because the durable budget is exhausted.'))
         try:
             result = await adapter._generate(system=system, prompt=prompt, schema=schema)
         except BaseException:

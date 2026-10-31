@@ -21,6 +21,12 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+class BudgetAdmissionError(GenerationError):
+    def __init__(self, reason):
+        super().__init__('BUDGET_EXCEEDED')
+        self.reason = reason
+
+
 class PostgreSQLBudgetLedger:
     def __init__(self, artifacts):
         self.artifacts = artifacts
@@ -48,12 +54,16 @@ class PostgreSQLBudgetLedger:
                            r.payload['usage'][key + '_tokens'] is not None else r.payload['reservation'][key]
                            for r in items)
             limits = self.artifacts.profile.data['limits']['run']
-            if (len(rows) >= min(run.limits['max_calls'], limits['max_calls']) or
-                    len(per_attempt) >= agent_limits['max_calls'] or
-                    cost(rows, 'input') + reservation['input'] > limits['max_input_tokens'] or
-                    cost(rows, 'output') + max_output_tokens > min(run.limits['max_output_tokens'], limits['max_output_tokens']) or
-                    cost(per_attempt, 'output') + max_output_tokens > agent_limits['max_output_tokens']):
-                raise GenerationError('BUDGET_EXCEEDED')
+            checks = [
+                (len(rows) >= min(run.limits['max_calls'], limits['max_calls']), 'MAX_CALLS'),
+                (len(per_attempt) >= agent_limits['max_calls'], 'AGENT_MAX_CALLS'),
+                (cost(rows, 'input') + reservation['input'] > limits['max_input_tokens'], 'MAX_INPUT_TOKENS'),
+                (cost(rows, 'output') + max_output_tokens > min(run.limits['max_output_tokens'], limits['max_output_tokens']), 'MAX_OUTPUT_TOKENS'),
+                (cost(per_attempt, 'output') + max_output_tokens > agent_limits['max_output_tokens'], 'AGENT_MAX_OUTPUT_TOKENS'),
+            ]
+            for exceeded, reason in checks:
+                if exceeded:
+                    raise BudgetAdmissionError(reason)
             session.add(ModelCall(call_id=UUID(call_id), run_id=run.id, attempt_id=UUID(str(attempt_id)),
                 payload={'model': model, 'reservation': reservation, 'fingerprint': sha256(encoded).hexdigest(),
                          'started_at': now(), 'finished_at': None, 'status': 'reserved', 'usage': None}))

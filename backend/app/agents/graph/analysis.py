@@ -169,14 +169,16 @@ class AnalysisGraph:
         self._graph.invoke(state, config, durability="sync")
         return self.snapshot(request["run_id"])
 
-    def retry(self, run_id: str, *, attempt_id: str, attempt_no: int) -> AnalysisState:
+    def retry(self, run_id: str, *, attempt_id: str, attempt_no: int, previous_attempt_failed: bool = False) -> AnalysisState:
         """Execute an already registered retry, preserving checkpoint history and inputs."""
         _uuid(attempt_id)
         state = self.snapshot(run_id)
         if state["attempt_id"] == attempt_id:
             _require(state["request"]["attempt"] == attempt_no, "RUN_STATE_CONFLICT")
             return self.recover(run_id)
-        _require(state["stage_status"] == "failed" and attempt_no > state["request"]["attempt"],
+        _require((state["stage_status"] == "failed" or
+                  (previous_attempt_failed and state["stage_status"] == "running"))
+                 and attempt_no > state["request"]["attempt"],
                  "RUN_STATE_CONFLICT")
         _require(attempt_id not in {a["attempt_id"] for a in state["attempts"]}, "ATTEMPT_ID_REUSED")
         self._verified_inputs(state)

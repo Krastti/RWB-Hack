@@ -68,7 +68,7 @@ def setup(db, *, waiting, profile, configured=True, fail_first=False):
             with db.begin() as unlocked:
                 unlocked.execute(select(Run).with_for_update(nowait=True)).all()
             calls.append((node, payload))
-            if fail_first and len(calls) == 1:
+            if fail_first and len(calls) <= int(fail_first):
                 return httpx.Response(429, json={'error': {'message': 'controlled rate limit'}})
             if node == 'analysis':
                 draft = answered if payload['business_input']['answers'] or not waiting else original
@@ -294,3 +294,63 @@ def test_http_retry_after_model_rate_limit(db):
         assert len(calls) == 6
         assert fresh.tasks['rwb.stage.execute.v1'].apply(args=[str(second)]).get() == 'already_handled'
         assert len(calls) == 6
+
+
+def test_unknown_rate_limit_usage_stops_at_durable_budget(db):
+    app, factory, calls, requirements = setup(db, waiting=False, profile='web-fastapi-angular', fail_first=20)
+    with TestClient(app) as client:
+        project = client.post('/api/v1/projects', json={'name': 'Budget', 'requirements_text': requirements}).json()
+        created = client.post(f'/api/v1/projects/{project["id"]}/runs',
+            headers={'Idempotency-Key': 'budget-start'}, json={'requirements_text': requirements})
+        run_id = created.json()['run_id']
+        worker = factory()
+        worker.stage_worker.orchestrator.runtime.intake.dispatch()
+        for index in range(10):
+            execute_next(db, worker)
+            run = client.get(f'/api/v1/runs/{run_id}').json()
+            if run['status'] == 'budget_exceeded':
+                break
+            assert run['status'] == 'failed', run
+            retried = client.post(f'/api/v1/runs/{run_id}/retry', headers={'Idempotency-Key': f'budget-retry-{index}'}, json={})
+            assert retried.status_code == 202, retried.text
+        assert run['status'] == 'budget_exceeded', run
+        assert run['stop_reason'] == 'MAX_INPUT_TOKENS'
+        assert run['stages'][-1]['reason'] == 'BUDGET_MAX_INPUT_TOKENS'
+        with db() as s:
+            rows = list(s.scalars(select(ModelCall).where(ModelCall.run_id == UUID(run_id))))
+            assert len(rows) == len(calls)
+            assert all(r.payload['usage']['input_tokens'] is None for r in rows)
+            assert sum(r.payload['reservation']['input'] for r in rows) <= 300000
+        again = client.post(f'/api/v1/runs/{run_id}/retry', headers={'Idempotency-Key': 'budget-no-blind-retry'}, json={})
+        assert again.status_code == 409
+
+
+def test_registered_retry_after_pre_result_worker_failure(db, monkeypatch):
+    from app.services.artifacts.budget import PostgreSQLBudgetLedger
+    app, factory, calls, requirements = setup(db, waiting=False, profile='web-fastapi-angular')
+    with TestClient(app) as client:
+        project = client.post('/api/v1/projects', json={'name': 'Crash', 'requirements_text': requirements}).json()
+        created = client.post(f'/api/v1/projects/{project["id"]}/runs',
+            headers={'Idempotency-Key': 'crash'}, json={'requirements_text': requirements})
+        run_id = created.json()['run_id']
+        worker = factory()
+        worker.stage_worker.orchestrator.runtime.intake.dispatch()
+        with db() as s:
+            identity = s.scalar(select(WorkerCommand.id))
+        def outage(*args, **kwargs):
+            raise OSError('pre-dispatch outage')
+        with monkeypatch.context() as patch:
+            patch.setattr(PostgreSQLBudgetLedger, 'reserve', outage)
+            assert worker.tasks['rwb.stage.execute.v1'].apply(args=[str(identity)]).get() == 'recovery_pending'
+        assert not calls
+        fresh = factory()
+        assert fresh.tasks['rwb.stage.execute.v1'].apply(args=[str(identity)]).get() == 'recovered'
+        current = client.get(f'/api/v1/runs/{run_id}').json()
+        if current['status'] == 'failed':
+            response = client.post(f'/api/v1/runs/{run_id}/retry', headers={'Idempotency-Key': 'retry-crash'}, json={})
+            assert response.status_code == 202, response.text
+        execute_next(db, fresh)
+        execute_next(db, fresh)
+        assert len(calls) == 5
+        current = client.get(f'/api/v1/runs/{run_id}').json()
+        assert current['stages'][-1]['status'] == 'succeeded'
