@@ -10,7 +10,12 @@ auth context. Repeated emission has identical bytes; missing bindings fail.
 `emit(model, catalog, routes, profile)` takes an immutable validated bound model,
 the accepted A-09 catalog and A-13 route descriptors. It validates all bindings,
 operation ownership, primary key fields/types, contract version, identifiers and grants.
-Compiler version is `python-1.1.0`; regenerate all three files together.
+Compiler version is `python-1.1.1`; regenerate all three files together.
+The caller must provide the same actual frozen behavior profile used for accepted
+bindings: web-fastapi-angular 1.1.0 or 1.2.0, with architecture's behavior-bindings
+grant. Base/default 1.0.0 is not a behavior opt-in. All four frozen model limits
+(bytes, expression depth, rules and domain values) are rechecked before emission;
+the generic validator's larger defaults do not replace this Run's limits.
 Unresolved/unsupported rules block emission. It returns exactly three backend-owned
 files: policy, transition service/route installer, and source map. The compiler
 owns their complete bytes: A-22 must accept them as deterministic outputs and
@@ -81,7 +86,7 @@ With the A-31/A-32 dependencies present, run:
 python -m unittest discover -s backend/tests -p 'test_python_behavior_codegen.py' -v
 ```
 
-The eight tests exercise emitted source through FastAPI/ASGI and
+The ten tests exercise profile compatibility and emitted source through FastAPI/ASGI and
 SQLAlchemy+aiosqlite, including default/disabled expiry, integer/string/UUID keys,
 deferred columns, refreshed trigger values, invalid IDs before SQL, failed commit,
 unchanged owner/state denials and mismatched/composite key bindings. Actual emitted
@@ -91,3 +96,9 @@ cases also require aiosqlite. Tests report an explicit skip when pending A-31/A-
 or async test dependencies are absent. SQLite does not verify PostgreSQL locking
 or concurrent transactions, and these adapters are test auth/response providers,
 not the future A-13 application wiring.
+
+Joint validation with A-34 uses one model/catalog/frozen profile for both emitters.
+The client gateway uses textual URL record IDs; FastAPI parses the declared native
+key. JSON response field names stay physical binding names, so no actor/owner or
+entity-name conversion is invented between compilers. The joint tests live with
+A-34 and run optionally when this Python emitter is present.

@@ -26,18 +26,18 @@ BEHAVIOR_READY = all(available(name) for name in (
 ASYNC_READY = all(available(name) for name in ('sqlalchemy', 'fastapi', 'httpx', 'aiosqlite', 'greenlet'))
 
 
-def emitted(kind):
+def emitted(kind, profile=None):
     from backend.app.agents.behavior.codegen.python.example import inputs
     from backend.app.agents.behavior.codegen.python.emitter import emit
     from backend.app.agents.behavior.profile import behavior_profile
     model, catalog, routes = inputs()
     routes['cancelTicket']['id_type'] = kind
     catalog['routes'] = deepcopy(routes)
-    return emit(model, catalog=catalog, routes=routes, profile=behavior_profile())
+    return emit(model, catalog=catalog, routes=routes, profile=profile or behavior_profile())
 
 
 @asynccontextmanager
-async def application(kind, *, expire=True, fail_commit=False):
+async def application(kind, *, expire=True, fail_commit=False, response_fields=('id', 'status', 'revision')):
     from fastapi import APIRouter, FastAPI
     from fastapi.encoders import jsonable_encoder
     from fastapi.responses import JSONResponse
@@ -112,7 +112,7 @@ async def application(kind, *, expire=True, fail_commit=False):
                 if not isinstance(snapshot, dict):
                     raise AssertionError('Response adapter must receive a detached column snapshot')
                 snapshots.append(deepcopy(snapshot))
-                result = JSONResponse(jsonable_encoder({key: snapshot[key] for key in ('id', 'status', 'revision')}))
+                result = JSONResponse(jsonable_encoder({key: snapshot[key] for key in response_fields}))
                 response_io.append(len(sql_count) - before)
                 return result
 
@@ -159,10 +159,47 @@ class EmitterContractTests(unittest.TestCase):
                 files = emitted(kind)
                 self.assertEqual(files, emitted(kind))
                 source_map = json.loads(files[MAP])
-                self.assertEqual(source_map['compiler_version'], 'python-1.1.0')
+                self.assertEqual(source_map['compiler_version'], 'python-1.1.1')
                 for path, digest in source_map['files'].items():
                     self.assertEqual(sha256(files[path].encode()).hexdigest(), digest)
                     compile(files[path], path, 'exec')
+
+    def test_default_profile_rejected_and_behavior_versions_supported(self):
+        from backend.app.agents.behavior.model import ModelError
+        from backend.app.agents.profiles import ProfileLoader, ProfileSource
+        with self.assertRaisesRegex(ModelError, 'BEHAVIOR_PROFILE_MISMATCH'):
+            emitted('integer', ProfileLoader().load('web-fastapi-angular'))
+        for version in ('1.1.0', '1.2.0'):
+            source = f'templates/profiles/web-fastapi-angular/{version}'
+            profile = ProfileLoader(registry={('web-fastapi-angular', version): ProfileSource(
+                source + '/profile.json', source + '/profile.schema.json')}).load('web-fastapi-angular', version=version)
+            self.assertEqual(len(emitted('integer', profile)), 3)
+
+    def test_all_frozen_behavior_limits_apply(self):
+        from backend.app.agents.behavior.codegen.python.example import inputs
+        from backend.app.agents.behavior.model import ModelError, canonical
+        from backend.app.agents.behavior.profile import behavior_profile
+        from backend.app.agents.profiles import ProfileLoader, ProfileSource
+        loader = ProfileLoader(registry={('web-fastapi-angular', '1.1.0'): ProfileSource(
+            'templates/profiles/web-fastapi-angular/1.1.0/profile.json',
+            'templates/profiles/web-fastapi-angular/1.1.0/profile.schema.json')})
+        size = len(canonical(inputs()[0]).encode())
+        for key, value, code in (
+            ('max_model_bytes', size - 1, 'BEHAVIOR_SIZE_LIMIT'),
+            ('max_expression_depth', 1, 'BEHAVIOR_EXPRESSION_DEPTH'),
+            ('max_rules', 2, 'BEHAVIOR_RULE_LIMIT'),
+            ('max_domain_values', 2, 'BEHAVIOR_DOMAIN_LIMIT'),
+        ):
+            with self.subTest(limit=key):
+                snapshot = behavior_profile().snapshot()
+                data = json.loads(snapshot['profile_json'])
+                data['limits']['behavior'][key] = value
+                snapshot['profile_json'] = json.dumps(data)
+                snapshot['checksum'] = sha256(snapshot['profile_json'].encode()).hexdigest()
+                profile = loader.restore(snapshot, expected_checksum=snapshot['checksum'],
+                                         expected_rules_checksum=snapshot['rules_checksum'])
+                with self.assertRaisesRegex(ModelError, code):
+                    emitted('integer', profile)
 
 
 @unittest.skipUnless(BEHAVIOR_READY and ASYNC_READY, 'requires A-31/A-32, SQLAlchemy async, FastAPI and aiosqlite')

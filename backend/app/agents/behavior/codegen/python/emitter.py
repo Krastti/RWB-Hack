@@ -5,7 +5,7 @@ from hashlib import sha256
 from pathlib import Path
 from ...model import bind, blockers, canonical, checksum, require, validate_model
 
-COMPILER_VERSION='python-1.1.0'
+COMPILER_VERSION='python-1.1.1'
 POLICY='backend/app/services/domain_policy.py'
 SERVICE='backend/app/services/domain_transitions.py'
 MAP='backend/app/services/domain_policy.map.json'
@@ -134,7 +134,14 @@ def emit(model, *, catalog, routes, profile):
     and entity field names. Actual A-09/A-13 adapters remain their owners' scope.
     """
     model=json.loads(canonical(model))
-    validate_model(model)
+    require(profile.profile_id == 'web-fastapi-angular' and
+            profile.profile_version in {'1.1.0', '1.2.0'} and
+            profile.allows('architecture', 'behavior-bindings.json'), 'BEHAVIOR_PROFILE_MISMATCH')
+    limits=profile.data['limits'].get('behavior')
+    require(isinstance(limits,dict), 'BEHAVIOR_PROFILE_MISMATCH')
+    validate_model(model,max_bytes=limits['max_model_bytes'],
+                   max_expression_depth=limits['max_expression_depth'],
+                   max_rules=limits['max_rules'],max_domain_values=limits['max_domain_values'])
     require(model['bindings'] is not None and not blockers(model),'BEHAVIOR_CODEGEN_BLOCKED')
     require(all(r['status']=='supported' for r in model['rules']),'BEHAVIOR_CODEGEN_UNSUPPORTED')
     bind(model,model['bindings'],catalog)
