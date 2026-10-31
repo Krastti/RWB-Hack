@@ -70,7 +70,8 @@ class BatchStore(Protocol):
 class BudgetLedger(Protocol):
     def reserve(self, *, run_id: str, attempt_id: str, call_id: str, model: str,
                 system: str, prompt: str, schema: dict, max_output_tokens: int,
-                timeout_seconds: float, agent_limits: dict) -> None:
+                timeout_seconds: float, agent_limits: dict,
+                response_format: str = 'json_schema', enable_thinking: bool | None = None) -> float | None:
         """Atomically enforce remaining Run/attempt calls, input/output and time budgets.
 
         Count/reserve the actual provider envelope including A-01's schema instruction.
@@ -108,11 +109,16 @@ class BatchExecutor:
 
     async def run(self, *, request: dict, owner_id: str, attempt_id: str, task_id: str,
                   plan: dict, profile: FrozenProfile, context: PreparedContext,
-                  files: tuple[FileSpec, ...], model_configuration: bytes) -> GenerationOutcome:
+                  files: tuple[FileSpec, ...], model_configuration: bytes,
+                  conditions: dict | None = None) -> GenerationOutcome:
         try:
             self._contracts.validate("agent-input", request)
             UUID(owner_id); UUID(attempt_id)
-            profile.validate_plan(plan)
+            _require(conditions is None or isinstance(conditions, dict) and
+                     all(isinstance(k, str) and type(v) is bool for k, v in conditions.items()),
+                     'GENERATION_INVALID_CONDITIONS')
+            conditions = dict(conditions or {})
+            profile.validate_plan(plan, conditions=conditions)
             tasks = [task for task in plan["tasks"] if task["task_id"] == task_id]
             _require(len(tasks) == 1, "GENERATION_TASK_NOT_FOUND")
             task = tasks[0]
@@ -121,6 +127,7 @@ class BatchExecutor:
                      and plan["profile_id"] == request["profile_id"] == profile.profile_id,
                      "GENERATION_TASK_MISMATCH")
             prepared = json.loads(context.data)
+            _require(prepared['conditions'] == conditions, 'GENERATION_CONDITIONS_MISMATCH')
             _require(prepared["agent_input"] == request and prepared["owner_agent"] == task["owner_agent"]
                      and context.manifest["profile"] == profile.metadata
                      and set(task["input_artifact_ids"]) <= set(request["input_artifact_ids"]),
@@ -148,7 +155,7 @@ class BatchExecutor:
                 _require(type(spec.version) is int and spec.version >= 1
                          and type(spec.output_token_budget) is int and spec.output_token_budget > 0,
                          "GENERATION_INVALID_FILE_SPEC")
-                _require(profile.allows(task["owner_agent"], spec.path) and
+                _require(profile.allows(task["owner_agent"], spec.path, conditions=conditions) and
                          (spec.path in task["output_paths"] or any(spec.path.startswith(d + "/")
                           for d in task["output_directories"])), "GENERATION_OUTPUT_NOT_ALLOWED")
                 required_kind = next((a["kind"] for a in profile.data["required_artifacts"] if a["path"] == spec.path), None)
@@ -169,6 +176,7 @@ class BatchExecutor:
                          "files": [vars(spec) for spec in files], "model_configuration": actual_configuration,
                          "batch_size": self._batch_size, "request_bytes": self._request_bytes,
                          "output_cap": cap, "executor_version": "1.0.0"}
+        configuration['conditions'] = conditions
         fingerprint = sha256(_json(configuration).encode()).hexdigest()
         scope = {"owner_id": owner_id, "run_id": request["run_id"], "attempt_id": attempt_id}
         accounting = {"run_id": request["run_id"], "attempt_id": attempt_id}
@@ -198,26 +206,8 @@ class BatchExecutor:
                 call_config = replace(self._config, max_output_tokens=output_cap, timeout_seconds=timeout)
                 _require(self._request_size(call_config, context.system, prompt, schema) <= self._request_bytes,
                          "GENERATION_CONTEXT_LIMIT")
-                call_id = str(uuid4())
-                prior_usage = self._ledger.usage(**accounting)
-                _require(prior_usage["calls"] < min(request["limits"]["max_calls"], limits["agent"]["max_calls"]),
-                         "GENERATION_CALL_BUDGET_EXHAUSTED")
-                if prior_usage["output_tokens"] is not None:
-                    _require(prior_usage["output_tokens"] + output_cap <= min(
-                        request["limits"]["max_output_tokens"], limits["agent"]["max_output_tokens"]),
-                        "GENERATION_OUTPUT_BUDGET_EXHAUSTED")
-                self._ledger.reserve(**accounting, call_id=call_id, model=self._config.model,
-                                     system=context.system, prompt=prompt, schema=schema,
-                                     max_output_tokens=output_cap, timeout_seconds=timeout,
-                                     agent_limits=request["limits"])
-                try:
-                    result = await LLMAdapter(replace(self._config, max_output_tokens=output_cap,
-                                                      timeout_seconds=timeout), transport=self._transport).generate(
-                                                          system=context.system, prompt=prompt, schema=schema)
-                except BaseException:
-                    self._ledger.abandon(**accounting, call_id=call_id)
-                    raise
-                self._ledger.finish(**accounting, call_id=call_id, result=result)
+                call_id, result = await self._dispatch(call_config, context.system, prompt, schema,
+                                                       accounting, request['limits'], limits['agent'])
                 if not result.ok:
                     raise GenerationError(result.error.code, result.error.retryable)
                 _require(Draft202012Validator(schema).is_valid(result.data), "GENERATION_INVALID_RESPONSE")
@@ -243,7 +233,10 @@ class BatchExecutor:
             except asyncio.CancelledError:
                 raise
             except GenerationError as exc:
-                diagnostic, retryable = exc.code, exc.retryable
+                diagnostic, retryable = ('BUDGET_' + exc.reason if hasattr(exc, 'reason') else exc.code), exc.retryable
+                diagnostic = {'GENERATION_TIMEOUT': 'BUDGET_AGENT_TIMEOUT',
+                              'GENERATION_CALL_BUDGET_EXHAUSTED': 'BUDGET_AGENT_MAX_CALLS',
+                              'GENERATION_OUTPUT_BUDGET_EXHAUSTED': 'BUDGET_AGENT_MAX_OUTPUT_TOKENS'}.get(diagnostic, diagnostic)
                 break
             except Exception:
                 # A store/ledger/subject failure is never turned into model success.
@@ -261,6 +254,39 @@ class BatchExecutor:
                       "severity": "error", "retryable": retryable, "related_fr_ids": task["related_fr_ids"]}]}
         self._contracts.validate("agent-result", result)
         return GenerationOutcome(result, remaining)
+
+    async def _dispatch(self, config, system, prompt, schema, scope, request_limits, agent_limits):
+        replay = getattr(self._ledger, 'replay', None)
+        captured = replay(**scope, config=config, system=system, prompt=prompt, schema=schema) if replay else None
+        if captured is not None:
+            return captured
+        prior = self._ledger.usage(**scope)
+        _require(prior['calls'] < min(request_limits['max_calls'], agent_limits['max_calls']),
+                 'GENERATION_CALL_BUDGET_EXHAUSTED')
+        if prior['output_tokens'] is not None:
+            _require(prior['output_tokens'] + config.max_output_tokens <= min(request_limits['max_output_tokens'], agent_limits['max_output_tokens']),
+                     'GENERATION_OUTPUT_BUDGET_EXHAUSTED')
+        call_id = str(uuid4())
+        admitted = self._ledger.reserve(**scope, call_id=call_id, model=config.model, system=system,
+            prompt=prompt, schema=schema, max_output_tokens=config.max_output_tokens, timeout_seconds=config.timeout_seconds,
+            agent_limits=request_limits, response_format=config.response_format, enable_thinking=config.enable_thinking)
+        if admitted is not None:
+            config = replace(config, timeout_seconds=min(config.timeout_seconds, admitted))
+        # A-22 owns reserve/finish, including inside a production accounting context.
+        from backend.app.agents.llm.accounting import active_accounting
+        token = active_accounting.set(None)
+        try:
+            result = await LLMAdapter(config, transport=self._transport).generate(system=system, prompt=prompt, schema=schema)
+        except BaseException:
+            self._ledger.abandon(**scope, call_id=call_id)
+            raise
+        finally:
+            active_accounting.reset(token)
+        deadline_result = getattr(self._ledger, 'deadline_result', None)
+        if deadline_result:
+            result = deadline_result(result, request_limits)
+        self._ledger.finish(**scope, call_id=call_id, result=result)
+        return call_id, result
 
     def _partition(self, files: tuple[FileSpec, ...], cap: int, context: PreparedContext, task: dict) -> tuple[tuple[FileSpec, ...], ...]:
         batches, current, cost = [], [], 256

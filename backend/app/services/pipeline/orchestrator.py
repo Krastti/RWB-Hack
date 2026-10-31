@@ -36,10 +36,24 @@ def pipeline_guard(record, change):
             raise LifecycleError(409, 'CHECKPOINT_REQUIRED', 'Accepted result and checkpoint required')
         Contracts().validate('agent-result', result)
     if change.kind == 'run' and change.target == 'completed':
-        raise LifecycleError(409, 'DOMAIN_GUARD_REQUIRED', 'Generation and assembly remain pending')
+        proof = record.data['saved_state'].get('prepared_snapshot')
+        if not proof or proof.get('readiness') != 'prepared' or not proof.get('manifest_checksum'):
+            raise LifecycleError(409, 'DOMAIN_GUARD_REQUIRED', 'Confirmed prepared snapshot required')
+        plan = record.data['saved_state'].get('generation_plan')
+        successful = {a.stage_id for a in record.attempts if a.status == 'succeeded'}
+        if not plan or not {task['stage_id'] for task in plan['tasks']} <= successful:
+            raise LifecycleError(409, 'DOMAIN_GUARD_REQUIRED', 'All planned generation tasks must be accepted')
     if change.kind == 'run' and change.target == 'waiting_for_input':
         if not any(q['required'] and not q.get('answer') for q in record.data['run']['questions']):
             raise LifecycleError(409, 'RUN_STATE_CONFLICT', 'Required questions missing')
+
+
+def pipeline_checkpoint_confirmed(record, attempt):
+    source = next((a for a in record.data['attempts'] if a['attempt_id'] == str(attempt.attempt_id)), None)
+    confirmed = record.data['saved_state'].get('pipeline_confirmed', {}).get(str(attempt.attempt_id))
+    result = source.get('accepted_result') if source else None
+    return bool(result and confirmed and result['status'] == confirmed['stage_status'] == 'succeeded'
+                and confirmed.get('result_checksum') == sha256(canonical(result).encode()).hexdigest())
 
 
 class PipelineOrchestrator:
@@ -59,16 +73,24 @@ class PipelineOrchestrator:
         profile = ProfileLoader().restore(snapshot, expected_checksum=snapshot['checksum'],
                                           expected_rules_checksum=snapshot['rules_checksum'])
         store = PostgreSQLArtifactStore(repo.sessions, owner_id=owner, execution=execution, profile=profile,
-                                        owner_agent=command.stage_id, conditions={'has_integrations': True, 'has_android': False})
+            owner_agent=source.input_state.get('task', {}).get('owner_agent', command.stage_id),
+            conditions=source.input_state.get('conditions', {'has_integrations': True, 'has_android': False}))
         ledger = PostgreSQLBudgetLedger(store)
         limits = profile.data['limits']['agent']
         for key in ('max_calls', 'max_output_tokens'):
             limits[key] = min(limits[key], getattr(record.run.limits, key))
         calls = AccountedCalls(ledger, str(command.run_id), str(command.attempt_id), limits)
+        from .active_time import ActiveTime
+        active_time = ActiveTime(execution, profile)
+        active_time.start()
         token = active_accounting.set(calls)
         try:
             if command.stage_id == 'analysis':
-                graph = AnalysisGraph(AnalysisNode(store, self.config, transport=self.transports.get('analysis')),
+                from .policies import PolicyPreparation
+                preparation = None if frozen['execution_policies'] or profile.profile_id != 'web-fastapi-angular' else PolicyPreparation(
+                    self.config, transport=self.transports.get('policies'))
+                graph = AnalysisGraph(AnalysisNode(store, self.config, transport=self.transports.get('analysis'),
+                                                   policy_preparation=preparation),
                                       store, PostgreSQLCheckpoints(store))
                 try:
                     old = graph.snapshot(str(command.run_id))
@@ -122,7 +144,7 @@ class PipelineOrchestrator:
                             execution_inputs={'prompt': b'Produce the approved architecture bundle.', 'template': b'',
                                 'model_configuration': canonical({k:v for k,v in vars(self.config).items() if k != 'api_key'}).encode(),
                                 'compiler_configuration': canonical(profile.data['stack']).encode()})
-                        policies = deepcopy(frozen['execution_policies'])
+                        policies = deepcopy(inputs.get('policies', frozen['execution_policies']))
                         if set(policies) != {'api_policy', 'naming_policy'}:
                             raise ValueError('ARCHITECTURE_POLICIES_REQUIRED')
                         for policy in policies.values():
@@ -173,11 +195,42 @@ class PipelineOrchestrator:
                     store.accept(str(command.run_id), str(command.attempt_id), result)
                 # A-09 is ephemeral; its accepted bundle is its durable replay boundary.
                 checkpoint = {'stage_status': result['status'], 'artifact_ids': [a['artifact_id'] for a in result['output_artifacts']]}
+            elif source.input_state.get('schema_version') == 'generation-task/1':
+                from .generation import execute_task
+                result = store.result(str(command.run_id), str(command.attempt_id))
+                if result is None:
+                    request = self.request(command, profile, limits, source.input_state['input_ids'])
+                    from ...agents.generation import GenerationError
+                    try:
+                        result = execute_task(store, ledger, self.config, request, source,
+                                              transport=self.transports.get(command.stage_id))
+                    except (GenerationError, ValueError) as error:
+                        import re
+                        code = str(error)
+                        if not re.fullmatch(r'[A-Z][A-Z0-9_]{0,79}', code):
+                            code = 'GENERATION_INPUT_REJECTED'
+                        result = {k: request[k] for k in ('schema_version','run_id','stage_id','attempt','contract_version')}
+                        result.update(status='failed',output_artifacts=[],questions=[],assumptions=[],
+                            usage=ledger.usage(run_id=str(command.run_id),attempt_id=str(command.attempt_id)),
+                            diagnostics=[dict(code=code,message='Generation task rejected its inputs or output.',
+                                severity='error',retryable=False,related_fr_ids=[])])
+                    store.accept(str(command.run_id), str(command.attempt_id), result)
+                if command.stage_id == 'assembly' and result['status'] == 'succeeded':
+                    from ..artifacts.snapshots import SnapshotPublisher
+                    manifest = json.loads(next(a['content'] for a in result['output_artifacts'] if a['kind'] == 'manifest'))
+                    SnapshotPublisher(store).publish(manifest)
+                checkpoint = {'stage_status': result['status'], 'artifact_ids': [a['artifact_id'] for a in result['output_artifacts']]}
             else:
                 raise RuntimeError('PIPELINE_STAGE_NOT_REGISTERED')
         finally:
             active_accounting.reset(token)
+            from ...adapters.queue import LeaseLost
+            try:
+                active_time.stop()
+            except LeaseLost:
+                pass
         with execution.transaction() as s:
+            checkpoint['result_checksum'] = sha256(canonical(result).encode()).hexdigest()
             store._save_receipt(s, str(command.run_id), str(command.attempt_id), 'checkpoint',
                 {'result_checksum': sha256(canonical(result).encode()).hexdigest()})
             run = s.get(Run, command.run_id)
@@ -215,6 +268,13 @@ class PipelineOrchestrator:
                     req = next((a for a in result['output_artifacts'] if a['kind'] == 'requirements'), None)
                     if req:
                         record.run.questions_revision = json.loads(req['content'])['questions_revision']
+                if command.stage_id == 'assembly' and result['status'] == 'succeeded':
+                    artifact = next(a for a in result['output_artifacts'] if a['kind'] == 'manifest')
+                    manifest = json.loads(artifact['content'])
+                    saved['prepared_snapshot'] = dict(snapshot_id=manifest['snapshot_id'], readiness=manifest['readiness'],
+                                                     manifest_checksum=artifact['checksum'])
+                if command.stage_id == 'architecture' and result['status'] == 'succeeded':
+                    saved['generation_plan'] = json.loads(next(a['content'] for a in result['output_artifacts'] if a['kind'] == 'generation_plan'))
                 return saved
             control.finish_attempt(owner_id=owner, run_id=run.id, stage_id=command.stage_id,
                 attempt_id=command.attempt_id, accepted_result=result, save_boundary=boundary)
@@ -228,8 +288,16 @@ class PipelineOrchestrator:
                                       reason_code=budget_reason or 'PIPELINE_STAGE_FAILED')
                 elif result['status'] == 'waiting_for_input':
                     tx.transition_run(expected='running', target='waiting_for_input', reason_code='ANALYSIS_QUESTIONS_REQUIRED')
+                elif command.stage_id == 'assembly':
+                    manifest = json.loads(next(a['content'] for a in result['output_artifacts'] if a['kind'] == 'manifest'))
+                    tx.publish(event_type='snapshot.prepared', stage_id='assembly', data=dict(snapshot_id=manifest['snapshot_id'],
+                        readiness=manifest['readiness'], artifact_ids=[a['artifact_id'] for a in manifest['artifacts']]))
+                    tx.transition_run(expected='running', target='completed', reason_code='SNAPSHOT_PREPARED')
             if command.stage_id == 'analysis' and result['status'] == 'succeeded' and run.status == 'running':
                 self.register_architecture(s, run, result)
+            elif result['status'] == 'succeeded' and run.status == 'running':
+                from .scheduling import register_next
+                register_next(self.runtime, s, run, profile, self.config)
 
     @staticmethod
     def bootstrap_history(command, execution, record, source):
@@ -262,9 +330,16 @@ class PipelineOrchestrator:
 
     def register_architecture(self, session, run, result):
         frozen = self.runtime.repository.frozen_input(session, run)
-        digest = sha256(canonical({'analysis_result': result, 'frozen_inputs': frozen}).encode()).hexdigest()
+        requirements = next(a for a in result['output_artifacts'] if a['kind'] == 'requirements')
+        policies = deepcopy(frozen['execution_policies'])
+        if not policies and run.profile_id == 'web-fastapi-angular':
+            receipt = session.get(ExecutionReceipt, (UUID(requirements['attempt_id']), 'architecture-policy'))
+            if receipt is None or receipt.payload['requirements_checksum'] != requirements['checksum']:
+                raise ValueError('ARCHITECTURE_POLICY_RECEIPT_REQUIRED')
+            policies = deepcopy(receipt.payload['policies'])
+        digest = sha256(canonical({'analysis_result': result, 'frozen_inputs': frozen, 'policies': policies}).encode()).hexdigest()
         source = AttemptState(stage_id='architecture', attempt_no=1, input_hash=digest,
-            input_state={'requirements_id': next(a['artifact_id'] for a in result['output_artifacts'] if a['kind'] == 'requirements'),
+            input_state={'requirements_id': requirements['artifact_id'], 'policies': policies,
                 'reservation': {'attempt_id': str(uuid4()),
                     'artifacts': {k: {'artifact_id': str(uuid4()), 'version': 1} for k in OUTPUTS},
                     'call_ids': {k: str(uuid4()) for k in NODES}}})

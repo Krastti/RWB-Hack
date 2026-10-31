@@ -78,7 +78,8 @@ def test_budget_retry_can_increase_limit(db, monkeypatch, reason, env_name, valu
         with db() as session:
             stages = list(session.scalars(select(StageAttempt).where(StageAttempt.run_id == UUID(run_id))))
             assert sorted((a.stage_id, a.attempt_no, a.status) for a in stages) == [
-                ('analysis', 1, 'succeeded'), ('architecture', 1, 'failed'), ('architecture', 2, 'succeeded')]
+                ('analysis', 1, 'succeeded'), ('architecture', 1, 'failed'), ('architecture', 2, 'succeeded'),
+                ('frontend-template', 1, 'pending')]
             assert session.get(Run, UUID(run_id)).limits == new_limits
         count = len(calls)
         assert worker.tasks['rwb.stage.execute.v1'].apply(args=[str(last)]).get() == 'already_handled'
@@ -116,7 +117,8 @@ def test_retry_can_recover_failure_before_initial_graph_checkpoint(db, monkeypat
         with db() as session:
             stages = list(session.scalars(select(StageAttempt).where(StageAttempt.run_id == UUID(run_id))))
             assert sorted((a.stage_id, a.attempt_no, a.status) for a in stages) == [
-                ('analysis', 1, 'failed'), ('analysis', 2, 'succeeded'), ('architecture', 1, 'succeeded')]
+                ('analysis', 1, 'failed'), ('analysis', 2, 'succeeded'), ('architecture', 1, 'succeeded'),
+                ('frontend-template', 1, 'pending')]
         fresh = factory()
         assert fresh.tasks['rwb.stage.execute.v1'].apply(args=[str(command_id)]).get() == 'already_handled'
         assert len(calls) == 5

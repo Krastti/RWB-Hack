@@ -79,6 +79,13 @@ def setup(db, *, waiting, profile, configured=True, fail_first=False, reject_sta
                 return httpx.Response(429, json={'error': {'message': 'controlled rejection'}})
             if node == 'analysis':
                 draft = answered if payload['business_input']['answers'] or not waiting else original
+            elif node == 'policies':
+                draft = read('config/tickets-policy.example.json')
+                for policy in draft.values():
+                    policy['requirements_checksum'] = payload['requirements_checksum']
+                for operation in draft['api_policy']['operations']:
+                    for key in ('authentication', 'authorization_rules', 'grants', 'security_requirement_indices'):
+                        del operation[key]
             elif node == 'proposal':
                 a = read('contracts/agents/examples/architecture.json')
                 draft = {k: a[k] for k in ('components', 'decisions', 'integrations')}
@@ -92,6 +99,12 @@ def setup(db, *, waiting, profile, configured=True, fail_first=False, reject_sta
                 draft['assumptions'] = [a for a in payload['requirements']['assumptions'] if a['id'] == 'ASM-002']
                 for name in ('Ticket', 'TicketStatusUpdate'):
                     draft['schemas'][name]['properties']['status']['maxLength'] = 32
+                if not configured:
+                    approved = {o['operation_id']: o for o in payload['api_policy']['operations']}
+                    for operation in draft['operations']:
+                        policy = approved[operation['operation_id']]
+                        operation['authorization_rules'] = policy['authorization_rules']
+                        operation['role_ids'] = [g['role_id'] for g in policy['grants']]
             elif node == 'data_model':
                 assert payload['approved_api_contract']['openapi'].startswith('3.1')
                 assert payload['naming_policy']['schema_version'] == 'architecture-names/1.0'
@@ -119,7 +132,7 @@ def setup(db, *, waiting, profile, configured=True, fail_first=False, reject_sta
     def worker():
         return create_pipeline_worker(sessions=db, config=LLMConfig(base_url='https://controlled.invalid/v1', model='test',
             api_key='controlled-test', max_output_tokens=8000, response_format=response_format), broker_url='memory://',
-            transports={k: transport(k) for k in ('analysis', 'proposal', 'openapi', 'data_model', 'ui_spec')})
+            transports={k: transport(k) for k in ('analysis', 'policies', 'proposal', 'openapi', 'data_model', 'ui_spec')})
     return app, worker, calls, requirements_text
 
 
@@ -163,7 +176,10 @@ def test_http_analysis_architecture(db, profile):
         assert len(calls) == 5
         with db() as s:
             attempts = list(s.scalars(select(StageAttempt).where(StageAttempt.run_id == run_id)))
-            assert {a.stage_id: a.status for a in attempts} == {'analysis': 'succeeded', 'architecture': 'succeeded'}
+            expected = {'analysis': 'succeeded', 'architecture': 'succeeded'}
+            if profile == 'web-fastapi-angular':
+                expected['frontend-template'] = 'pending'
+            assert {a.stage_id: a.status for a in attempts} == expected
             objects = list(s.scalars(select(ArtifactObject).where(ArtifactObject.run_id == run_id)))
             assert len(objects) == 9  # private input plus eight public artifacts
             for obj in objects:
@@ -173,13 +189,16 @@ def test_http_analysis_architecture(db, profile):
                     assert downloaded.status_code == 200 and downloaded.content == obj.content
             assert len(list(s.scalars(select(ModelCall).where(ModelCall.run_id == run_id)))) == 5
             physical_ids = {str(r.call_id) for r in s.scalars(select(ModelCall).where(ModelCall.run_id == run_id))}
-            accepted_ids = {c['call_id'] for a in attempts for c in
+            accepted_ids = {c['call_id'] for a in attempts if a.status == 'succeeded' for c in
                 s.get(ExecutionReceipt, (a.id, 'result')).payload['usage']['model_calls']}
             assert accepted_ids == physical_ids
             assert s.get(Run, run_id).status == 'running'
             assert s.scalar(select(func.count()).select_from(RunEvent).where(RunEvent.run_id == run_id)) > 5
             assert s.scalar(text('select count(*) from pipeline_checkpoints')) > 0
             for a in attempts:
+                if a.status == 'pending':
+                    assert s.get(ExecutionReceipt, (a.id, 'result')) is None
+                    continue
                 assert s.get(ExecutionReceipt, (a.id, 'checkpoint')) is not None
         fresh = worker_factory()
         assert fresh.tasks['rwb.stage.execute.v1'].apply(args=[str(second)]).get() == 'already_handled'
@@ -406,7 +425,9 @@ def test_registered_retry_after_pre_result_worker_failure(db, monkeypatch):
         execute_next(db, fresh)
         assert len(calls) == 5
         current = client.get(f'/api/v1/runs/{run_id}').json()
-        assert current['stages'][-1]['status'] == 'succeeded'
+        assert next(s for s in current['stages'] if s['stage_id'] == 'architecture')['status'] == 'succeeded'
+        assert current['stages'][-1]['stage_id'] == 'frontend-template'
+        assert current['stages'][-1]['status'] == 'pending'
 
 
 @pytest.mark.parametrize('invalid_first', [True, 'evidence'])

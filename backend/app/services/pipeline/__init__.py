@@ -2,10 +2,11 @@
 
 
 def compose_pipeline(runtime, config, *, broker_url, transports=None):
-    from .orchestrator import PipelineOrchestrator, pipeline_guard
+    from .orchestrator import PipelineOrchestrator, pipeline_guard, pipeline_checkpoint_confirmed
     from ..runtime import compose_worker
     runtime.queue.replay_captured_results = True
     runtime.repository.guard = runtime.states.guard = pipeline_guard
+    runtime.states.checkpoint_confirmed = pipeline_checkpoint_confirmed
     from ..runtime.recovery import RuntimeRecovery
     from ...models import StageAttempt
     from ..artifacts.models import ExecutionReceipt

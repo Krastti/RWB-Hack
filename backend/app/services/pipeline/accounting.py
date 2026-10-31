@@ -40,7 +40,7 @@ class AccountedCalls:
         try:
             while True:
                 try:
-                    self.ledger.reserve(**scope, model=config.model, system=system, prompt=prompt, schema=schema,
+                    admitted_timeout = self.ledger.reserve(**scope, model=config.model, system=system, prompt=prompt, schema=schema,
                         max_output_tokens=config.max_output_tokens, timeout_seconds=config.timeout_seconds, agent_limits=self.limits,
                         response_format=config.response_format, enable_thinking=config.enable_thinking,
                         minimum_interval_seconds=interval, rate_scope=rate_scope)
@@ -55,9 +55,14 @@ class AccountedCalls:
             return LLMResult(usage=LLMUsage(), error=LLMError(error.code,
                 'Model call was not sent because the Run no longer admits new work.'))
         try:
+            if admitted_timeout is not None and admitted_timeout < config.timeout_seconds:
+                from dataclasses import replace
+                from ...agents.llm import LLMAdapter
+                adapter = LLMAdapter(replace(config, timeout_seconds=admitted_timeout), transport=adapter._transport)
             result = await adapter._generate(system=system, prompt=prompt, schema=schema)
         except BaseException:
             self.ledger.abandon(**scope)
             raise
+        result = self.ledger.deadline_result(result, self.limits)
         self.ledger.finish(**scope, result=result)
         return result

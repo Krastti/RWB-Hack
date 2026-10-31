@@ -22,6 +22,14 @@ def validate_required_artifacts(profile):
 
 
 def make_plan(context, requirements_id, requirements, profile, design):
+    if profile['profile_id'] == 'web-fastapi-angular':
+        from ...generation.inventory import make_tasks
+        plan = dict(schema_version='1.0', profile_id=context['profile_id'],
+                    contract_version=context['contract_version'], tasks=make_tasks(
+                        requirements_id, sorted(f['id'] for f in requirements['functional_requirements']),
+                        bool(design['integrations'])))
+        validate_profile_grants(plan, profile)
+        return plan
     owners = [owner for owner in OWNERS if owner in profile["ownership"]["agents"]
               and owner != "android" and (owner != "integrations" or design["integrations"])]
     dependencies = {
@@ -53,6 +61,9 @@ def make_tree(profile, design):
         item["path"]: item["owner"] for item in profile["required_artifacts"]
         if item["condition"] == "always" or item["condition"] == "has_integrations" and has_integrations
     }
+    if profile['profile_id'] == 'web-fastapi-angular':
+        from ...generation.inventory import tasks
+        files.update({path: owner for _, owner, _, paths in tasks(has_integrations) for path in paths})
     directories = set()
 
     def add_parents(path):

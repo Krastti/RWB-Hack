@@ -65,6 +65,15 @@ class PostgreSQLBudgetLedger:
                 raise CallAdmissionStopped('RUN_CANCELLED' if run.status in {'cancelling', 'cancelled'} else 'RUN_NOT_RUNNING')
             if state and state.payload.get('saved_state', {}).get('terminal_intent'):
                 raise CallAdmissionStopped('RUN_STOPPING')
+            clock = getattr(self.artifacts.execution, 'activity_clock', None)
+            if clock is not None:
+                remaining_run, remaining_agent = clock.remaining(session, agent_limits)
+                if remaining_run <= 0:
+                    raise BudgetAdmissionError('RUN_TIMEOUT')
+                if remaining_agent <= 0:
+                    raise BudgetAdmissionError('AGENT_TIMEOUT')
+                timeout_seconds = min(timeout_seconds, remaining_run, remaining_agent,
+                                      self.artifacts.profile.data['limits']['model_call']['timeout_seconds'])
             if minimum_interval_seconds and rate_scope:
                 session.execute(text('SELECT pg_advisory_xact_lock(hashtext(:scope))'), {'scope': rate_scope})
                 latest = session.scalar(select(ModelCall).where(ModelCall.payload['rate_scope'].astext == rate_scope)
@@ -92,6 +101,7 @@ class PostgreSQLBudgetLedger:
             session.add(ModelCall(call_id=UUID(call_id), run_id=run.id, attempt_id=UUID(str(attempt_id)),
                 payload={'model': model, 'rate_scope': rate_scope, 'reservation': reservation, 'fingerprint': sha256(encoded).hexdigest(),
                          'started_at': now(), 'finished_at': None, 'status': 'reserved', 'usage': None}))
+        return timeout_seconds
 
     def _settle(self, run_id, attempt_id, call_id, usage, status, response=None):
         with self.artifacts.execution.transaction() as session:
@@ -119,8 +129,41 @@ class PostgreSQLBudgetLedger:
              'duration_seconds': usage.latency_ms / 1000},
             'succeeded' if result.ok else 'failed', response=__import__('dataclasses').asdict(result))
 
+    def deadline_result(self, result, agent_limits):
+        """Preserve physical usage, but reject a response after the active budget."""
+        clock = getattr(self.artifacts.execution, 'activity_clock', None)
+        if clock is None:
+            return result
+        with self.artifacts.execution.transaction() as session:
+            run_remaining, agent_remaining = clock.remaining(session, agent_limits)
+        if run_remaining > 0 and agent_remaining > 0:
+            return result
+        from dataclasses import replace
+        from ...errors.llm import LLMError
+        reason = 'RUN_TIMEOUT' if run_remaining <= 0 else 'AGENT_TIMEOUT'
+        return replace(result, data=None, error=LLMError('BUDGET_' + reason, 'Active execution time is exhausted.'))
+
     def abandon(self, *, run_id, attempt_id, call_id):
         self._settle(run_id, attempt_id, call_id, None, 'in_doubt')
+
+    def replay(self, *, run_id, attempt_id, config, system, prompt, schema):
+        """Reuse a settled physical response before batch acceptance, within one attempt."""
+        fingerprint = sha256(canonical(request_payload(config, system, prompt, schema)).encode()).hexdigest()
+        with self.artifacts.sessions() as session:
+            self.artifacts._scope(session, run_id)
+            row = session.scalar(select(ModelCall).where(ModelCall.run_id == UUID(str(run_id)),
+                ModelCall.attempt_id == UUID(str(attempt_id)), ModelCall.payload['fingerprint'].astext == fingerprint,
+                ModelCall.payload['status'].astext.in_(['succeeded','failed']))
+                .order_by(ModelCall.payload['started_at'].astext.desc()).limit(1))
+            if row is None or not row.payload.get('response'):
+                return None
+            from ...models.dto.llm import LLMResult, LLMUsage
+            from ...errors.llm import LLMError
+            value = row.payload['response']
+            result = LLMResult(data=value['data'],usage=LLMUsage(**value['usage']),
+                error=LLMError(**value['error']) if value['error'] else None,
+                candidate=value.get('candidate'),validation_feedback=tuple(value.get('validation_feedback', ())))
+            return str(row.call_id), result
 
     def usage(self, *, run_id, attempt_id):
         with self.artifacts.sessions() as session:

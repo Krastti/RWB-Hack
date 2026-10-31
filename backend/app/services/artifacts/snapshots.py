@@ -72,6 +72,9 @@ class SnapshotPublisher:
                 # Every upstream producer must have an accepted result and a
                 # confirmed checkpoint. Merely having files is not acceptance.
                 for row in selected.values():
+                    producer = session.get(StageAttempt, row.attempt_id)
+                    require(producer is not None and producer.contract_version == manifest['contract_version'],
+                            'SNAPSHOT_CONTRACT_VERSION_MISMATCH')
                     if row.attempt_id == store.execution.lease.command.attempt_id:
                         continue
                     receipt = session.get(ExecutionReceipt, (row.attempt_id, 'result'))

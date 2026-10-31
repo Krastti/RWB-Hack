@@ -23,7 +23,7 @@
 Платформа и создаваемый ею проект — разные приложения с разными API, БД и
 учётными данными. Стек платформы: Angular 22/TypeScript/Bootstrap 5.3/SCSS,
 FastAPI/Pydantic/SQLAlchemy/PostgreSQL. Миграции платформы — Flyway SQL.
-Первый профиль **генерируемого проекта** — `web-fastapi-angular` 1.0.0:
+Основной профиль **генерируемого проекта** — `web-fastapi-angular` (версия замораживается при создании Run):
 Angular/Bootstrap + FastAPI/PostgreSQL, миграции Alembic.
 
 Первая продуктовая версия задумана для одного автора: собственные проекты,
@@ -45,16 +45,18 @@ Mock допускается только для явно обозначенны�
 ## Архитектура и фактическое состояние
 
 Целевая цепочка: Angular → REST `/api/v1` → FastAPI/PostgreSQL → очередь/worker →
-LangGraph → LLM adapter → артефакты/snapshot → ZIP/GitLab. Celery queue adapter и StageWorker существуют; им требуется предметный orchestrator; технический recovery встроен
-callables и не образуют автоматически сквозной pipeline.
+LangGraph → LLM adapter → артефакты/snapshot → ZIP. Production entrypoint —
+`celery -A app.workers.pipeline:app worker -B`; API и worker используют общую PostgreSQL.
+Web MVP выполняет анализ → политики → A-09 → точный DAG генерации → сборку →
+подтверждённый snapshot → `completed`. GitLab и интеграция behavior-компиляторов — дальнейшие этапы.
 
 | Область | Что есть в коде | Ограничение интеграции |
 |---|---|---|
-| HTTP и БД | Factory, JWT, проекты/ревизии, PostgreSQL repositories, ORM Run/attempt/event/idempotency, Flyway V1–V9 | Штатная factory подключает auth/projects/createRun/Run GET/cancel/retry/answers; выдача требует отдельной интеграции |
-| Run | Общий PostgreSQL runtime, createRun→attempt dispatcher, lifecycle, cancel/retry, queue/lease adapter, StageWorker | Worker factory требует предметный orchestrator, технический recovery встроен; C-02/artifact/LangGraph bridge и полный протокол восстановления ещё не подключены |
-| Анализ | A-01 adapter, A-02 prompt/renderer, legacy analyst, A-04 граф с durable SQLite checkpoints | Legacy 0.1 не является узлом C-02; полный bridge аналитика/worker отсутствует |
-| UI | Вход, проекты, Run monitor/timeline, вопросы, просмотр анализа, команды | Доступность экрана не подтверждает наличие соответствующего backend endpoint |
-| Генерация и выдача | Schemas, профиль, связанные fixtures | Полные architecture/coding/assembly/storage/ZIP/GitLab runtime не интегрированы |
+| HTTP и БД | JWT, проекты/ревизии, Run/attempt/event/idempotency, Flyway V1–V14, owner-scoped artifacts и ZIP | Нужны PostgreSQL и первоначальный пользователь |
+| Run | Production orchestrator, очередь/lease, cancel/retry, durable checkpoints, общий ledger и активный таймер | Последовательный DAG; параллелизм и impact-based regeneration отложены |
+| Анализ и архитектура | C-02 аналитик, PostgreSQL LangGraph checkpoints, source-bound права, A-05–A-09 | Неразрешимые права возвращаются вопросом; произвольные ACL не угадываются |
+| UI | Монитор, вопросы с неизменяемыми ответами, анализ, список/просмотр файлов, ZIP | Browser editor, diff и отдельный coverage UI не входят в MVP |
+| Генерация и выдача | Angular/FastAPI шаблоны, SQLAlchemy/Alembic, предметные generators, docs, manifest/traceability и prepared snapshot | Worker не исполняет сгенерированный код; prepared не доказывает сборку, бизнес-поведение или безопасность продукта |
 
 Связанные ограничения описаны в интеграционных задачах
 [#127](https://github.com/Krastti/RWB-Hack/issues/127),
@@ -66,7 +68,7 @@ callables и не образуют автоматически сквозной p
 
 ## Быстрый старт
 
-Из корня репозитория, Python 3.11+; совместное окружение проверяется отдельно от
+Из корня репозитория, Python 3.12; совместное окружение проверяется отдельно от
 доступности PostgreSQL и LLM:
 
 ```sh
@@ -88,7 +90,8 @@ npm start
 
 Открыть `http://localhost:4200`; `/api` проксируется на `127.0.0.1:8000`.
 [Offline-примеры агентов](docs/agents.md#проверки-и-примеры) не вызывают платную модель.
-Инструкции не являются подтверждением запуска БД, реального LLM или полного pipeline.
+Воспроизводимые проверки и границы MVP: [web MVP](docs/web-mvp.md).
+Живой LLM требует действующих настроек; контролируемые тесты не подтверждают качество внешней модели.
 
 ## Требования и план развития
 

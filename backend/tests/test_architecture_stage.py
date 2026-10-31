@@ -100,7 +100,7 @@ def test_tree_plan_disagreement_fails_without_outputs():
                 payload = deepcopy(reply.payload)
                 payload["generation_plan"]["tasks"] = [t for t in payload["generation_plan"]["tasks"] if t["owner_agent"] != "frontend"]
                 for task in payload["generation_plan"]["tasks"]:
-                    task["depends_on"] = [x for x in task["depends_on"] if x != "frontend"]
+                    task["depends_on"] = [x for x in task["depends_on"] if x not in {"frontend", "frontend-template"}]
                 return replace(reply, payload=payload)
             return reply
         return call

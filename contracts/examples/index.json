@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "contracts": {
-    "platform": "2.1.0",
+    "platform": "2.3.0",
     "lifecycle": "1.0",
     "source_commit": "f030c71e01d8aade0a9c11e0da9708db0ec94cf0"
   },
