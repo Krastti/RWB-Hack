@@ -132,3 +132,18 @@ def test_incompatible_data_model_fails_without_partial_results():
     assert outcome.result["diagnostics"][0]["code"] == "ARCHITECTURE_FIELD_CONSTRAINT_MISMATCH"
     assert outcome.result["usage"]["calls"] == 3
     assert not outcome.result["output_artifacts"] and not outcome.project_tree
+
+
+def test_put_request_checks_required_fields():
+    prepared, reservation, stage = setup_stage()
+    outcome = run(stage, prepared, reservation)
+    import yaml
+    artifacts = {a["kind"]: a for a in outcome.result["output_artifacts"]}
+    document = yaml.safe_load(artifacts["openapi"]["content"])
+    model = loads(artifacts["data_model"]["content"])
+    policy = loads(prepared.inputs_json)["naming_policy"]
+    path = next(p for p in document["paths"].values() if "post" in p)
+    path["put"] = path.pop("post")
+    document["components"]["schemas"]["TicketCreate"]["required"] = []
+    with pytest.raises(ArchitectureError, match="ARCHITECTURE_FIELD_REQUIRED_MISMATCH"):
+        validate_names(document, model, policy)

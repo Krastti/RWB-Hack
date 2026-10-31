@@ -101,7 +101,12 @@ nullable, varchar maxLength и совпадение enum с SQL `in` constraint.
 или несовместимость возвращается диагностикой архитектору **до UI/кодогенерации**;
 генераторы не исправляются скрытым изменением принятых artifacts. Первая версия
 поддерживает плоские object DTO/scalar fields; nested/ref/composition bindings
-требуют расширения карты. Это не полное доказательство семантики SQL/JSON Schema.
+требуют расширения карты. Обязательность прямых полей проверяется для POST и PUT с телом, прямо
+ссылающимся на DTO через `#/components/schemas/`: non-null поле без default
+должно быть в `required`. Не включённые в DTO поля могут задаваться сервером.
+Inline request schemas, ссылки на requestBody и составные схемы этой проверкой
+не охватываются и требуют отдельного согласования; PATCH рассматривается как
+частичное обновление. Это не полное доказательство семантики SQL/JSON Schema.
 
 UI adapter повторно валидирует operationId, request/response field bindings,
 security, роли и FR средствами A-08. Его sources должны ссылаться на точные

@@ -54,11 +54,12 @@ def validate_names(document, model, policy):
     }
     create_schemas = set()
     for path in document.get("paths", {}).values():
-        operation = path.get("post", {})
-        for media in operation.get("requestBody", {}).get("content", {}).values():
-            ref = media.get("schema", {}).get("$ref", "")
-            if ref.startswith("#/components/schemas/"):
-                create_schemas.add(ref.removeprefix("#/components/schemas/"))
+        for method in ("post", "put"):
+            operation = path.get(method, {})
+            for media in operation.get("requestBody", {}).get("content", {}).values():
+                ref = media.get("schema", {}).get("$ref", "")
+                if ref.startswith("#/components/schemas/"):
+                    create_schemas.add(ref.removeprefix("#/components/schemas/"))
     for binding in policy["bindings"]:
         schema = schemas[binding["schema"]]
         require(schema.get("type") == "object" and not any(k in schema for k in ("$ref", "allOf", "anyOf", "oneOf")),
