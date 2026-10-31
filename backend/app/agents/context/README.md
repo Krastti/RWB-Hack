@@ -5,7 +5,7 @@
 
 `ContextBuilder(resolver, max_context_bytes=...).prepare(request, owner_id=...,
 owner_agent=..., profile=..., references=..., execution_inputs=...,
-related_fr_ids=...) -> PreparedContext`.
+related_fr_ids=..., accepted_result_references=...) -> PreparedContext`.
 
 `request` — закрытый C-02 AgentInput. `references` — точные C-02 metadata всех
 разрешённых входов из frozen Run/task. Их ID должны совпадать с AgentInput.
@@ -37,6 +37,11 @@ accepted означает принятие предметной схемы пр�
 Документации/сборке дополнительно передаются все входы по структурным refs
 architecture/plan и metadata уже принятых результатов. Отсутствие любого
 обязательного input останавливает подготовку до вызова модели.
+Для documentation worker обязан передать `accepted_result_references`: полный
+словарь ID и metadata результатов разработки из доверенного frozen Run/task
+на момент подготовки (пустой словарь допустим, если результатов нет). Все они
+должны присутствовать в `references` и пройти обычную проверку resolver. Полнота
+самого словаря обеспечивается вызывающим worker, а не выводится из плана.
 
 `related_fr_ids` выделяет FR и замыкает связанные сценарии/критерии/ограничения.
 Полные требования, NFR, роли/permissions и ограничения сохраняются во входе:
@@ -46,10 +51,13 @@ architecture/plan и metadata уже принятых результатов. О
 
 `execution_inputs` содержит точные bytes четырёх серверных входов: prompt,
 template, model_configuration, compiler_configuration (последние два — JSON
-objects, без credentials). Их берёт worker из реально применяемой конфигурации,
+objects). Их берёт worker из реально применяемой конфигурации,
 не из ответа модели/запроса пользователя. Политика профиля и prompt образуют
 `system`; бизнес-артефакты находятся только в JSON `data`. PreparedContext
 не исполняет содержимое. Не передавайте data в system при подключении LLM.
+Конфигурации модели и компилятора не включаются в system/data; в manifest
+попадают только их хеши и размеры. Для воспроизведения worker отдельно хранит
+исходные bytes в приватном хранилище.
 
 `manifest` фиксирует metadata/checksum входов, профиль/правила, конфигурацию,
 contract_version, Run/stage/attempt и hash/size канонической пары system/data.

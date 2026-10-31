@@ -22,3 +22,6 @@ jobs:
       - run: python -m pytest backend/tests/test_profile_review.py -v
         env:
           PYTHONPATH: backend:.
+      - run: python -m pytest backend/tests/test_context_review.py contracts/agents/test_validate.py -v
+        env:
+          PYTHONPATH: backend:.
