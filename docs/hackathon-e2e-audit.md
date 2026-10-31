@@ -491,3 +491,45 @@ Live diagnosis preserved several failed attempts, including a worker restart
 during an in-flight diagnostic call (unknown usage retained). A standalone
 minimal chat success was not proof of full analysis or architecture. End-to-end
 acceptance is recorded below only after all eight files are actually verified.
+
+### Status at the requested final-fixes commit
+
+Live Run: `a6ee4f89-f256-474a-8fcd-ba3157ea12b4`, repair-ticket project
+`71727031-2e00-456a-9e07-8e40a0fda698`. Analysis attempt 2 succeeded; three
+accepted analysis files were downloaded through authenticated HTTP. Architecture
+attempt 1 failed on a paraphrased source reference; attempt 2 reached the real
+provider but its decoder rejected a literal-enum/regex intersection. These
+failures and all physical calls remain recorded. The Run is failed, not completed;
+a live accepted five-artifact architecture bundle has NOT yet been demonstrated.
+
+The final fixes use exact accepted source-reference choices, emit literal enums
+without problematic regex intersections in decoder guidance, and derive fresh,
+deterministic artifact/call reservations from the already registered architecture
+retry attempt. Frozen input state is not rewritten and no extra StageAttempt is
+created. Full backend validation still checks the original schemas and provenance.
+
+Reproduction of byte verification after a successful retry:
+
+```sh
+PYTHONPATH=backend:. python backend/tools/verify_live_architecture.py \
+  a6ee4f89-f256-474a-8fcd-ba3157ea12b4 --output reports/live-architecture
+```
+
+The tool authenticates using PANEL_LOGIN/PANEL_PASSWORD from the ignored root
+.env, reads HTTP endpoints only, and refuses to report successful architecture
+while the Run is failed or missing any of the eight accepted outputs.
+
+Latest broad verification before the final enum/reservation patch:
+146 backend tests and 15 subtests passed; 57 frontend tests passed; the agent
+regression suite passed 144 tests, with an additional A-05 run of 38 tests after
+its coverage-prompt change. Final patch verification is recorded below.
+
+Final patch checks: `backend/tests/test_pipeline_execution.py` plus
+`backend/tests/test_llm_adapter_accounting.py`: 32 passed in 78.87 seconds,
+including registered HTTP architecture retry with fresh artifact UUIDs/version 2,
+all eight controlled-transport outputs, and duplicate delivery without another
+model call. `git diff --check` passed. API and worker were rebuilt/restarted with
+normal Compose configuration; the temporary diagnostic HTTP relay was removed.
+The three real accepted analysis files were reread after restart and their bytes
+matched stored SHA-256 checksums. No further live model retry was issued at this
+commit-only completion step. Live A-09 acceptance remains outstanding.

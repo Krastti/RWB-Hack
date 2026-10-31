@@ -31,7 +31,7 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
 
 
-def setup(db, *, waiting, profile, configured=True, fail_first=False, reject_status=429, response_format="json_schema", invalid_first=False):
+def setup(db, *, waiting, profile, configured=True, fail_first=False, reject_status=429, response_format="json_schema", invalid_first=False, fail_architecture_once=False):
     owner = uuid4()
     with db.begin() as s:
         s.add(User(id=owner, login=str(owner), password_hash='test'))
@@ -75,6 +75,8 @@ def setup(db, *, waiting, profile, configured=True, fail_first=False, reject_sta
             calls.append((node, payload))
             if fail_first and len(calls) <= int(fail_first):
                 return httpx.Response(reject_status, json={'error': {'message': 'controlled rejection'}})
+            if fail_architecture_once and node == 'proposal' and sum(n == 'proposal' for n, _ in calls) == 1:
+                return httpx.Response(429, json={'error': {'message': 'controlled rejection'}})
             if node == 'analysis':
                 draft = answered if payload['business_input']['answers'] or not waiting else original
             elif node == 'proposal':
@@ -407,3 +409,31 @@ def test_invalid_model_candidate_is_repaired_by_another_accounted_call(db, inval
             assert raw.status_code == 200 and sha256(raw.content).hexdigest() == artifact['checksum']
         app.dependency_overrides[current_user] = lambda: CurrentUser(uuid4(), 'other')
         assert client.get(f'/api/v1/runs/{run_id}/accepted-artifacts').status_code == 404
+
+
+def test_architecture_http_retry_uses_new_attempt_reservation(db):
+    app, factory, calls, requirements = setup(db, waiting=False, profile='russtech-fullstack', fail_architecture_once=True)
+    with TestClient(app) as client:
+        project = client.post('/api/v1/projects', json={'name': 'Architecture retry', 'requirements_text': requirements}).json()
+        created = client.post(f'/api/v1/projects/{project["id"]}/runs', headers={'Idempotency-Key': 'arch-retry'},
+                             json={'requirements_text': requirements, 'profile_id': 'russtech-fullstack'})
+        run_id = created.json()['run_id']
+        worker = factory()
+        worker.stage_worker.orchestrator.runtime.intake.dispatch()
+        execute_next(db, worker)
+        execute_next(db, worker)
+        assert client.get(f'/api/v1/runs/{run_id}').json()['status'] == 'failed'
+        response = client.post(f'/api/v1/runs/{run_id}/retry', headers={'Idempotency-Key': 'arch-again'}, json={})
+        assert response.status_code == 202, response.text
+        fresh = factory()
+        identity = execute_next(db, fresh)
+        artifacts = client.get(f'/api/v1/runs/{run_id}/accepted-artifacts').json()['items']
+        assert len(artifacts) == 8
+        with db() as s:
+            attempt = s.scalar(select(StageAttempt).where(StageAttempt.run_id == UUID(run_id),
+                StageAttempt.stage_id == 'architecture', StageAttempt.attempt_no == 2))
+            assert attempt.status == 'succeeded'
+            assert all(a['attempt_id'] == str(attempt.id) and a['version'] == 2 for a in artifacts if a['author_agent'] == 'architecture')
+        count = len(calls)
+        assert fresh.tasks['rwb.stage.execute.v1'].apply(args=[str(identity)]).get() == 'already_handled'
+        assert len(calls) == count

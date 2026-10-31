@@ -135,8 +135,15 @@ class PipelineOrchestrator:
                             profile_bytes=profile._raw, profile_checksum=profile.checksum,
                             rules_text=profile.rules_text, rules_checksum=profile.metadata['rules_checksum'],
                             api_policy=policies['api_policy'], naming_policy=policies['naming_policy'])
+                        reservation = deepcopy(inputs['reservation'])
+                        if reservation['attempt_id'] != str(command.attempt_id):
+                            reservation['attempt_id'] = str(command.attempt_id)
+                            reservation['call_ids'] = {node: str(uuid5(command.attempt_id, 'physical-call:' + str(i)))
+                                                       for i, node in enumerate(NODES)}
+                            reservation['artifacts'] = {name: {'artifact_id': str(uuid5(command.attempt_id, 'architecture-artifact:' + name)),
+                                                              'version': command.attempt_no} for name in OUTPUTS}
                         outcome = asyncio.run(ArchitectureStage(RuntimeNodes(self.config, transports=self.transports)).run(
-                            prepared, reservation=inputs['reservation']))
+                            prepared, reservation=reservation))
                         result = outcome.result
                     except (ValueError, ArchitectureExecutionError) as error:
                         import re

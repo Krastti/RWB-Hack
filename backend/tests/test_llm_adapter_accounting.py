@@ -79,3 +79,11 @@ def test_decoder_regex_preserves_json_schema_search_semantics():
     wire = provider_shape({'type': 'string', 'pattern': r'\S'})
     assert re.fullmatch(wire['pattern'], 'A complete source quote with spaces.')
     assert not re.fullmatch(wire['pattern'], '   ')
+
+
+def test_decoder_literal_enums_avoid_provider_regex_intersection_bug():
+    from backend.app.agents.llm.adapter import provider_shape
+    original = {'type': 'object', 'properties': {'text': {'type': 'string', 'pattern': r'\S'}},
+                'enum': [{'text': 'An exact accepted source.'}]}
+    assert provider_shape(original) == {'enum': original['enum']}
+    assert 'properties' in original

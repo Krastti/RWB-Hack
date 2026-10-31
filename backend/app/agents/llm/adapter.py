@@ -56,6 +56,8 @@ def provider_shape(schema):
         return [provider_shape(v) for v in schema]
     if not isinstance(schema, dict):
         return schema
+    if "enum" in schema:
+        return {"enum": schema["enum"]}
     result = {}
     for key, value in schema.items():
         if key in {'if', 'then', 'else', 'not', 'contains', 'minContains', 'maxContains',
