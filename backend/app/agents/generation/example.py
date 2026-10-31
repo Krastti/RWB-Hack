@@ -121,13 +121,17 @@ async def example(*, fail_second=False):
     executor = BatchExecutor(config=config, store=store, ledger=ledger, max_files_per_batch=1,
                              max_request_bytes=262144, validate_file=validate, transport=httpx.MockTransport(handler))
     args = dict(request=request, owner_id=OWNER, attempt_id=str(uuid4()), task_id='services',
-                plan=plan, profile=profile, context=context, files=files)
+                plan=plan, profile=profile, context=context, files=files,
+                model_configuration=execution["model_configuration"])
     first = await executor.run(**args)
     assert first.result['status'] == ('failed' if fail_second else 'succeeded')
     assert len(store.files) == (1 if fail_second else 2)
     assert first.result['usage']['calls'] == 2
-    if not fail_second:
-        replay = await executor.run(**args)
+    replay = await executor.run(**args)
+    if fail_second:
+        assert replay.result["status"] == "succeeded" and len(seen) == 3
+        assert replay.result["usage"]["calls"] == 3 and len(store.files) == 2
+    else:
         assert replay.result == first.result and len(seen) == 2
     return first
 

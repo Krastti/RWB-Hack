@@ -50,6 +50,17 @@ def _contains_secret(value: Any, secret: str) -> bool:
     return False
 
 
+def request_payload(config: LLMConfig, system: str, prompt: str, schema: dict) -> dict:
+    """Build the exact JSON envelope dispatched by the adapter."""
+    response_format: dict[str, Any] = {"type": config.response_format}
+    if config.response_format == "json_schema":
+        response_format["json_schema"] = {"name": "result", "strict": True, "schema": schema}
+    instruction = system + "\nReturn only JSON matching this schema:\n" + json.dumps(schema)
+    return {"model": config.model,
+            "messages": [{"role": "system", "content": instruction}, {"role": "user", "content": prompt}],
+            "response_format": response_format, "max_tokens": config.max_output_tokens, "stream": False}
+
+
 class LLMAdapter:
     """One HTTP call per generate(); caller owns retries and run budgets.
 
@@ -84,19 +95,7 @@ class LLMAdapter:
             validator = validator_class(
                 schema, registry=Registry(retrieve=_no_remote_schema), format_checker=FormatChecker(),
             )
-            response_format: dict[str, Any] = {"type": self._config.response_format}
-            if self._config.response_format == "json_schema":
-                response_format["json_schema"] = {"name": "result", "strict": True, "schema": schema}
-            # JSON-object mode also receives the exact schema; local validation is
-            # authoritative in either mode. No silent fallback or extra model call.
-            instruction = system + "\nReturn only JSON matching this schema:\n" + json.dumps(schema)
-            payload = {
-                "model": self._config.model,
-                "messages": [{"role": "system", "content": instruction}, {"role": "user", "content": prompt}],
-                "response_format": response_format,
-                "max_tokens": self._config.max_output_tokens,
-                "stream": False,
-            }
+            payload = request_payload(self._config, system, prompt, schema)
         except Exception:
             # Never expose validation exceptions: they can contain schema values.
             return fail("LLM_INVALID_SCHEMA", "The supplied schema cannot be used.")
