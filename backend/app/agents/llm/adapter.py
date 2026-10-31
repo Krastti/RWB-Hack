@@ -68,6 +68,10 @@ def provider_shape(schema):
         elif key == 'pattern':
             pattern = value[:value.index('$(?!')] + '$' if '$(?!' in value else value
             if '(?' not in pattern:
+                if not pattern.startswith('^'):
+                    pattern = r'[\s\S]*(?:' + pattern + ')'
+                if not pattern.endswith('$'):
+                    pattern += r'[\s\S]*'
                 result[key] = pattern
         elif key == 'allOf':
             parts = [provider_shape(v) for v in value]

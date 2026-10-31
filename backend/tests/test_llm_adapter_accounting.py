@@ -71,3 +71,11 @@ def test_compat_decoder_keeps_full_contract_validation():
     assert 'if' not in wire and 'then' not in wire
     assert 'if' in schema and wire['additionalProperties'] is False
     assert not result.ok and result.candidate == {'enabled': True}
+
+
+def test_decoder_regex_preserves_json_schema_search_semantics():
+    import re
+    from backend.app.agents.llm.adapter import provider_shape
+    wire = provider_shape({'type': 'string', 'pattern': r'\S'})
+    assert re.fullmatch(wire['pattern'], 'A complete source quote with spaces.')
+    assert not re.fullmatch(wire['pattern'], '   ')
