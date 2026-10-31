@@ -174,3 +174,8 @@ API: http://localhost:8000. Данные PostgreSQL сохраняются в na
 внутри образа или файла, подключённого через volume. Пользователь для входа
 создаётся по инструкции backend. Настройки `.env` передаются API и worker;
 адреса PostgreSQL и Redis внутри Compose устанавливаются автоматически.
+
+Frontend также запускается через Compose: http://localhost:4200
+(порт задаётся `FRONTEND_PORT` в общем `.env`). Angular собирается в Docker,
+Nginx обслуживает SPA и проксирует `/api/` на сервис API.
+Ключ LLM остаётся в окружении backend/worker и не передаётся frontend.

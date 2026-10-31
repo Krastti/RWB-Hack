@@ -47,6 +47,14 @@ services:
     <<: *runtime
     ports:
       - '127.0.0.1:${API_PORT:-8000}:8000'
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - '127.0.0.1:${FRONTEND_PORT:-4200}:80'
+    depends_on:
+      - api
   worker:
     <<: *runtime
     command: celery -A app.workers.pipeline:app worker -B --loglevel=INFO
