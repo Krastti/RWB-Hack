@@ -450,3 +450,44 @@ After rebuilding Compose, the existing local Run
 `budget_exceeded / MAX_INPUT_TOKENS` without an orchestrator exception. The
 physical ledger stayed at two rows, confirming no additional model dispatch.
 The original five attempts and unknown-usage reservations were preserved.
+
+## Live provider integration follow-up (2026-10-31)
+
+Earlier controlled-transport evidence remains historical. This follow-up uses
+real HTTP requests to the configured Qwen-compatible provider, with PostgreSQL,
+Redis and external Celery worker processes in Compose. The operator approved a
+separate repair-ticket demo project; no accepted result is seeded or copied.
+
+Implemented: explicit json_schema_compat decoder guidance with unsupported
+conditionals/look-around excluded from provider grammar only; full original
+backend schema and semantic validators retained. JSON Schema search patterns are
+translated to decoder full-match semantics. Optional thinking control, bounded
+caller-owned analyst repairs with private rejected candidates and path-specific
+feedback, actual-wire request fingerprints and durable physical-call accounting
+are connected. Explicit client rejections release token reservations unless
+usage is reported; timeouts/5xx with unknown usage retain reservations.
+
+The actual gateway rejected complex schema grammar and reported a per-key token
+window of 30000. PostgreSQL advisory-lock admission now coordinates configured
+call spacing across workers without holding a Run lock during waiting or HTTP.
+The local configuration uses a 65-second interval, 8000 output-token cap and
+120-second request timeout. This is provider configuration, not a reset of Run
+expense history.
+
+A-09 now supplies approved naming policy to OpenAPI and the exact generated
+OpenAPI contract to data-model generation. Policy access/surface fields are
+constants in the response schema; models still generate DTOs and domain design.
+Trusted explicit security-rule placeholders bind accepted requirement text by
+index before the existing strict API/security validator. A-05 receives an
+explicit coverage checklist including prohibitions.
+
+C-01 2.3.0 adds GET /runs/{run_id}/accepted-artifacts for latest owner-scoped
+checkpoint-confirmed outputs. Existing manifest/ZIP DTOs are unchanged. The
+panel uses accepted outputs before assembly, and API/TypeScript schemas are
+updated together. Server policies mount from config; the repair-ticket policy
+example is domain-specific and is not a policy for arbitrary projects.
+
+Live diagnosis preserved several failed attempts, including a worker restart
+during an in-flight diagnostic call (unknown usage retained). A standalone
+minimal chat success was not proof of full analysis or architecture. End-to-end
+acceptance is recorded below only after all eight files are actually verified.

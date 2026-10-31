@@ -101,9 +101,15 @@ def setup(db, *, waiting, profile, configured=True, fail_first=False, reject_sta
             if invalid_first and len(calls) == 1:
                 from copy import deepcopy
                 draft = deepcopy(draft)
-                draft['requirements']['security_requirements'][0]['id'] = 'FORBIDDEN'
+                if invalid_first == 'evidence':
+                    draft['requirements']['security_requirements'][0]['evidence'][0]['quote'] += ' invented'
+                else:
+                    draft['requirements']['security_requirements'][0]['id'] = 'FORBIDDEN'
             if invalid_first and len(calls) == 2:
-                assert payload['repair_candidate']['requirements']['security_requirements'][0]['id'] == 'FORBIDDEN'
+                if invalid_first == 'evidence':
+                    assert any('/quote' in item for item in payload['validation_feedback'])
+                else:
+                    assert payload['repair_candidate']['requirements']['security_requirements'][0]['id'] == 'FORBIDDEN'
                 assert payload['validation_feedback']
             return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(draft)}}],
                 'usage': {'prompt_tokens': 100, 'completion_tokens': 200, 'total_tokens': 300}})
@@ -372,9 +378,10 @@ def test_registered_retry_after_pre_result_worker_failure(db, monkeypatch):
         assert current['stages'][-1]['status'] == 'succeeded'
 
 
-def test_invalid_model_candidate_is_repaired_by_another_accounted_call(db):
+@pytest.mark.parametrize('invalid_first', [True, 'evidence'])
+def test_invalid_model_candidate_is_repaired_by_another_accounted_call(db, invalid_first):
     app, factory, calls, requirements = setup(db, waiting=False, profile='russtech-fullstack',
-                                            response_format='json_object', invalid_first=True)
+                                            response_format='json_object', invalid_first=invalid_first)
     with TestClient(app) as client:
         project = client.post('/api/v1/projects', json={'name': 'Repair', 'requirements_text': requirements}).json()
         created = client.post(f'/api/v1/projects/{project["id"]}/runs', headers={'Idempotency-Key': 'repair'},
@@ -394,7 +401,7 @@ def test_invalid_model_candidate_is_repaired_by_another_accounted_call(db):
             rows = list(s.scalars(select(ModelCall).where(ModelCall.run_id == UUID(run_id))))
             assert len(rows) == 6
             assert sum(r.payload['usage']['output_tokens'] for r in rows) == 1200
-            assert sum(r.payload['status'] == 'failed' for r in rows) == 1
+            assert sum(r.payload['status'] == 'failed' for r in rows) == (0 if invalid_first == 'evidence' else 1)
         for artifact in accepted.json()['items']:
             raw = client.get(f'/api/v1/runs/{run_id}/artifacts/{artifact["artifact_id"]}')
             assert raw.status_code == 200 and sha256(raw.content).hexdigest() == artifact['checksum']

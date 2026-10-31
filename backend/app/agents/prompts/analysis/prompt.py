@@ -166,8 +166,24 @@ async def generate_analysis(llm: StructuredLLM, prepared: AnalysisPrompt) -> LLM
     try:
         validate_draft(result.data, prepared)
     except ContractError as error:
+        feedback = [str(error)]
+        if str(error) == 'ANALYSIS_UNSUPPORTED_EVIDENCE':
+            confirmed = {a['question_id']: a['value'] for a in prepared.business_input['answers']}
+            confirmed.update({q['question_id']: q['answer'] for q in (prepared.previous_requirements or {}).get('questions', []) if 'answer' in q})
+            def check(value, path=''):
+                if isinstance(value, dict):
+                    if value.get('source') in {'requirements', 'answer'} and 'quote' in value:
+                        source = prepared.business_input['requirements_text'] if value['source'] == 'requirements' else confirmed.get(value.get('question_id'), '')
+                        if value['quote'] not in source:
+                            feedback.append(path + '/quote: replace with an exact substring of the original source; do not prepend IDs or paraphrase')
+                    for key, child in value.items():
+                        check(child, path + '/' + str(key))
+                elif isinstance(value, list):
+                    for index, child in enumerate(value):
+                        check(child, path + '/' + str(index))
+            check(result.data)
         return LLMResult(
-            usage=result.usage, candidate=result.data, validation_feedback=(str(error),),
+            usage=result.usage, candidate=result.data, validation_feedback=tuple(feedback),
             error=LLMError(
                 code="ANALYSIS_INVALID_DRAFT",
                 message="The model response failed analysis validation.",

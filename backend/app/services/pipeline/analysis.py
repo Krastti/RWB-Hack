@@ -61,7 +61,8 @@ class AnalysisNode:
                 "\nThe previous candidate failed validation. Regenerate the complete JSON document, fixing the listed paths/codes. "
                 "Never add fields forbidden by the schema. For design_notes status=proposed, assumption_ids must reference "
                 "at least one declared ASM. For needs_clarification, question_ids must include an unresolved required question. "
-                "Preserve all original facts, source quotes and confirmed answers.")
+                "Preserve original facts and confirmed answers. Replace any unsupported quote with an exact substring "
+                "of the original requirements_text/answer; do not retain an invalid quote merely because it appeared in the candidate.")
         # The A-01 call ledger survives even if draft validation rejects the response.
         from ..artifacts.budget import PostgreSQLBudgetLedger
         usage = PostgreSQLBudgetLedger(self.store).usage(run_id=request['run_id'], attempt_id=attempt_id)
