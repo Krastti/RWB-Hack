@@ -50,7 +50,7 @@ callables и не образуют автоматически сквозной p
 
 | Область | Что есть в коде | Ограничение интеграции |
 |---|---|---|
-| HTTP и БД | Factory, JWT, проекты/ревизии, PostgreSQL repositories, ORM Run/attempt/event/idempotency, Flyway V1–V8 | Штатная factory подключает auth/projects/createRun/Run GET/cancel/retry; answers/выдача требуют отдельной интеграции |
+| HTTP и БД | Factory, JWT, проекты/ревизии, PostgreSQL repositories, ORM Run/attempt/event/idempotency, Flyway V1–V9 | Штатная factory подключает auth/projects/createRun/Run GET/cancel/retry/answers; выдача требует отдельной интеграции |
 | Run | Общий PostgreSQL runtime, createRun→attempt dispatcher, lifecycle, cancel/retry, queue/lease adapter, StageWorker | Worker factory требует предметный orchestrator, технический recovery встроен; C-02/artifact/LangGraph bridge и полный протокол восстановления ещё не подключены |
 | Анализ | A-01 adapter, A-02 prompt/renderer, legacy analyst, A-04 граф с durable SQLite checkpoints | Legacy 0.1 не является узлом C-02; полный bridge аналитика/worker отсутствует |
 | UI | Вход, проекты, Run monitor/timeline, вопросы, просмотр анализа, команды | Доступность экрана не подтверждает наличие соответствующего backend endpoint |
