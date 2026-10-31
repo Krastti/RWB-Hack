@@ -63,7 +63,7 @@ def prepare_openapi(context: dict, requirements_artifact: dict, *, profile: dict
         contracts.validate("artifact", artifact)
         from backend.app.agents.profiles.loader import validate_profile_data
         validate_profile_data(profile)
-        require(context["profile_id"] == profile["profile_id"], "PROFILE_CONTEXT_MISMATCH")
+        require(context["profile_id"] == profile["profile_id"], "OPENAPI_UNSUPPORTED_PROFILE")
         require(artifact["artifact_id"] in context["input_artifact_ids"]
                 and artifact["kind"] == "requirements" and artifact["path"] == "requirements.json"
                 and "content" in artifact, "OPENAPI_REQUIREMENTS_NOT_ALLOWED")

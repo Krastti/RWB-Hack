@@ -62,7 +62,8 @@ def make_tree(profile, design):
         add_parents(path)
     if has_integrations:
         for condition in profile["conditional_directories"]:
-            directories.update(condition["directories"])
+            if condition["condition"] == "has_integrations":
+                directories.update(condition["directories"])
     # Design directories include contracts; coding tasks keep their own grants.
     grants = [directory for owner in ("architecture", *OWNERS) if owner in profile["ownership"]["agents"] and owner != "android" and (owner != "integrations" or has_integrations)
               for directory in profile["ownership"]["agents"][owner].get("directories", [])]

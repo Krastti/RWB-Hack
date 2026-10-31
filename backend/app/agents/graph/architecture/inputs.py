@@ -40,7 +40,7 @@ def prepare_architecture(context, requirements_artifact, *, profile_bytes, profi
         profile = loads(profile_content)
         from backend.app.agents.profiles.loader import validate_profile_data
         validate_profile_data(profile)
-        require(context["profile_id"] == profile["profile_id"], "PROFILE_CONTEXT_MISMATCH")
+        require(context["profile_id"] == profile["profile_id"], "ARCHITECTURE_UNSUPPORTED_PROFILE")
         require(isinstance(rules_text, str) and bool(rules_text.strip())
                 and sha256(rules_text.encode("utf-8")).hexdigest() == rules_checksum,
                 "ARCHITECTURE_RULES_CHECKSUM_MISMATCH")

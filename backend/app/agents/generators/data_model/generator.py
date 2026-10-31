@@ -54,7 +54,7 @@ def build_data_model_prompt(context: dict, requirements_artifact: dict, *, profi
             "DATA_MODEL_INPUT_NOT_ALLOWED")
     from backend.app.agents.profiles.loader import validate_profile_data
     validate_profile_data(profile)
-    require(context["profile_id"] == profile["profile_id"], "PROFILE_CONTEXT_MISMATCH")
+    require(context["profile_id"] == profile["profile_id"], "DATA_MODEL_UNSUPPORTED_PROFILE")
     require("data-model.json" in profile["ownership"]["agents"]["architecture"]["paths"],
             "DATA_MODEL_OUTPUT_NOT_ALLOWED")
     defaults = profile["limits"]["agent"]

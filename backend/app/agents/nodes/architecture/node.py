@@ -70,8 +70,14 @@ class ArchitectureNode:
             _require(type(profile_bytes) is bytes and sha256(profile_bytes).hexdigest() == profile_checksum,
                      "ARCHITECTURE_PROFILE_CHECKSUM_MISMATCH")
             profile = loads(profile_bytes.decode("utf-8"))
-            from ...profiles.loader import validate_profile_data
-            validate_profile_data(profile)
+            from ...profiles.loader import validate_profile_data, ProfileError
+            validate_required_artifacts(profile)
+            _require(all(len(item['path']) <= profile['limits']['artifacts']['max_path_length']
+                         for item in profile['required_artifacts']), 'ARCHITECTURE_PATH_TOO_LONG')
+            try:
+                validate_profile_data(profile)
+            except ProfileError:
+                raise ContractError('ARCHITECTURE_INVALID_PROFILE') from None
             _require(context["profile_id"] == profile["profile_id"]
                      and context["stage_id"] == self._stage_id, "ARCHITECTURE_CONTEXT_MISMATCH")
             _require(isinstance(rules_text, str) and bool(rules_text.strip())

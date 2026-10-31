@@ -69,7 +69,7 @@ def prepare_ui_spec(
         profile = loads(profile_content)
         from backend.app.agents.profiles.loader import validate_profile_data
         validate_profile_data(profile)
-        require(context["profile_id"] == profile["profile_id"], "PROFILE_CONTEXT_MISMATCH")
+        require(context["profile_id"] == profile["profile_id"], "UI_UNSUPPORTED_PROFILE")
         require(profile["ownership"]["default"] == "deny"
                 and "ui-spec.json" in profile["ownership"]["agents"]["architecture"]["paths"], "UI_OUTPUT_NOT_ALLOWED")
         require(profile["ui_kit"]["name"] == "Bootstrap"
