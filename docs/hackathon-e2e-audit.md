@@ -390,3 +390,11 @@ This iteration's requested Analysis → Architecture execution path is demonstra
 Remaining work belongs to the later generation/assembly/verification milestones;
 no full hackathon E2E, external broker/process-crash proof, live LLM quality,
 Android, product build, GitLab, deployment or UI completion is claimed here.
+
+### Shared environment configuration
+
+Backend and production worker automatically load the repository root `.env`,
+independently of the working directory. Copy `.env.example` to `.env` and set
+`LLM_BASE_URL`, `LLM_MODEL`, and `LLM_API_KEY`. Existing process environment
+variables take precedence. `.env` is ignored by Git; only the empty template is
+committed. Database, broker and policy variables may also be placed in this file.
