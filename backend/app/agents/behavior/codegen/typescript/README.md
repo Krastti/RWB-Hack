@@ -15,6 +15,12 @@ Byte identity is stable even if JSON object keys are reordered. Exact file hashe
 model/input checksums and compiler version are recorded. Independent invariants
 are labeled unenforced; they are simulation assertions, not extra UI guards.
 
+The actual frozen profile must opt in to behavior: web-fastapi-angular 1.1.0 or
+1.2.0 with architecture's behavior-bindings grant. Default/base 1.0.0 is rejected.
+Model bytes, expression depth, rule count and finite domains are checked against
+that snapshot's behavior limits before files are emitted; validator defaults do
+not override stricter frozen limits.
+
 The runtime uses three-valued evaluation, exact typed equality, safe integer
 checks, explicit missing/null, and no truthiness/coercion. It only reads fields
 listed in the accepted binding's public_fields; missing private owner data means
@@ -59,7 +65,19 @@ python -m backend.app.agents.behavior.codegen.typescript.tests.run
 `NODE_BINARY` selects Node; `ANGULAR_NODE_MODULES` can point to an existing install
 of the repository's frontend dependencies. The runner uses temporary emitted files,
 does not install packages and only adjusts the compiled policy import extension
-for Node ESM. Compiler/source-map version is `typescript-1.0.1`.
+for Node ESM. Compiler/source-map version is `typescript-1.0.2`.
+
+The runner also executes explicit Python compatibility checks: base profile
+rejection, both supported behavior versions and all four lowered frozen limits.
+If the updated A-33/PR #150 is present, optional joint checks compare both emitted
+policies on 216 visible-input cases and verify equal model checksums, private owner
+staying unknown, plus actual emitted FastAPI response DTOs reaching TS policy for
+integer/string/UUID keys. These tests use the A-33 regression fixture, ASGI and
+SQLite; SQLAlchemy async dependencies are needed for that optional bridge. Without
+A-33 the three joint tests are explicitly skipped, not reported as coverage.
+No Python emitter is imported by production TypeScript output or normal emit().
+Gateway record IDs are textual URL segments; backend parsing supplies the native
+accepted primary-key type. JSON field names use the same accepted physical bindings.
 
 Outstanding: the component has not been installed in a real A-11 generated screen
 with accepted A-09/ui-spec bindings and an actual API gateway. The standalone

@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 from tempfile import TemporaryDirectory
 
 from ....fixtures import bound_example
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[7]
 
 
 def main():
+    subprocess.run([sys.executable, '-B', '-m', 'unittest', __package__ + '.compat', '-q'], check=True)
     node = os.environ.get('NODE_BINARY', 'node')
     modules = Path(os.environ.get('ANGULAR_NODE_MODULES', ROOT / 'frontend/node_modules')).resolve()
     _, model = bound_example()
