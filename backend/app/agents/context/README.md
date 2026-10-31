@@ -5,11 +5,14 @@
 
 `ContextBuilder(resolver, max_context_bytes=...).prepare(request, owner_id=...,
 owner_agent=..., profile=..., references=..., execution_inputs=...,
-related_fr_ids=..., accepted_result_references=...) -> PreparedContext`.
+related_fr_ids=..., accepted_result_references=..., conditions=...) -> PreparedContext`.
 
 `request` — закрытый C-02 AgentInput. `references` — точные C-02 metadata всех
 разрешённых входов из frozen Run/task. Их ID должны совпадать с AgentInput.
 `profile` — FrozenProfile A-29, восстановленный по доверенным checksum Run.
+`conditions` — доверенные булевы условия из frozen Run/task, те же, что
+используются при проверке плана A-29. Например, `has_integrations=True`
+разрешает условные директории интеграций; отсутствие условия запрещает их.
 
 Resolver получает owner_id/run_id/artifact_id и возвращает `ResolvedArtifact`
 с фактическими bytes, metadata, contract_version и признаком accepted. Проверка

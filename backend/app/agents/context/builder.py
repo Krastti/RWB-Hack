@@ -94,6 +94,7 @@ class ContextBuilder:
         references: Mapping[str, dict], execution_inputs: Mapping[str, bytes],
         related_fr_ids: tuple[str, ...] | None = None,
         accepted_result_references: Mapping[str, dict] | None = None,
+        conditions: Mapping[str, bool] | None = None,
     ) -> PreparedContext:
         """references and execution_inputs come from trusted frozen Run/task state.
 
@@ -102,6 +103,10 @@ class ContextBuilder:
         """
         request, references = deepcopy(request), deepcopy(dict(references))
         execution_inputs = dict(execution_inputs)
+        _require(conditions is None or (isinstance(conditions, Mapping) and
+                 all(isinstance(key, str) and type(value) is bool for key, value in conditions.items())),
+                 "CONTEXT_INVALID_CONDITIONS")
+        conditions = dict(conditions or {})
         try:
             UUID(owner_id)
             self._contracts.validate("agent-input", request)
@@ -124,7 +129,11 @@ class ContextBuilder:
                 _require(validator.is_valid(value) and value["artifact_id"] == key,
                          "CONTEXT_REFERENCE_INVALID")
                 _require(key not in references, "CONTEXT_RESULT_OVERLAPS_INPUT")
-                _require(profile.allows(value["author_agent"], value["path"]), "CONTEXT_OWNERSHIP_MISMATCH")
+                try:
+                    permitted = profile.allows(value["author_agent"], value["path"], conditions=conditions)
+                except (ProfileError, ValueError, TypeError, KeyError):
+                    raise ContextError("CONTEXT_OWNERSHIP_MISMATCH") from None
+                _require(permitted, "CONTEXT_OWNERSHIP_MISMATCH")
                 inventory.append(deepcopy(value))
         _require(set(execution_inputs) == EXECUTION_INPUTS
                  and all(type(value) is bytes for value in execution_inputs.values()),
@@ -177,7 +186,7 @@ class ContextBuilder:
                 # Business input is owned/accepted by storage, not an output grant
                 # of a generating agent. Other artifacts must obey C-05 grants.
                 permitted = (metadata["kind"] == "business_requirements" or
-                             profile.allows(metadata["author_agent"], metadata["path"]))
+                             profile.allows(metadata["author_agent"], metadata["path"], conditions=conditions))
             except (ValueError, UnicodeError, TypeError, KeyError):
                 raise ContextError("CONTEXT_ARTIFACT_INVALID") from None
             _require(permitted, "CONTEXT_OWNERSHIP_MISMATCH")

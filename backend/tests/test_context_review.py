@@ -124,3 +124,39 @@ def test_documentation_inventory_is_metadata_only_and_configuration_has_separate
     with pytest.raises(ContextError, match='CONTEXT_EXECUTION_INPUT_SIZE_LIMIT'):
         ContextBuilder(FixtureResolver(artifacts), max_context_bytes=256 * 1024,
                        max_execution_input_bytes=100).prepare(request, execution_inputs=inputs, **kwargs)
+
+
+@pytest.mark.parametrize('path', ['integrations/README.md', 'backend/app/integrations/client.py'])
+@pytest.mark.parametrize('as_inventory', [False, True])
+def test_conditional_grants_in_context_and_inventory(path, as_inventory):
+    from dataclasses import replace
+    from hashlib import sha256
+    from uuid import uuid4
+    from app.agents.context.example import fixture_inputs, FixtureResolver, OWNER
+    from app.agents.profiles import ProfileLoader
+    fixtures = fixture_inputs()
+    raw = b'conditional integration output'
+    metadata = dict(fixtures['requirements'].metadata, artifact_id=str(uuid4()), path=path,
+                    kind='source_code', author_agent='integrations', media_type='text/plain',
+                    checksum=sha256(raw).hexdigest(), size_bytes=len(raw))
+    result = replace(fixtures['requirements'], metadata=metadata, content=raw)
+    artifacts = list(fixtures.values()) + ([] if as_inventory else [result])
+    references = {a.metadata['artifact_id']: a.metadata for a in artifacts}
+    request = {'schema_version': '1.0', 'run_id': result.run_id, 'stage_id': 'documentation',
+               'attempt': 1, 'contract_version': result.contract_version,
+               'profile_id': 'web-fastapi-angular', 'limits': {'max_calls': 1, 'max_output_tokens': 3000},
+               'input_artifact_ids': list(references)}
+    kwargs = dict(owner_id=OWNER, owner_agent='documentation',
+                  profile=ProfileLoader().load('web-fastapi-angular'), references=references,
+                  accepted_result_references={metadata['artifact_id']: metadata} if as_inventory else {},
+                  execution_inputs={'prompt': b'', 'template': b'', 'model_configuration': b'{}',
+                                    'compiler_configuration': b'{}'})
+    builder = ContextBuilder(FixtureResolver(artifacts), max_context_bytes=256 * 1024)
+    builder.prepare(request, conditions={'has_integrations': True}, **kwargs)
+    for conditions in ({'has_integrations': False}, {}):
+        with pytest.raises(ContextError, match='CONTEXT_OWNERSHIP_MISMATCH'):
+            builder.prepare(request, conditions=conditions, **kwargs)
+    if as_inventory:
+        metadata['author_agent'] = 'unknown_agent'
+        with pytest.raises(ContextError, match='CONTEXT_OWNERSHIP_MISMATCH'):
+            builder.prepare(request, conditions={'has_integrations': True}, **kwargs)
