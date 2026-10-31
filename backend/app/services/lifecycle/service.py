@@ -197,6 +197,8 @@ class LifecycleTransaction:
         self._mutable()
         _reason(reason_code)
         record = self._record
+        if record.data.get("saved_state", {}).get("terminal_intent"):
+            raise conflict("Terminal intent forbids new attempts")
         if record.status == "cancelling":
             raise conflict("Cancellation forbids new attempts")
         if not all(isinstance(v, str) and v for v in (stage_id, contract_version, input_hash)):
@@ -247,6 +249,8 @@ class LifecycleTransaction:
         attempt = self._attempt(attempt_id, generation)
         if attempt.status != expected or (expected, target) not in STAGE_TRANSITIONS:
             raise conflict("Unexpected or forbidden attempt transition")
+        if target == "running" and record.data.get("saved_state", {}).get("terminal_intent"):
+            raise conflict("Terminal intent forbids new execution")
         if target == "running" and record.status != "running":
             raise conflict("Run does not admit new execution")
         if target != "running" and record.status not in {"running", "cancelling"}:

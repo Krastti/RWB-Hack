@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: RWB-Hack Platform API
-  version: 2.1.0
+  version: 2.3.0
   description: Контракт C-01. completed означает подготовленные артефакты, без утверждения
     о тестировании или деплое. Все вложенные ресурсы проверяются по владельцу; чужие
     и отсутствующие ресурсы возвращают одинаковый 404. Даты UTC. Необязательные поля
@@ -360,6 +360,30 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Retry'
+  /api/v1/runs/{run_id}/accepted-artifacts:
+    get:
+      operationId: listAcceptedArtifacts
+      summary: Latest accepted checkpoint-confirmed stage outputs before assembly
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema: *id001
+      responses:
+        '200':
+          description: Empty until stage acceptance; no project readiness claim
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedArtifacts'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
   /api/v1/runs/{run_id}/artifacts:
     get:
       operationId: listArtifacts
@@ -674,6 +698,7 @@ components:
           type: string
           enum:
           - web-fastapi-angular
+          - russtech-fullstack
           default: web-fastapi-angular
       required:
       - requirements_text
@@ -779,6 +804,7 @@ components:
           type: string
           enum:
           - web-fastapi-angular
+          - russtech-fullstack
           - web-fastapi-react
         status:
           $ref: '#/components/schemas/RunStatus'
@@ -942,6 +968,16 @@ components:
       - checksum
       - size_bytes
       - related_fr_ids
+    AcceptedArtifacts:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Artifact'
+      required:
+      - items
     ManifestPage:
       type: object
       additionalProperties: false

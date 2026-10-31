@@ -1,0 +1,40 @@
+{
+  "schema_version": "architecture-names/1.0",
+  "requirements_checksum": "ef6b05718fe83b9695445e360699ae9c99452748d9ac2064be7abba9d76d9514",
+  "bindings": [
+    {
+      "schema": "Ticket",
+      "entity": "tickets",
+      "fields": {
+        "id": "id",
+        "owner_id": "owner_id",
+        "description": "description",
+        "status": "status"
+      },
+      "derived_fields": {}
+    },
+    {
+      "schema": "TicketCreate",
+      "entity": "tickets",
+      "fields": {
+        "description": "description"
+      },
+      "derived_fields": {}
+    },
+    {
+      "schema": "TicketStatusUpdate",
+      "entity": "tickets",
+      "fields": {
+        "status": "status"
+      },
+      "derived_fields": {}
+    }
+  ],
+  "nonpersistent_schemas": {
+    "Error": "Общий error envelope, не SQL entity.",
+    "TicketList": "Массив Ticket, не отдельная SQL entity."
+  },
+  "unexposed_entities": {
+    "employees": "Справочник владельцев; публичный employee API требованиями не задан."
+  }
+}

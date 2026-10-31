@@ -1,0 +1,50 @@
+name: Profile tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  profile-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements-test.txt
+            backend/app/agents/profiles/requirements.txt
+            contracts/agents/requirements.txt
+            backend/app/agents/generation/requirements.txt
+            backend/app/agents/llm/requirements.txt
+
+      - run: python -m pip install -r backend/requirements-test.txt -r backend/app/agents/generation/requirements.txt
+
+      - run: python -m pytest backend/tests/test_profile_review.py -v
+        env:
+          PYTHONPATH: backend:.
+
+      - run: python -m pytest backend/tests/test_context_review.py contracts/agents/test_validate.py -v
+        env:
+          PYTHONPATH: backend:.
+
+      - run: python -m unittest backend.app.agents.generation.tests.test_executor -v
+        env:
+          PYTHONPATH: backend:.
+
+  architecture-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: python -m pip install -r backend/requirements-worker.txt -r backend/requirements-test.txt
+
+      - run: python -m pytest backend/tests/test_architecture_stage.py -v
+        env:
+          PYTHONPATH: backend:.

@@ -158,9 +158,10 @@ def validate_semantics(name, data):
 
 
 class Contracts:
-    def __init__(self):
+    def __init__(self, repository_root=None):
+        schema_root = Path(repository_root) / "contracts/agents" if repository_root is not None else ROOT
         self.schemas = {p.name.removesuffix(".schema.json"): load(p)
-                        for p in sorted((ROOT / "v1").glob("*.schema.json"))}
+                        for p in sorted((schema_root / "v1").glob("*.schema.json"))}
         require(bool(self.schemas), "No local schemas")
         ids = [schema["$id"] for schema in self.schemas.values()]
         require(len(ids) == len(set(ids)), "Duplicate schema $id")
@@ -232,27 +233,55 @@ def validate_profile_grants(plan, profile):
 
 
 
+def read_policy_bytes(repository_root, relative, limit=1024 * 1024):
+    """Bounded descriptor-relative read; never follow directory/file symlinks."""
+    import os
+    parts = Path(relative).parts
+    require(parts and not Path(relative).is_absolute() and all(p not in {".", ".."} for p in parts),
+            "Untrusted policy path")
+    directory = os.open(repository_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in parts[:-1]:
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+            os.close(directory)
+            directory = child
+        fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(fd, "rb") as stream:
+            import stat
+            require(stat.S_ISREG(os.fstat(stream.fileno()).st_mode), "Untrusted policy file")
+            raw = stream.read(limit + 1)
+            require(len(raw) <= limit, "PROFILE_SIZE_LIMIT")
+            return raw
+    finally:
+        os.close(directory)
+
+
 def load_profile_rules(profile, repository_root=None):
     """Offline resolution contract, not production profile-loader integration.
 
     No generic Markdown redirect following. Only this allowlisted local target
     is recognized, and neither pointer nor target may redirect through symlinks.
     """
-    require(profile.get("profile_id") == "web-fastapi-angular" and
-            profile.get("rules_document") == "README.md", "Unsupported profile rules reference")
+    targets = {"web-fastapi-angular": "docs/agents.md",
+               "russtech-fullstack": "docs/russtech-profile.md"}
+    profile_id = profile.get("profile_id")
+    require(profile_id in targets and profile.get("rules_document") == "README.md",
+            "Unsupported profile rules reference")
     root = (Path(repository_root) if repository_root is not None else ROOT.parent.parent).resolve()
-    pointer = root / "templates/profiles/web-fastapi-angular/README.md"
-    target = root / "docs/agents.md"
+    pointer = root / f"templates/profiles/{profile_id}/README.md"
+    target = root / targets[profile_id]
     try:
         require(pointer.resolve(strict=True) == pointer and target.resolve(strict=True) == target,
                 "Profile rules must use trusted local files")
-        pointer_text = pointer.read_text(encoding="utf-8")
-        rules = target.read_text(encoding="utf-8")
+        def bounded(path):
+            return read_policy_bytes(root, path.relative_to(root)).decode("utf-8")
+        pointer_text = bounded(pointer)
+        rules = bounded(target)
     except (OSError, UnicodeError):
         raise ContractError("Profile rules document is unavailable") from None
     import re
     markers = re.findall(r"<!-- rwb-profile-rules: (.*?) -->", pointer_text)
-    require(markers == ["docs/agents.md#профиль-c-05"], "Unresolved profile rules pointer")
+    require(markers == [targets[profile_id] + "#профиль-c-05"], "Unresolved profile rules pointer")
     for heading in ("## Профиль C-05", "### Ownership и generation plan",
                     "### Правила генерируемого приложения", "### Limits и остановки"):
         require(heading in rules.splitlines(), "Incomplete profile rules document")

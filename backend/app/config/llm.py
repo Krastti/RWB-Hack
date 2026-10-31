@@ -14,7 +14,9 @@ class LLMConfig:
     api_key: str = field(repr=False)
     timeout_seconds: float = 60.0
     max_output_tokens: int = 2048
-    response_format: Literal["json_schema", "json_object"] = "json_schema"
+    response_format: Literal["json_schema", "json_object", "json_schema_compat"] = "json_schema"
+
+    enable_thinking: bool | None = None
 
     def __post_init__(self) -> None:
         try:
@@ -26,7 +28,8 @@ class LLMConfig:
                 and self.api_key.isascii() and not any(ord(c) < 33 or ord(c) == 127 for c in self.api_key)
                 and math.isfinite(self.timeout_seconds) and self.timeout_seconds > 0
                 and type(self.max_output_tokens) is int and self.max_output_tokens > 0
-                and self.response_format in ("json_schema", "json_object")
+                and self.response_format in ("json_schema", "json_object", "json_schema_compat")
+                and (self.enable_thinking is None or type(self.enable_thinking) is bool)
             )
         except (ValueError, TypeError, AttributeError):
             valid = False

@@ -17,7 +17,10 @@ counterexample is shortest by number of actions; invariants are independent
 assertions evaluated on every edge before state deduplication and at the initial
 state. State-only deduplication is valid because this DSL has no hidden state.
 Integer domains larger than the cap use explicit boundary/zero samples; sampled
-or unknown domains are inconclusive. Scenario enumeration is also bounded.
+or unknown domains are inconclusive. Parameter combinations are consumed lazily;
+scenario count and the shared deadline are checked before each scenario is saved.
+Present initial values must satisfy their declared types and finite domains before
+invariants run; invalid values return unsupported and are rejected by replay.
 Identities are the declared **synthetic finite domain**, not all real users.
 
 Reports distinguish counterexample, no_counterexample_within_bounds,

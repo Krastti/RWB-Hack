@@ -3,7 +3,7 @@ from collections import deque
 from itertools import product
 from time import monotonic
 from ..model import ModelError, canonical, checksum, validate_model, require
-from ..interpreter.runtime import INTERPRETER_VERSION, invariants, step_validated
+from ..interpreter.runtime import INTERPRETER_VERSION, invariants, step_validated, valid_state
 
 
 def domain(t,identities,cap):
@@ -32,7 +32,7 @@ def explore(model,initial,*,max_depth=5,max_states=1000,timeout_seconds=2.0,max_
         validate_model(model)
     except (ModelError,RecursionError,TypeError,ValueError):
         return finish('unsupported','INVALID_OR_UNSUPPORTED_MODEL')
-    if not isinstance(initial,dict) or initial.get('entity') not in {e['id'] for e in model['entities']} or not isinstance(initial.get('values'),dict):
+    if not valid_state(model, initial):
         return finish('unsupported','INVALID_INITIAL_STATE')
     # Enumeration and exploration share one deadline and finite scenario budget.
     scenarios=[]
@@ -44,17 +44,25 @@ def explore(model,initial,*,max_depth=5,max_states=1000,timeout_seconds=2.0,max_
         for p in params:
             values,full=domain(p['type'],model['identities'],max_domain_values)
             domains.append(values);complete=complete and full
-        for identity,role,values in product(sorted(model['identities']),sorted(model['roles']),product(*domains)):
-            if monotonic()-start>=timeout_seconds: return finish('inconclusive','TIME_LIMIT')
-            if len(scenarios)>=max_scenarios:
-                report['domain_complete']=False
-                return finish('inconclusive','SCENARIO_LIMIT')
-            scenarios.append(({'id':identity,'role':role},{'id':action['id'],'parameters':dict(zip([p['id'] for p in params],values))}))
+        parameter_ids = [parameter['id'] for parameter in params]
+        for identity in sorted(model['identities']):
+            for role in sorted(model['roles']):
+                for values in product(*domains):
+                    if monotonic() - start >= timeout_seconds:
+                        return finish('inconclusive', 'TIME_LIMIT')
+                    if len(scenarios) >= max_scenarios:
+                        report['domain_complete'] = False
+                        return finish('inconclusive', 'SCENARIO_LIMIT')
+                    actor = {'id': identity, 'role': role}
+                    action_input = {'id': action['id'], 'parameters': dict(zip(parameter_ids, values))}
+                    scenarios.append((actor, action_input))
     report['domain_complete']=complete
     unknown=set(r['id'] for r in model['rules'] if r['status']!='supported')
     if not scenarios:
         return finish('unsupported','NO_ACTION_SCENARIOS')
     for actor, action in scenarios:
+        if monotonic() - start >= timeout_seconds:
+            return finish('inconclusive', 'TIME_LIMIT')
         for inv in invariants(model,initial,initial,actor,action):
             if inv['status']=='unknown': unknown.add(inv['rule_id'])
             if inv['status']=='violated':
@@ -100,6 +108,7 @@ def replay(model,report):
     validate_model(model)
     require(report['model_checksum']==checksum(model) and report['interpreter_version']==INTERPRETER_VERSION, 'BEHAVIOR_REPLAY_VERSION_MISMATCH')
     state=report['initial_state']
+    require(valid_state(model, state), 'BEHAVIOR_REPLAY_INVALID_STATE')
     for edge in report['trace']:
         result=step_validated(model,state,edge['actor'],edge['action'])
         require(result==edge['result'] and result['status']=='allowed','BEHAVIOR_REPLAY_MISMATCH')

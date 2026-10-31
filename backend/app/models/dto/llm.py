@@ -23,6 +23,10 @@ class LLMResult:
     usage: LLMUsage = field(default_factory=LLMUsage)
     error: LLMError | None = None
 
+    # Private validation repair input; never an accepted domain result.
+    candidate: Any = field(default=None, repr=False)
+    validation_feedback: tuple[str, ...] = field(default=(), repr=False)
+
     @property
     def ok(self) -> bool:
         return self.error is None

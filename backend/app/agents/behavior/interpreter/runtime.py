@@ -17,6 +17,17 @@ def valid(value, t, identities):
     return type(value) is str and value in (identities if t['kind']=='identity' else t['values'])
 
 
+def valid_state(model, state):
+    if not isinstance(state, dict) or not isinstance(state.get('values'), dict):
+        return False
+    entity = next((item for item in model['entities'] if item['id'] == state.get('entity')), None)
+    if entity is None:
+        return False
+    fields = {item['id']: item['type'] for item in entity['fields']}
+    return all(name in fields and valid(value, fields[name], model['identities'])
+               for name, value in state['values'].items())
+
+
 def evaluate(expr, env):
     op = expr.get('op')
     if op == 'literal':
@@ -73,7 +84,7 @@ def step_validated(model,state,actor,action):
     arguments=action.get('parameters',{})
     if not isinstance(values,dict) or not isinstance(arguments,dict) or not isinstance(actor,dict):
         return _result('unknown',{'entity':entity,'values':{}},reason='INVALID_INPUT')
-    if any(k not in fields or not valid(v,fields[k],model['identities']) for k,v in values.items()):
+    if not valid_state(model, state):
         return _result('unknown',state,reason='INVALID_STATE_VALUE')
     if any(k not in params or not valid(v,params[k],model['identities']) for k,v in arguments.items()):
         return _result('unknown',state,reason='INVALID_PARAMETER_VALUE')
